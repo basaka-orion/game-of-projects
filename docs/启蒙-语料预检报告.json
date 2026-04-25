@@ -1,0 +1,1643 @@
+{
+  "scannedAt": "2026-04-21T18:48:58.945Z",
+  "corpusPath": "/Users/apple/Documents/Openbasaka_Brain/Wiki",
+  "totalFiles": 6427,
+  "frontmatterSample": {
+    "sampleSize": 24,
+    "exportedCount": 24,
+    "appleNotesCount": 24
+  },
+  "lowConfidenceCount": 5911,
+  "earliestYear": 2013,
+  "latestYear": 2026,
+  "database": {
+    "dbPath": "/Users/apple/Library/Application Support/game-of-projects/game-of-projects.db",
+    "wikiSources": 0,
+    "drawers": 0,
+    "pages": 0
+  },
+  "byYear": [
+    [
+      "2014",
+      1397
+    ],
+    [
+      "2015",
+      1081
+    ],
+    [
+      "2016",
+      674
+    ],
+    [
+      "2017",
+      599
+    ],
+    [
+      "2019",
+      474
+    ],
+    [
+      "2018",
+      399
+    ],
+    [
+      "2022",
+      360
+    ],
+    [
+      "2021",
+      358
+    ],
+    [
+      "2023",
+      329
+    ],
+    [
+      "2025",
+      226
+    ],
+    [
+      "2020",
+      207
+    ],
+    [
+      "2024",
+      174
+    ],
+    [
+      "2026",
+      113
+    ],
+    [
+      "2013",
+      36
+    ]
+  ],
+  "byWing": [
+    [
+      "关键对话",
+      5048
+    ],
+    [
+      "世界模型",
+      778
+    ],
+    [
+      "自我定义",
+      219
+    ],
+    [
+      "创意与项目",
+      178
+    ],
+    [
+      "未竟心愿",
+      64
+    ],
+    [
+      "画像工坊",
+      61
+    ],
+    [
+      "探索方法",
+      58
+    ],
+    [
+      "系统演化",
+      21
+    ]
+  ],
+  "byHall": [
+    [
+      "经历回忆",
+      4496
+    ],
+    [
+      "世界观",
+      1036
+    ],
+    [
+      "情绪与渴望",
+      381
+    ],
+    [
+      "自我认识",
+      204
+    ],
+    [
+      "创意表达",
+      129
+    ],
+    [
+      "结构与工程",
+      113
+    ],
+    [
+      "关系与家庭",
+      68
+    ]
+  ],
+  "byRoom": [
+    [
+      "记忆-阶段轨迹",
+      4491
+    ],
+    [
+      "世界观-时代判断",
+      721
+    ],
+    [
+      "情绪-渴望与波动",
+      316
+    ],
+    [
+      "对话-关键碰撞",
+      294
+    ],
+    [
+      "自我-核心信念",
+      181
+    ],
+    [
+      "创作-灵感草图",
+      104
+    ],
+    [
+      "关系-亲密与协同",
+      68
+    ],
+    [
+      "画像工坊-阶段信号",
+      61
+    ],
+    [
+      "心愿-未竟召唤",
+      60
+    ],
+    [
+      "方法-认知与执行",
+      56
+    ],
+    [
+      "项目-构想推进",
+      54
+    ],
+    [
+      "项目-个人智能系统",
+      21
+    ]
+  ],
+  "bySource": [
+    [
+      "Apple Notes (sample)",
+      24
+    ],
+    [
+      "unknown",
+      0
+    ]
+  ],
+  "pilot": [
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20260228_其实有一个工作流的-我不晓得能不能这样执行-例如用户我就是boss本人-我下达一个要开发的项目让miya帮我去安排-md.md",
+      "relativePath": "20260228_其实有一个工作流的-我不晓得能不能这样执行-例如用户我就是boss本人-我下达一个要开发的项目让miya帮我去安排-md.md",
+      "year": 2026,
+      "title": "其实有一个工作流的 我不晓得能不能这样执行 例如用户我就是boss本人 我下达一个要开发的项目让miya帮我去安排 md",
+      "wing": "creation",
+      "hall": "consciousness",
+      "room": "项目-构想推进",
+      "confidence": 0.95
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20251207_-创十一-我想做一个ios应用-基于移动端swift-ui系统-这个应用是这样的-其主题是-你记录下的世界逐渐成为你-首先这个-md.md",
+      "relativePath": "20251207_-创十一-我想做一个ios应用-基于移动端swift-ui系统-这个应用是这样的-其主题是-你记录下的世界逐渐成为你-首先这个-md.md",
+      "year": 2025,
+      "title": "创十一 我想做一个ios应用 基于移动端swift ui系统 这个应用是这样的 其主题是 你记录下的世界逐渐成为你 首先这个 md",
+      "wing": "creation",
+      "hall": "consciousness",
+      "room": "项目-构想推进",
+      "confidence": 0.85
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20251209_我想做一个ios应用-基于移动端swift-ui系统-这个应用是这样的-其主题是-你记录下的世界逐渐成为你-首先这个应用会通过最前沿-md.md",
+      "relativePath": "20251209_我想做一个ios应用-基于移动端swift-ui系统-这个应用是这样的-其主题是-你记录下的世界逐渐成为你-首先这个应用会通过最前沿-md.md",
+      "year": 2025,
+      "title": "我想做一个ios应用 基于移动端swift ui系统 这个应用是这样的 其主题是 你记录下的世界逐渐成为你 首先这个应用会通过最前沿 md",
+      "wing": "creation",
+      "hall": "consciousness",
+      "room": "项目-构想推进",
+      "confidence": 0.85
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20141121_其实-我觉得这一次只是一次实验与尝试-对我来说-我更希望的是下一次的每一次机会-md.md",
+      "relativePath": "20141121_其实-我觉得这一次只是一次实验与尝试-对我来说-我更希望的是下一次的每一次机会-md.md",
+      "year": 2014,
+      "title": "其实 我觉得这一次只是一次实验与尝试 对我来说 我更希望的是下一次的每一次机会 md",
+      "wing": "creation",
+      "hall": "emotions",
+      "room": "情绪-渴望与波动",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20170314_你知道为什么坐在马桶盖-上-最适合我们记录自身的灵感吗-因为有泄才有通-有通才会泄-md.md",
+      "relativePath": "20170314_你知道为什么坐在马桶盖-上-最适合我们记录自身的灵感吗-因为有泄才有通-有通才会泄-md.md",
+      "year": 2017,
+      "title": "你知道为什么坐在马桶盖 上 最适合我们记录自身的灵感吗 因为有泄才有通 有通才会泄 md",
+      "wing": "creation",
+      "hall": "consciousness",
+      "room": "创作-灵感草图",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20250216_山啊-我今年必须把借助ai的一些小项目进行到底-趋势不可违-我想好好把握下-坚持下去-各项准备工作我都筹备差不多了-但还有一些事项-md.md",
+      "relativePath": "20250216_山啊-我今年必须把借助ai的一些小项目进行到底-趋势不可违-我想好好把握下-坚持下去-各项准备工作我都筹备差不多了-但还有一些事项-md.md",
+      "year": 2025,
+      "title": "山啊 我今年必须把借助ai的一些小项目进行到底 趋势不可违 我想好好把握下 坚持下去 各项准备工作我都筹备差不多了 但还有一些事项 md",
+      "wing": "creation",
+      "hall": "creative",
+      "room": "项目-构想推进",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20260113_我想做一个app-其最关键最重要的功能就是植入一个ai语音助手-这个ai助手只要我点击呼唤键或者某一个召唤指令后-除非我说结束-不然-md.md",
+      "relativePath": "20260113_我想做一个app-其最关键最重要的功能就是植入一个ai语音助手-这个ai助手只要我点击呼唤键或者某一个召唤指令后-除非我说结束-不然-md.md",
+      "year": 2026,
+      "title": "我想做一个app 其最关键最重要的功能就是植入一个ai语音助手 这个ai助手只要我点击呼唤键或者某一个召唤指令后 除非我说结束 不然 md",
+      "wing": "creation",
+      "hall": "emotions",
+      "room": "情绪-渴望与波动",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20260307_我需要一个就是可以跟openclaw进行交接的一个一个应用也好-或是一个网页也好-其实就是openclaw整个系统的架构它运行的方式-md.md",
+      "relativePath": "20260307_我需要一个就是可以跟openclaw进行交接的一个一个应用也好-或是一个网页也好-其实就是openclaw整个系统的架构它运行的方式-md.md",
+      "year": 2026,
+      "title": "我需要一个就是可以跟openclaw进行交接的一个一个应用也好 或是一个网页也好 其实就是openclaw整个系统的架构它运行的方式 md",
+      "wing": "creation",
+      "hall": "consciousness",
+      "room": "项目-构想推进",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140624_随时随地记录自己的感受-思路以及灵感-md.md",
+      "relativePath": "20140624_随时随地记录自己的感受-思路以及灵感-md.md",
+      "year": 2014,
+      "title": "随时随地记录自己的感受 思路以及灵感 md",
+      "wing": "creation",
+      "hall": "emotions",
+      "room": "情绪-渴望与波动",
+      "confidence": 0.69
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20141207_我喜欢在夜间里看书-因为寂静-因为有灵感-因此会很兴奋-md.md",
+      "relativePath": "20141207_我喜欢在夜间里看书-因为寂静-因为有灵感-因此会很兴奋-md.md",
+      "year": 2014,
+      "title": "我喜欢在夜间里看书 因为寂静 因为有灵感 因此会很兴奋 md",
+      "wing": "creation",
+      "hall": "emotions",
+      "room": "情绪-渴望与波动",
+      "confidence": 0.69
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20170522_你知道世界上为什么会有那么多人吗-因为为了防止你的存在只剩下睡觉的功能-md.md",
+      "relativePath": "20170522_你知道世界上为什么会有那么多人吗-因为为了防止你的存在只剩下睡觉的功能-md.md",
+      "year": 2017,
+      "title": "你知道世界上为什么会有那么多人吗 因为为了防止你的存在只剩下睡觉的功能 md",
+      "wing": "creation",
+      "hall": "consciousness",
+      "room": "创作-灵感草图",
+      "confidence": 0.69
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20250705_-颜值-面相-应用原型方案-一份可完全执行的技术与产品蓝图-md.md",
+      "relativePath": "20250705_-颜值-面相-应用原型方案-一份可完全执行的技术与产品蓝图-md.md",
+      "year": 2025,
+      "title": "颜值 面相 应用原型方案 一份可完全执行的技术与产品蓝图 md",
+      "wing": "creation",
+      "hall": "technical",
+      "room": "项目-构想推进",
+      "confidence": 0.69
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20250819_星空-我需要对ios应用进行系统性的120fps性能优化-基于当前项目的代码结构和启动日志分析-实现promotion设备-md.md",
+      "relativePath": "20250819_星空-我需要对ios应用进行系统性的120fps性能优化-基于当前项目的代码结构和启动日志分析-实现promotion设备-md.md",
+      "year": 2025,
+      "title": "星空 我需要对ios应用进行系统性的120fps性能优化 基于当前项目的代码结构和启动日志分析 实现promotion设备 md",
+      "wing": "creation",
+      "hall": "consciousness",
+      "room": "项目-构想推进",
+      "confidence": 0.69
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20251019_-创七-好的-首席系统架构师已就位-战情室的全息屏幕上数据流正在汇集-三位大师已经准备就绪-让我们开始将这个富有诗意的构想-转化-md.md",
+      "relativePath": "20251019_-创七-好的-首席系统架构师已就位-战情室的全息屏幕上数据流正在汇集-三位大师已经准备就绪-让我们开始将这个富有诗意的构想-转化-md.md",
+      "year": 2025,
+      "title": "创七 好的 首席系统架构师已就位 战情室的全息屏幕上数据流正在汇集 三位大师已经准备就绪 让我们开始将这个富有诗意的构想 转化 md",
+      "wing": "creation",
+      "hall": "technical",
+      "room": "项目-构想推进",
+      "confidence": 0.69
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20251125_在做网站或者app的时候会有磁带未来主义的风格等等-请把这是世界上所有应用在项目中的风格呈现出来-从主流热度开始排列出来-就是需要-md.md",
+      "relativePath": "20251125_在做网站或者app的时候会有磁带未来主义的风格等等-请把这是世界上所有应用在项目中的风格呈现出来-从主流热度开始排列出来-就是需要-md.md",
+      "year": 2025,
+      "title": "在做网站或者app的时候会有磁带未来主义的风格等等 请把这是世界上所有应用在项目中的风格呈现出来 从主流热度开始排列出来 就是需要 md",
+      "wing": "creation",
+      "hall": "consciousness",
+      "room": "项目-构想推进",
+      "confidence": 0.69
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20131222_初级感觉区的功能是感受和分析感觉刺激-而次级感觉区则在此基础上加以整合和联系-产生具体的感觉-在皮肤感觉中-象痛觉这样的低级感觉-在-md.md",
+      "relativePath": "20131222_初级感觉区的功能是感受和分析感觉刺激-而次级感觉区则在此基础上加以整合和联系-产生具体的感觉-在皮肤感觉中-象痛觉这样的低级感觉-在-md.md",
+      "year": 2013,
+      "title": "初级感觉区的功能是感受和分析感觉刺激 而次级感觉区则在此基础上加以整合和联系 产生具体的感觉 在皮肤感觉中 象痛觉这样的低级感觉 在 md",
+      "wing": "creation",
+      "hall": "emotions",
+      "room": "情绪-渴望与波动",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140323_渠道-方法方式-产品-定位-md.md",
+      "relativePath": "20140323_渠道-方法方式-产品-定位-md.md",
+      "year": 2014,
+      "title": "渠道 方法方式 产品 定位 md",
+      "wing": "creation",
+      "hall": "technical",
+      "room": "项目-构想推进",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140713_夜间的灵感总是使我异常的兴奋-以至于有时候为了想不去影响下一个白天的正常工作而会做出极端的妥协方案-生理自慰-不过-结果强迫的压制-md.md",
+      "relativePath": "20140713_夜间的灵感总是使我异常的兴奋-以至于有时候为了想不去影响下一个白天的正常工作而会做出极端的妥协方案-生理自慰-不过-结果强迫的压制-md.md",
+      "year": 2014,
+      "title": "夜间的灵感总是使我异常的兴奋 以至于有时候为了想不去影响下一个白天的正常工作而会做出极端的妥协方案 生理自慰 不过 结果强迫的压制 md",
+      "wing": "creation",
+      "hall": "emotions",
+      "room": "情绪-渴望与波动",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20151010_其实-分析两个人是如何成为伴侣这个疑惑应该从这几方面入手-md.md",
+      "relativePath": "20151010_其实-分析两个人是如何成为伴侣这个疑惑应该从这几方面入手-md.md",
+      "year": 2015,
+      "title": "其实 分析两个人是如何成为伴侣这个疑惑应该从这几方面入手 md",
+      "wing": "dialogue",
+      "hall": "family",
+      "room": "关系-亲密与协同",
+      "confidence": 0.85
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20151010_但你曾经真的想过为什么自己就非得在固执地认为自己是怎样的一种性别之后-然后才去与其它的性别人成为伴侣或与之交配吗-md.md",
+      "relativePath": "20151010_但你曾经真的想过为什么自己就非得在固执地认为自己是怎样的一种性别之后-然后才去与其它的性别人成为伴侣或与之交配吗-md.md",
+      "year": 2015,
+      "title": "但你曾经真的想过为什么自己就非得在固执地认为自己是怎样的一种性别之后 然后才去与其它的性别人成为伴侣或与之交配吗 md",
+      "wing": "dialogue",
+      "hall": "family",
+      "room": "关系-亲密与协同",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20160330_其实-我觉得我们与父母之间的关系-不仅限于是晚辈与长辈之间的关系-也不仅仅是朋友-更应该是搭档-彼此之间的搭档-md.md",
+      "relativePath": "20160330_其实-我觉得我们与父母之间的关系-不仅限于是晚辈与长辈之间的关系-也不仅仅是朋友-更应该是搭档-彼此之间的搭档-md.md",
+      "year": 2016,
+      "title": "其实 我觉得我们与父母之间的关系 不仅限于是晚辈与长辈之间的关系 也不仅仅是朋友 更应该是搭档 彼此之间的搭档 md",
+      "wing": "dialogue",
+      "hall": "family",
+      "room": "关系-亲密与协同",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20210826_要了解一个人不难-主要是对方是否愿意为你敞开心扉-以及你们是否有一定相处的经历-md.md",
+      "relativePath": "20210826_要了解一个人不难-主要是对方是否愿意为你敞开心扉-以及你们是否有一定相处的经历-md.md",
+      "year": 2021,
+      "title": "要了解一个人不难 主要是对方是否愿意为你敞开心扉 以及你们是否有一定相处的经历 md",
+      "wing": "dialogue",
+      "hall": "emotions",
+      "room": "情绪-渴望与波动",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140101_如何去记录梦境-记录的工具-md.md",
+      "relativePath": "20140101_如何去记录梦境-记录的工具-md.md",
+      "year": 2014,
+      "title": "如何去记录梦境 记录的工具 md",
+      "wing": "dialogue",
+      "hall": "consciousness",
+      "room": "对话-关键碰撞",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140116_对于一般人来说-如果-你不是在兴趣之下去延续你的学习的话-那么后来你便会发现自己过去都在花费着大量时间做着大量的低效功-md.md",
+      "relativePath": "20140116_对于一般人来说-如果-你不是在兴趣之下去延续你的学习的话-那么后来你便会发现自己过去都在花费着大量时间做着大量的低效功-md.md",
+      "year": 2014,
+      "title": "对于一般人来说 如果 你不是在兴趣之下去延续你的学习的话 那么后来你便会发现自己过去都在花费着大量时间做着大量的低效功 md",
+      "wing": "dialogue",
+      "hall": "consciousness",
+      "room": "对话-关键碰撞",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140408_如果跟你说-我这十年间会混得很不错-只是一开始需要有人自助我-你会为了自己而投资于我吗-md.md",
+      "relativePath": "20140408_如果跟你说-我这十年间会混得很不错-只是一开始需要有人自助我-你会为了自己而投资于我吗-md.md",
+      "year": 2014,
+      "title": "如果跟你说 我这十年间会混得很不错 只是一开始需要有人自助我 你会为了自己而投资于我吗 md",
+      "wing": "dialogue",
+      "hall": "memory",
+      "room": "记忆-阶段轨迹",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140523_我们总是试图地让自己的每一个行为都寻找到一个合理的解释-但往往我们总是难以发现到其觉察点-是否我们自己只是一具实行着各种解释的躯体-md.md",
+      "relativePath": "20140523_我们总是试图地让自己的每一个行为都寻找到一个合理的解释-但往往我们总是难以发现到其觉察点-是否我们自己只是一具实行着各种解释的躯体-md.md",
+      "year": 2014,
+      "title": "我们总是试图地让自己的每一个行为都寻找到一个合理的解释 但往往我们总是难以发现到其觉察点 是否我们自己只是一具实行着各种解释的躯体 md",
+      "wing": "dialogue",
+      "hall": "consciousness",
+      "room": "对话-关键碰撞",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140617_当一个人突然对于你过往的经历开始关心并且感兴趣时-那么他要么是爱上你了-并且他会感觉这是一种享受-就好像你们之前一起经历过-要么他-md.md",
+      "relativePath": "20140617_当一个人突然对于你过往的经历开始关心并且感兴趣时-那么他要么是爱上你了-并且他会感觉这是一种享受-就好像你们之前一起经历过-要么他-md.md",
+      "year": 2014,
+      "title": "当一个人突然对于你过往的经历开始关心并且感兴趣时 那么他要么是爱上你了 并且他会感觉这是一种享受 就好像你们之前一起经历过 要么他 md",
+      "wing": "dialogue",
+      "hall": "memory",
+      "room": "记忆-阶段轨迹",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140619_what-about-your-heart-是否自己空间里的内容是属于自己经久不衰的记录-是可以回忆的-是可以从内心出发去发觉-md.md",
+      "relativePath": "20140619_what-about-your-heart-是否自己空间里的内容是属于自己经久不衰的记录-是可以回忆的-是可以从内心出发去发觉-md.md",
+      "year": 2014,
+      "title": "what about your heart 是否自己空间里的内容是属于自己经久不衰的记录 是可以回忆的 是可以从内心出发去发觉 md",
+      "wing": "dialogue",
+      "hall": "consciousness",
+      "room": "对话-关键碰撞",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140624_为什么有时候当我们在唧嚼回忆时-便想极力挽回过去的遗憾-md.md",
+      "relativePath": "20140624_为什么有时候当我们在唧嚼回忆时-便想极力挽回过去的遗憾-md.md",
+      "year": 2014,
+      "title": "为什么有时候当我们在唧嚼回忆时 便想极力挽回过去的遗憾 md",
+      "wing": "dialogue",
+      "hall": "consciousness",
+      "room": "对话-关键碰撞",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140711_为什么我不能拥有过去-只能活在当下并且面临着未知到来的总总-md.md",
+      "relativePath": "20140711_为什么我不能拥有过去-只能活在当下并且面临着未知到来的总总-md.md",
+      "year": 2014,
+      "title": "为什么我不能拥有过去 只能活在当下并且面临着未知到来的总总 md",
+      "wing": "dialogue",
+      "hall": "consciousness",
+      "room": "对话-关键碰撞",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140726_你为什么总是自以为是地认为这一切的存在本应该如此的理所当然-而连一句恭维的为什么也不去问-md.md",
+      "relativePath": "20140726_你为什么总是自以为是地认为这一切的存在本应该如此的理所当然-而连一句恭维的为什么也不去问-md.md",
+      "year": 2014,
+      "title": "你为什么总是自以为是地认为这一切的存在本应该如此的理所当然 而连一句恭维的为什么也不去问 md",
+      "wing": "dialogue",
+      "hall": "consciousness",
+      "room": "对话-关键碰撞",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140802_-你怎么会知道这是我一开始就想发给你的信息呢-其实-很多微妙细节里所体现出来的隐形信息才是最为关键的-谢谢你会把它们记下来-每-md.md",
+      "relativePath": "20140802_-你怎么会知道这是我一开始就想发给你的信息呢-其实-很多微妙细节里所体现出来的隐形信息才是最为关键的-谢谢你会把它们记下来-每-md.md",
+      "year": 2014,
+      "title": "你怎么会知道这是我一开始就想发给你的信息呢 其实 很多微妙细节里所体现出来的隐形信息才是最为关键的 谢谢你会把它们记下来 每 md",
+      "wing": "dialogue",
+      "hall": "consciousness",
+      "room": "对话-关键碰撞",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20141130_我们为什么不能与陌生或者喜欢的人-在第一次见面时-冷静地谈谈-md.md",
+      "relativePath": "20141130_我们为什么不能与陌生或者喜欢的人-在第一次见面时-冷静地谈谈-md.md",
+      "year": 2014,
+      "title": "我们为什么不能与陌生或者喜欢的人 在第一次见面时 冷静地谈谈 md",
+      "wing": "dialogue",
+      "hall": "emotions",
+      "room": "情绪-渴望与波动",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20150202_人为什么必须得这样活着-md.md",
+      "relativePath": "20150202_人为什么必须得这样活着-md.md",
+      "year": 2015,
+      "title": "人为什么必须得这样活着 md",
+      "wing": "dialogue",
+      "hall": "consciousness",
+      "room": "对话-关键碰撞",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20150517_你应该如何去迎合全球脑乃至释怀被化解于其一的宇宙脑-md.md",
+      "relativePath": "20150517_你应该如何去迎合全球脑乃至释怀被化解于其一的宇宙脑-md.md",
+      "year": 2015,
+      "title": "你应该如何去迎合全球脑乃至释怀被化解于其一的宇宙脑 md",
+      "wing": "dialogue",
+      "hall": "consciousness",
+      "room": "对话-关键碰撞",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20151002_对了-你喜欢在夜深人静里-静静地去享受那股寂静-我们都知道这个时候思路其实是会更清透的-因为人相对没那么浮躁-相对会更平静一些-md.md",
+      "relativePath": "20151002_对了-你喜欢在夜深人静里-静静地去享受那股寂静-我们都知道这个时候思路其实是会更清透的-因为人相对没那么浮躁-相对会更平静一些-md.md",
+      "year": 2015,
+      "title": "对了 你喜欢在夜深人静里 静静地去享受那股寂静 我们都知道这个时候思路其实是会更清透的 因为人相对没那么浮躁 相对会更平静一些 md",
+      "wing": "dialogue",
+      "hall": "emotions",
+      "room": "情绪-渴望与波动",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140328_我们要善于观察与发现-自我-随着科技水平的日益发达-我们是否更应该懂得如何去发觉自己能够区别于智能机器人的独有特性-比如说是一项-md.md",
+      "relativePath": "20140328_我们要善于观察与发现-自我-随着科技水平的日益发达-我们是否更应该懂得如何去发觉自己能够区别于智能机器人的独有特性-比如说是一项-md.md",
+      "year": 2014,
+      "title": "我们要善于观察与发现 自我 随着科技水平的日益发达 我们是否更应该懂得如何去发觉自己能够区别于智能机器人的独有特性 比如说是一项 md",
+      "wing": "identity",
+      "hall": "consciousness",
+      "room": "自我-核心信念",
+      "confidence": 0.85
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140422_这回我终于知道为什么我的同学不还我钱了-因为-我只是一味地想要得到我想要的-而却吝啬花些时间与情感去关心他-md.md",
+      "relativePath": "20140422_这回我终于知道为什么我的同学不还我钱了-因为-我只是一味地想要得到我想要的-而却吝啬花些时间与情感去关心他-md.md",
+      "year": 2014,
+      "title": "这回我终于知道为什么我的同学不还我钱了 因为 我只是一味地想要得到我想要的 而却吝啬花些时间与情感去关心他 md",
+      "wing": "identity",
+      "hall": "emotions",
+      "room": "情绪-渴望与波动",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140528_不要否认自我-否认过往的经历-事出必有因-是什么并不重要-重要的是怎么前行-为了什么-搞清楚与明白其间的为什么-md.md",
+      "relativePath": "20140528_不要否认自我-否认过往的经历-事出必有因-是什么并不重要-重要的是怎么前行-为了什么-搞清楚与明白其间的为什么-md.md",
+      "year": 2014,
+      "title": "不要否认自我 否认过往的经历 事出必有因 是什么并不重要 重要的是怎么前行 为了什么 搞清楚与明白其间的为什么 md",
+      "wing": "identity",
+      "hall": "consciousness",
+      "room": "自我-核心信念",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20151010_不过-有时候你的女友或男票曾经有跟你说过-如果我是男生-或者我是女生的话就好了-此时此刻跟ta接触的你会是怎么样的一种感受呢-你-md.md",
+      "relativePath": "20151010_不过-有时候你的女友或男票曾经有跟你说过-如果我是男生-或者我是女生的话就好了-此时此刻跟ta接触的你会是怎么样的一种感受呢-你-md.md",
+      "year": 2015,
+      "title": "不过 有时候你的女友或男票曾经有跟你说过 如果我是男生 或者我是女生的话就好了 此时此刻跟ta接触的你会是怎么样的一种感受呢 你 md",
+      "wing": "identity",
+      "hall": "emotions",
+      "room": "情绪-渴望与波动",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20151023_即使-我们通过环境本身去改变自我的机动性-但我们依然只是环境间的一部分环节与存在-而相对于游戏本身-如何执行游戏-完全凭借它的媒介-md.md",
+      "relativePath": "20151023_即使-我们通过环境本身去改变自我的机动性-但我们依然只是环境间的一部分环节与存在-而相对于游戏本身-如何执行游戏-完全凭借它的媒介-md.md",
+      "year": 2015,
+      "title": "即使 我们通过环境本身去改变自我的机动性 但我们依然只是环境间的一部分环节与存在 而相对于游戏本身 如何执行游戏 完全凭借它的媒介 md",
+      "wing": "identity",
+      "hall": "consciousness",
+      "room": "自我-核心信念",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20190608_我想要的其实蛮纯粹的-但如果你不理解的话-就会觉得很复杂-md.md",
+      "relativePath": "20190608_我想要的其实蛮纯粹的-但如果你不理解的话-就会觉得很复杂-md.md",
+      "year": 2019,
+      "title": "我想要的其实蛮纯粹的 但如果你不理解的话 就会觉得很复杂 md",
+      "wing": "identity",
+      "hall": "emotions",
+      "room": "情绪-渴望与波动",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140117_不管别人怎么看-属于你的人生更应该由你自己来看待-md.md",
+      "relativePath": "20140117_不管别人怎么看-属于你的人生更应该由你自己来看待-md.md",
+      "year": 2014,
+      "title": "不管别人怎么看 属于你的人生更应该由你自己来看待 md",
+      "wing": "identity",
+      "hall": "identity",
+      "room": "自我-核心信念",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140411_如果-我不是-游戏-里的npc-我是不会希望我的队友帮我玩通关的-而我只有半途game-over的份-md.md",
+      "relativePath": "20140411_如果-我不是-游戏-里的npc-我是不会希望我的队友帮我玩通关的-而我只有半途game-over的份-md.md",
+      "year": 2014,
+      "title": "如果 我不是 游戏 里的npc 我是不会希望我的队友帮我玩通关的 而我只有半途game over的份 md",
+      "wing": "identity",
+      "hall": "emotions",
+      "room": "情绪-渴望与波动",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140708_我觉得-十分钟-这部电影告诉了一个这样的道理-往往越厉害-成熟冷静-境高悟远的人-越能在关键且短暂的时刻做出对于他人生非常重要的决定-md.md",
+      "relativePath": "20140708_我觉得-十分钟-这部电影告诉了一个这样的道理-往往越厉害-成熟冷静-境高悟远的人-越能在关键且短暂的时刻做出对于他人生非常重要的决定-md.md",
+      "year": 2014,
+      "title": "我觉得 十分钟 这部电影告诉了一个这样的道理 往往越厉害 成熟冷静 境高悟远的人 越能在关键且短暂的时刻做出对于他人生非常重要的决定 md",
+      "wing": "identity",
+      "hall": "identity",
+      "room": "自我-核心信念",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140720_人类在经受自我与周遭环境不同程度与纬度的不断变化当中-其人生态度是非常不一样的-这就是为什么人生是变态的-而我们却如此愿意为了自己-md.md",
+      "relativePath": "20140720_人类在经受自我与周遭环境不同程度与纬度的不断变化当中-其人生态度是非常不一样的-这就是为什么人生是变态的-而我们却如此愿意为了自己-md.md",
+      "year": 2014,
+      "title": "人类在经受自我与周遭环境不同程度与纬度的不断变化当中 其人生态度是非常不一样的 这就是为什么人生是变态的 而我们却如此愿意为了自己 md",
+      "wing": "identity",
+      "hall": "consciousness",
+      "room": "自我-核心信念",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140813_其实-真没什么-太阳-出来晒一晒-白天显现了出来-太阳-出去溜达溜达-夜幕降临了-在怎么轰轰烈烈与精彩的人生-往那一趟一闭眼-不管-md.md",
+      "relativePath": "20140813_其实-真没什么-太阳-出来晒一晒-白天显现了出来-太阳-出去溜达溜达-夜幕降临了-在怎么轰轰烈烈与精彩的人生-往那一趟一闭眼-不管-md.md",
+      "year": 2014,
+      "title": "其实 真没什么 太阳 出来晒一晒 白天显现了出来 太阳 出去溜达溜达 夜幕降临了 在怎么轰轰烈烈与精彩的人生 往那一趟一闭眼 不管 md",
+      "wing": "identity",
+      "hall": "consciousness",
+      "room": "自我-核心信念",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140905_我很困-我得去休息-但当我睡着完之后-我不晓得我是否还能够再次苏醒-我不晓得遭受外创与深受内创之后-能够得到及时的自我修复与治愈-md.md",
+      "relativePath": "20140905_我很困-我得去休息-但当我睡着完之后-我不晓得我是否还能够再次苏醒-我不晓得遭受外创与深受内创之后-能够得到及时的自我修复与治愈-md.md",
+      "year": 2014,
+      "title": "我很困 我得去休息 但当我睡着完之后 我不晓得我是否还能够再次苏醒 我不晓得遭受外创与深受内创之后 能够得到及时的自我修复与治愈 md",
+      "wing": "identity",
+      "hall": "consciousness",
+      "room": "自我-核心信念",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140915_如果-我是一个记录狂-我有好几门的事物需要记录-那么现在我需要的就是好几本收纳本去将至分别开来-md.md",
+      "relativePath": "20140915_如果-我是一个记录狂-我有好几门的事物需要记录-那么现在我需要的就是好几本收纳本去将至分别开来-md.md",
+      "year": 2014,
+      "title": "如果 我是一个记录狂 我有好几门的事物需要记录 那么现在我需要的就是好几本收纳本去将至分别开来 md",
+      "wing": "identity",
+      "hall": "memory",
+      "room": "自我-核心信念",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20141123_如果你不觉得自我与特别-那么你是没有信心继续活下去的-相信我-没人希望自己是多余的-md.md",
+      "relativePath": "20141123_如果你不觉得自我与特别-那么你是没有信心继续活下去的-相信我-没人希望自己是多余的-md.md",
+      "year": 2014,
+      "title": "如果你不觉得自我与特别 那么你是没有信心继续活下去的 相信我 没人希望自己是多余的 md",
+      "wing": "identity",
+      "hall": "emotions",
+      "room": "情绪-渴望与波动",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20160114_与其让我去形容你是怎么样的一个人-还不如让我去说说自己对于你的感觉-因为我相信自己的真实感受比什么都来得客观-md.md",
+      "relativePath": "20160114_与其让我去形容你是怎么样的一个人-还不如让我去说说自己对于你的感觉-因为我相信自己的真实感受比什么都来得客观-md.md",
+      "year": 2016,
+      "title": "与其让我去形容你是怎么样的一个人 还不如让我去说说自己对于你的感觉 因为我相信自己的真实感受比什么都来得客观 md",
+      "wing": "identity",
+      "hall": "emotions",
+      "room": "情绪-渴望与波动",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20160118_简单点来说-人生真的很无聊的-如果能够把自个的工作当成副业-然后制定些目标的话-或许会更有趣些-自身的局限结合无限的欲望-决定着-md.md",
+      "relativePath": "20160118_简单点来说-人生真的很无聊的-如果能够把自个的工作当成副业-然后制定些目标的话-或许会更有趣些-自身的局限结合无限的欲望-决定着-md.md",
+      "year": 2016,
+      "title": "简单点来说 人生真的很无聊的 如果能够把自个的工作当成副业 然后制定些目标的话 或许会更有趣些 自身的局限结合无限的欲望 决定着 md",
+      "wing": "identity",
+      "hall": "identity",
+      "room": "自我-核心信念",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20160131_太理所当然的人生-其实不太-好玩-的-md.md",
+      "relativePath": "20160131_太理所当然的人生-其实不太-好玩-的-md.md",
+      "year": 2016,
+      "title": "太理所当然的人生 其实不太 好玩 的 md",
+      "wing": "identity",
+      "hall": "consciousness",
+      "room": "自我-核心信念",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20160323_我有一个特质就是-慢慢地去理解以及了解我的话-要有耐心点哦-你会觉得-其实我是一个超有趣的人-玩游戏-享受各种体验与东西谁不会-md.md",
+      "relativePath": "20160323_我有一个特质就是-慢慢地去理解以及了解我的话-要有耐心点哦-你会觉得-其实我是一个超有趣的人-玩游戏-享受各种体验与东西谁不会-md.md",
+      "year": 2016,
+      "title": "我有一个特质就是 慢慢地去理解以及了解我的话 要有耐心点哦 你会觉得 其实我是一个超有趣的人 玩游戏 享受各种体验与东西谁不会 md",
+      "wing": "identity",
+      "hall": "consciousness",
+      "room": "自我-核心信念",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20250731_依照我提供给你视图感觉-我需要你帮我创造所有白噪音应该有的画面的prompt-我想依照这个创造与之完美对应的画面-md.md",
+      "relativePath": "20250731_依照我提供给你视图感觉-我需要你帮我创造所有白噪音应该有的画面的prompt-我想依照这个创造与之完美对应的画面-md.md",
+      "year": 2025,
+      "title": "依照我提供给你视图感觉 我需要你帮我创造所有白噪音应该有的画面的prompt 我想依照这个创造与之完美对应的画面 md",
+      "wing": "method",
+      "hall": "technical",
+      "room": "方法-认知与执行",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20260328_第一-在我想要的效果是在-翰墨流光-里-我希望中国独有的文化以及精辟性-结合ai-prompt在赋予大模型最根本与本质的指令-请问-md.md",
+      "relativePath": "20260328_第一-在我想要的效果是在-翰墨流光-里-我希望中国独有的文化以及精辟性-结合ai-prompt在赋予大模型最根本与本质的指令-请问-md.md",
+      "year": 2026,
+      "title": "第一 在我想要的效果是在 翰墨流光 里 我希望中国独有的文化以及精辟性 结合ai prompt在赋予大模型最根本与本质的指令 请问 md",
+      "wing": "method",
+      "hall": "emotions",
+      "room": "情绪-渴望与波动",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20251210_如果你不够了解计算机的运行逻辑-也不晓得如何与之对话-更对于最新的技术与前沿的信息不够了解-那么即便现在的ai大模型都极其强大-但是-md.md",
+      "relativePath": "20251210_如果你不够了解计算机的运行逻辑-也不晓得如何与之对话-更对于最新的技术与前沿的信息不够了解-那么即便现在的ai大模型都极其强大-但是-md.md",
+      "year": 2025,
+      "title": "如果你不够了解计算机的运行逻辑 也不晓得如何与之对话 更对于最新的技术与前沿的信息不够了解 那么即便现在的ai大模型都极其强大 但是 md",
+      "wing": "method",
+      "hall": "consciousness",
+      "room": "方法-认知与执行",
+      "confidence": 0.69
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20190630_系啊-其实可以多种-策略-去发展的-看着局势与运势的撮合-再作出理性的判断-放松-把最真实的你表现出来-总能在一些跳脱之余时-看懂-md.md",
+      "relativePath": "20190630_系啊-其实可以多种-策略-去发展的-看着局势与运势的撮合-再作出理性的判断-放松-把最真实的你表现出来-总能在一些跳脱之余时-看懂-md.md",
+      "year": 2019,
+      "title": "系啊 其实可以多种 策略 去发展的 看着局势与运势的撮合 再作出理性的判断 放松 把最真实的你表现出来 总能在一些跳脱之余时 看懂 md",
+      "wing": "method",
+      "hall": "consciousness",
+      "room": "方法-认知与执行",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140531_局限发展的模式-资源-价值观-流程-md.md",
+      "relativePath": "20140531_局限发展的模式-资源-价值观-流程-md.md",
+      "year": 2014,
+      "title": "局限发展的模式 资源 价值观 流程 md",
+      "wing": "method",
+      "hall": "technical",
+      "room": "方法-认知与执行",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140624_原则-一开始制定的规则-md.md",
+      "relativePath": "20140624_原则-一开始制定的规则-md.md",
+      "year": 2014,
+      "title": "原则 一开始制定的规则 md",
+      "wing": "method",
+      "hall": "technical",
+      "room": "方法-认知与执行",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20141114_人性-老式的进化策略-技术-md.md",
+      "relativePath": "20141114_人性-老式的进化策略-技术-md.md",
+      "year": 2014,
+      "title": "人性 老式的进化策略 技术 md",
+      "wing": "method",
+      "hall": "technical",
+      "room": "方法-认知与执行",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20190923_-所谓的自觉-就是你内在的自我之间达成做事原则的共识-md.md",
+      "relativePath": "20190923_-所谓的自觉-就是你内在的自我之间达成做事原则的共识-md.md",
+      "year": 2019,
+      "title": "所谓的自觉 就是你内在的自我之间达成做事原则的共识 md",
+      "wing": "method",
+      "hall": "technical",
+      "room": "方法-认知与执行",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20220324_即使开很烂的车-你也要在人生的策略上-做自己的驾驶员-md.md",
+      "relativePath": "20220324_即使开很烂的车-你也要在人生的策略上-做自己的驾驶员-md.md",
+      "year": 2022,
+      "title": "即使开很烂的车 你也要在人生的策略上 做自己的驾驶员 md",
+      "wing": "method",
+      "hall": "technical",
+      "room": "方法-认知与执行",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20230928_-思维模型-思维逻辑-以及极强的感受去做事情-md.md",
+      "relativePath": "20230928_-思维模型-思维逻辑-以及极强的感受去做事情-md.md",
+      "year": 2023,
+      "title": "思维模型 思维逻辑 以及极强的感受去做事情 md",
+      "wing": "method",
+      "hall": "emotions",
+      "room": "情绪-渴望与波动",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20231213_除了科学技术-能力与模型的探索和运用之外-其它的都是忽悠-所以-忽悠的质量很重要-md.md",
+      "relativePath": "20231213_除了科学技术-能力与模型的探索和运用之外-其它的都是忽悠-所以-忽悠的质量很重要-md.md",
+      "year": 2023,
+      "title": "除了科学技术 能力与模型的探索和运用之外 其它的都是忽悠 所以 忽悠的质量很重要 md",
+      "wing": "method",
+      "hall": "technical",
+      "room": "方法-认知与执行",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20240530_现在你是特斯拉-马斯克-乔布斯-罗振宇的综合体-你博览群书-你非常知道如何把复杂的内容言简意赅化-非常清楚罗列大量文字背后的逻辑框架-md.md",
+      "relativePath": "20240530_现在你是特斯拉-马斯克-乔布斯-罗振宇的综合体-你博览群书-你非常知道如何把复杂的内容言简意赅化-非常清楚罗列大量文字背后的逻辑框架-md.md",
+      "year": 2024,
+      "title": "现在你是特斯拉 马斯克 乔布斯 罗振宇的综合体 你博览群书 你非常知道如何把复杂的内容言简意赅化 非常清楚罗列大量文字背后的逻辑框架 md",
+      "wing": "method",
+      "hall": "consciousness",
+      "room": "方法-认知与执行",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20241226_-自我的基本法则-是一个人的内核与生理机制对于环境的对应策略-我们需要建立的一套系统是-通过理解自身的内核与生理机制-在建立规则之外-md.md",
+      "relativePath": "20241226_-自我的基本法则-是一个人的内核与生理机制对于环境的对应策略-我们需要建立的一套系统是-通过理解自身的内核与生理机制-在建立规则之外-md.md",
+      "year": 2024,
+      "title": "自我的基本法则 是一个人的内核与生理机制对于环境的对应策略 我们需要建立的一套系统是 通过理解自身的内核与生理机制 在建立规则之外 md",
+      "wing": "method",
+      "hall": "technical",
+      "room": "方法-认知与执行",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20250618_当用户描述需求时候-三个智者必须出发运用对应的大模型与角色-然后触发一个一个实时来陈述自己的辩论-要让用户看到模型角色激动实时的辩论-md.md",
+      "relativePath": "20250618_当用户描述需求时候-三个智者必须出发运用对应的大模型与角色-然后触发一个一个实时来陈述自己的辩论-要让用户看到模型角色激动实时的辩论-md.md",
+      "year": 2025,
+      "title": "当用户描述需求时候 三个智者必须出发运用对应的大模型与角色 然后触发一个一个实时来陈述自己的辩论 要让用户看到模型角色激动实时的辩论 md",
+      "wing": "method",
+      "hall": "technical",
+      "room": "方法-认知与执行",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20251020_帮我自动检查环境并安装-codex-cli-工具-按以下步骤执行-md.md",
+      "relativePath": "20251020_帮我自动检查环境并安装-codex-cli-工具-按以下步骤执行-md.md",
+      "year": 2025,
+      "title": "帮我自动检查环境并安装 codex cli 工具 按以下步骤执行 md",
+      "wing": "method",
+      "hall": "technical",
+      "room": "方法-认知与执行",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140202_观察-体验-验证的模式与方法-方式-md.md",
+      "relativePath": "20140202_观察-体验-验证的模式与方法-方式-md.md",
+      "year": 2014,
+      "title": "观察 体验 验证的模式与方法 方式 md",
+      "wing": "method",
+      "hall": "technical",
+      "room": "方法-认知与执行",
+      "confidence": 0.47
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140403_制度与资金-生产能力与计划-销售策略-实际需求-生存的基本条件-md.md",
+      "relativePath": "20140403_制度与资金-生产能力与计划-销售策略-实际需求-生存的基本条件-md.md",
+      "year": 2014,
+      "title": "制度与资金 生产能力与计划 销售策略 实际需求 生存的基本条件 md",
+      "wing": "method",
+      "hall": "technical",
+      "room": "方法-认知与执行",
+      "confidence": 0.47
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20141118_生物界里的进化策略大多都是为了活着而活着-其他有可能的空余都只是为了无聊而打发的时间-md.md",
+      "relativePath": "20141118_生物界里的进化策略大多都是为了活着而活着-其他有可能的空余都只是为了无聊而打发的时间-md.md",
+      "year": 2014,
+      "title": "生物界里的进化策略大多都是为了活着而活着 其他有可能的空余都只是为了无聊而打发的时间 md",
+      "wing": "method",
+      "hall": "technical",
+      "room": "方法-认知与执行",
+      "confidence": 0.47
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20241225_制定一个系统化的方法来构建自我的内核测试机制-同时利用ai-agent来辅助这一过程-从而提升对世界的全面认知-md.md",
+      "relativePath": "20241225_制定一个系统化的方法来构建自我的内核测试机制-同时利用ai-agent来辅助这一过程-从而提升对世界的全面认知-md.md",
+      "year": 2024,
+      "title": "制定一个系统化的方法来构建自我的内核测试机制 同时利用ai agent来辅助这一过程 从而提升对世界的全面认知 md",
+      "wing": "openbasaka",
+      "hall": "technical",
+      "room": "项目-个人智能系统",
+      "confidence": 0.91
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20251031_claude-skills正式发布-这不是简单的功能升级-而是ai能力管理的全新范式-告别几千字复杂prompt-拥抱模块化-标准化-md.md",
+      "relativePath": "20251031_claude-skills正式发布-这不是简单的功能升级-而是ai能力管理的全新范式-告别几千字复杂prompt-拥抱模块化-标准化-md.md",
+      "year": 2025,
+      "title": "claude skills正式发布 这不是简单的功能升级 而是ai能力管理的全新范式 告别几千字复杂prompt 拥抱模块化 标准化 md",
+      "wing": "openbasaka",
+      "hall": "technical",
+      "room": "项目-个人智能系统",
+      "confidence": 0.69
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20260131_我是-__kimi-2-5-agent-cluster-终极架构师__-md.md",
+      "relativePath": "20260131_我是-__kimi-2-5-agent-cluster-终极架构师__-md.md",
+      "year": 2026,
+      "title": "我是 kimi 2 5 agent cluster 终极架构师 md",
+      "wing": "openbasaka",
+      "hall": "technical",
+      "room": "项目-个人智能系统",
+      "confidence": 0.69
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20260131_这是一份基于-__kimi-2-5-agent-cluster-方法论__-的执行级白皮书-md.md",
+      "relativePath": "20260131_这是一份基于-__kimi-2-5-agent-cluster-方法论__-的执行级白皮书-md.md",
+      "year": 2026,
+      "title": "这是一份基于 kimi 2 5 agent cluster 方法论 的执行级白皮书 md",
+      "wing": "openbasaka",
+      "hall": "technical",
+      "room": "项目-个人智能系统",
+      "confidence": 0.69
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20260226_请重新审视整个项目-现在的一个大问题是agent之间没法合作工作-首先-每个agent自身的模型要足够好用-第二-程序员组的agent-md.md",
+      "relativePath": "20260226_请重新审视整个项目-现在的一个大问题是agent之间没法合作工作-首先-每个agent自身的模型要足够好用-第二-程序员组的agent-md.md",
+      "year": 2026,
+      "title": "请重新审视整个项目 现在的一个大问题是agent之间没法合作工作 首先 每个agent自身的模型要足够好用 第二 程序员组的agent md",
+      "wing": "openbasaka",
+      "hall": "technical",
+      "room": "项目-个人智能系统",
+      "confidence": 0.69
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20260405_我想做一个应用-就是创建一个agent团队-然后这个团队是为了用户的需求而生-具体他们要做得事情就是-当用户提出一个想法或者需求的-md.md",
+      "relativePath": "20260405_我想做一个应用-就是创建一个agent团队-然后这个团队是为了用户的需求而生-具体他们要做得事情就是-当用户提出一个想法或者需求的-md.md",
+      "year": 2026,
+      "title": "我想做一个应用 就是创建一个agent团队 然后这个团队是为了用户的需求而生 具体他们要做得事情就是 当用户提出一个想法或者需求的 md",
+      "wing": "openbasaka",
+      "hall": "technical",
+      "room": "项目-个人智能系统",
+      "confidence": 0.69
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20251122_我想用claude-skills在做ui与ux设计的时候-可以很大程度利用https___60fps-design_-其pro的license-md.md",
+      "relativePath": "20251122_我想用claude-skills在做ui与ux设计的时候-可以很大程度利用https___60fps-design_-其pro的license-md.md",
+      "year": 2025,
+      "title": "我想用claude skills在做ui与ux设计的时候 可以很大程度利用https 60fps design 其pro的license md",
+      "wing": "openbasaka",
+      "hall": "technical",
+      "room": "项目-个人智能系统",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20250307_我觉得在ai-agent面前-人类需要做的是调整好大方向与控制好细节-还有结合自己的灵感-所以-有一个-画布-可以在此之外去操作-md.md",
+      "relativePath": "20250307_我觉得在ai-agent面前-人类需要做的是调整好大方向与控制好细节-还有结合自己的灵感-所以-有一个-画布-可以在此之外去操作-md.md",
+      "year": 2025,
+      "title": "我觉得在ai agent面前 人类需要做的是调整好大方向与控制好细节 还有结合自己的灵感 所以 有一个 画布 可以在此之外去操作 md",
+      "wing": "openbasaka",
+      "hall": "technical",
+      "room": "项目-个人智能系统",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20250709_请对-basaka-cc-星空主题作品集网站进行以下三个具体的布局调整-1-__移除英雄区域的_联系我_按钮__-在-md.md",
+      "relativePath": "20250709_请对-basaka-cc-星空主题作品集网站进行以下三个具体的布局调整-1-__移除英雄区域的_联系我_按钮__-在-md.md",
+      "year": 2025,
+      "title": "请对 basaka cc 星空主题作品集网站进行以下三个具体的布局调整 1 移除英雄区域的 联系我 按钮 在 md",
+      "wing": "openbasaka",
+      "hall": "technical",
+      "room": "项目-个人智能系统",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20251021_以下是我想安装的mcp-md.md",
+      "relativePath": "20251021_以下是我想安装的mcp-md.md",
+      "year": 2025,
+      "title": "以下是我想安装的mcp md",
+      "wing": "openbasaka",
+      "hall": "technical",
+      "room": "项目-个人智能系统",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20260225_请帮我把整个openclaw-telegram-skills-evomap等等的所有做成一张流程图-md.md",
+      "relativePath": "20260225_请帮我把整个openclaw-telegram-skills-evomap等等的所有做成一张流程图-md.md",
+      "year": 2026,
+      "title": "请帮我把整个openclaw telegram skills evomap等等的所有做成一张流程图 md",
+      "wing": "openbasaka",
+      "hall": "technical",
+      "room": "项目-个人智能系统",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20260225_我要给openclaw一条铁律-所有agent使用的主模型而不是容灾模型-其主模型要跟随着最新与适用之间找寻一个平衡点-如果每天10-md.md",
+      "relativePath": "20260225_我要给openclaw一条铁律-所有agent使用的主模型而不是容灾模型-其主模型要跟随着最新与适用之间找寻一个平衡点-如果每天10-md.md",
+      "year": 2026,
+      "title": "我要给openclaw一条铁律 所有agent使用的主模型而不是容灾模型 其主模型要跟随着最新与适用之间找寻一个平衡点 如果每天10 md",
+      "wing": "openbasaka",
+      "hall": "technical",
+      "room": "项目-个人智能系统",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20260308_以openclaw为引子-未来-或者说现在-会有越来越多人在手机-电脑-pc_mac-上安装智能系统-但这样的系统不应仅仅是帮你搜索-md.md",
+      "relativePath": "20260308_以openclaw为引子-未来-或者说现在-会有越来越多人在手机-电脑-pc_mac-上安装智能系统-但这样的系统不应仅仅是帮你搜索-md.md",
+      "year": 2026,
+      "title": "以openclaw为引子 未来 或者说现在 会有越来越多人在手机 电脑 pc mac 上安装智能系统 但这样的系统不应仅仅是帮你搜索 md",
+      "wing": "openbasaka",
+      "hall": "technical",
+      "room": "项目-个人智能系统",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20190802_-3-5-启蒙与此时-md.md",
+      "relativePath": "20190802_-3-5-启蒙与此时-md.md",
+      "year": 2019,
+      "title": "3 5 启蒙与此时 md",
+      "wing": "openbasaka",
+      "hall": "technical",
+      "room": "项目-个人智能系统",
+      "confidence": 0.47
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20231112_现在你是一个这样的助手-你的外挂是我给你整合的知识库-然后我们需要在弄一个服务器出来去做一些知识互动的平台-你能做得到吗-如果做不-md.md",
+      "relativePath": "20231112_现在你是一个这样的助手-你的外挂是我给你整合的知识库-然后我们需要在弄一个服务器出来去做一些知识互动的平台-你能做得到吗-如果做不-md.md",
+      "year": 2023,
+      "title": "现在你是一个这样的助手 你的外挂是我给你整合的知识库 然后我们需要在弄一个服务器出来去做一些知识互动的平台 你能做得到吗 如果做不 md",
+      "wing": "openbasaka",
+      "hall": "technical",
+      "room": "项目-个人智能系统",
+      "confidence": 0.47
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20250610_使用mcp时候不用咨询我-md.md",
+      "relativePath": "20250610_使用mcp时候不用咨询我-md.md",
+      "year": 2025,
+      "title": "使用mcp时候不用咨询我 md",
+      "wing": "openbasaka",
+      "hall": "technical",
+      "room": "项目-个人智能系统",
+      "confidence": 0.47
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20260119_main-cp-r-_users_charlesqin_skills_skills__-_-gemini_antigravity-md.md",
+      "relativePath": "20260119_main-cp-r-_users_charlesqin_skills_skills__-_-gemini_antigravity-md.md",
+      "year": 2026,
+      "title": "main cp r users charlesqin skills skills gemini antigravity md",
+      "wing": "openbasaka",
+      "hall": "technical",
+      "room": "项目-个人智能系统",
+      "confidence": 0.47
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20260121_相信你知道什么是claude-skills-md.md",
+      "relativePath": "20260121_相信你知道什么是claude-skills-md.md",
+      "year": 2026,
+      "title": "相信你知道什么是claude skills md",
+      "wing": "openbasaka",
+      "hall": "technical",
+      "room": "项目-个人智能系统",
+      "confidence": 0.47
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20161122_各种感觉-知觉-情绪-性格-自我意识-md.md",
+      "relativePath": "20161122_各种感觉-知觉-情绪-性格-自我意识-md.md",
+      "year": 2016,
+      "title": "各种感觉 知觉 情绪 性格 自我意识 md",
+      "wing": "profiling",
+      "hall": "emotions",
+      "room": "画像工坊-阶段信号",
+      "confidence": 0.8
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20250317_你为-自我解码器-设计的功能已经非常有趣且实用-涵盖了mbti-大五人格测试-智商测试推荐-以及创新的-内核探测器-和-世界观拼图-md.md",
+      "relativePath": "20250317_你为-自我解码器-设计的功能已经非常有趣且实用-涵盖了mbti-大五人格测试-智商测试推荐-以及创新的-内核探测器-和-世界观拼图-md.md",
+      "year": 2025,
+      "title": "你为 自我解码器 设计的功能已经非常有趣且实用 涵盖了mbti 大五人格测试 智商测试推荐 以及创新的 内核探测器 和 世界观拼图 md",
+      "wing": "profiling",
+      "hall": "consciousness",
+      "room": "画像工坊-阶段信号",
+      "confidence": 0.8
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20160903_性格决定大脑回路的方向与习惯-md.md",
+      "relativePath": "20160903_性格决定大脑回路的方向与习惯-md.md",
+      "year": 2016,
+      "title": "性格决定大脑回路的方向与习惯 md",
+      "wing": "profiling",
+      "hall": "identity",
+      "room": "画像工坊-阶段信号",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20170127_你知道为什么有许多人站在高楼沿边会有种想要跳下来的倾向感吗-md.md",
+      "relativePath": "20170127_你知道为什么有许多人站在高楼沿边会有种想要跳下来的倾向感吗-md.md",
+      "year": 2017,
+      "title": "你知道为什么有许多人站在高楼沿边会有种想要跳下来的倾向感吗 md",
+      "wing": "profiling",
+      "hall": "emotions",
+      "room": "画像工坊-阶段信号",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20220407_发现自己的天赋之所以难-在于你花-过多-的时间在跟探索与生存无关的漫无目的上-你没有一个自我潜能的过程-md.md",
+      "relativePath": "20220407_发现自己的天赋之所以难-在于你花-过多-的时间在跟探索与生存无关的漫无目的上-你没有一个自我潜能的过程-md.md",
+      "year": 2022,
+      "title": "发现自己的天赋之所以难 在于你花 过多 的时间在跟探索与生存无关的漫无目的上 你没有一个自我潜能的过程 md",
+      "wing": "profiling",
+      "hall": "consciousness",
+      "room": "画像工坊-阶段信号",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20231004_-自我从来都没有区别性-我们之间的区别在于天赋-在于环境-背景与周遭-因为我们决定不了这两者因素-于是-认知的差异性别-md.md",
+      "relativePath": "20231004_-自我从来都没有区别性-我们之间的区别在于天赋-在于环境-背景与周遭-因为我们决定不了这两者因素-于是-认知的差异性别-md.md",
+      "year": 2023,
+      "title": "自我从来都没有区别性 我们之间的区别在于天赋 在于环境 背景与周遭 因为我们决定不了这两者因素 于是 认知的差异性别 md",
+      "wing": "profiling",
+      "hall": "identity",
+      "room": "画像工坊-阶段信号",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20250215_-其实没成为怎样的人都可以-也不应该为此自卑或是为此自傲-因为在成功的人天赋异禀的人到了很多名利双全-他们之所以有现在的成绩-不-md.md",
+      "relativePath": "20250215_-其实没成为怎样的人都可以-也不应该为此自卑或是为此自傲-因为在成功的人天赋异禀的人到了很多名利双全-他们之所以有现在的成绩-不-md.md",
+      "year": 2025,
+      "title": "其实没成为怎样的人都可以 也不应该为此自卑或是为此自傲 因为在成功的人天赋异禀的人到了很多名利双全 他们之所以有现在的成绩 不 md",
+      "wing": "profiling",
+      "hall": "consciousness",
+      "room": "画像工坊-阶段信号",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20250830_应用测试-我确认授权你在当前开发环境中执行以下操作来完成aether应用的全面测试验证-md.md",
+      "relativePath": "20250830_应用测试-我确认授权你在当前开发环境中执行以下操作来完成aether应用的全面测试验证-md.md",
+      "year": 2025,
+      "title": "应用测试 我确认授权你在当前开发环境中执行以下操作来完成aether应用的全面测试验证 md",
+      "wing": "profiling",
+      "hall": "creative",
+      "room": "画像工坊-阶段信号",
+      "confidence": 0.69
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140328_精力-体质-专注点-天赋-策略-md.md",
+      "relativePath": "20140328_精力-体质-专注点-天赋-策略-md.md",
+      "year": 2014,
+      "title": "精力 体质 专注点 天赋 策略 md",
+      "wing": "profiling",
+      "hall": "technical",
+      "room": "画像工坊-阶段信号",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140717_思想给意识增添了人格-笛卡尔-md.md",
+      "relativePath": "20140717_思想给意识增添了人格-笛卡尔-md.md",
+      "year": 2014,
+      "title": "思想给意识增添了人格 笛卡尔 md",
+      "wing": "profiling",
+      "hall": "consciousness",
+      "room": "画像工坊-阶段信号",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20141029_一出生的天赋便决定了其可能性-md.md",
+      "relativePath": "20141029_一出生的天赋便决定了其可能性-md.md",
+      "year": 2014,
+      "title": "一出生的天赋便决定了其可能性 md",
+      "wing": "profiling",
+      "hall": "identity",
+      "room": "画像工坊-阶段信号",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20141102_性格-兴趣-体质-意识-md.md",
+      "relativePath": "20141102_性格-兴趣-体质-意识-md.md",
+      "year": 2014,
+      "title": "性格 兴趣 体质 意识 md",
+      "wing": "profiling",
+      "hall": "consciousness",
+      "room": "画像工坊-阶段信号",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20150209_每个人的人格魅力都是很不一样的-不管你喜不喜欢-体不体会到不到-它便造成了彼此之间的存在-md.md",
+      "relativePath": "20150209_每个人的人格魅力都是很不一样的-不管你喜不喜欢-体不体会到不到-它便造成了彼此之间的存在-md.md",
+      "year": 2015,
+      "title": "每个人的人格魅力都是很不一样的 不管你喜不喜欢 体不体会到不到 它便造成了彼此之间的存在 md",
+      "wing": "profiling",
+      "hall": "emotions",
+      "room": "画像工坊-阶段信号",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20150620_中国目前最失败的教育在于-害怕孩子受苦与犯错-以及时不时想要剥夺孩子的天赋以及创新能力-md.md",
+      "relativePath": "20150620_中国目前最失败的教育在于-害怕孩子受苦与犯错-以及时不时想要剥夺孩子的天赋以及创新能力-md.md",
+      "year": 2015,
+      "title": "中国目前最失败的教育在于 害怕孩子受苦与犯错 以及时不时想要剥夺孩子的天赋以及创新能力 md",
+      "wing": "profiling",
+      "hall": "emotions",
+      "room": "画像工坊-阶段信号",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20150914_因为天赋-性格-技能以及环境上的不同-所以每个人在描述世界的状态是存在着差异-md.md",
+      "relativePath": "20150914_因为天赋-性格-技能以及环境上的不同-所以每个人在描述世界的状态是存在着差异-md.md",
+      "year": 2015,
+      "title": "因为天赋 性格 技能以及环境上的不同 所以每个人在描述世界的状态是存在着差异 md",
+      "wing": "profiling",
+      "hall": "consciousness",
+      "room": "画像工坊-阶段信号",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20151009_你是一个有才能有天赋的人-只是他人还不晓得如何去运用你的能力罢了-md.md",
+      "relativePath": "20151009_你是一个有才能有天赋的人-只是他人还不晓得如何去运用你的能力罢了-md.md",
+      "year": 2015,
+      "title": "你是一个有才能有天赋的人 只是他人还不晓得如何去运用你的能力罢了 md",
+      "wing": "profiling",
+      "hall": "consciousness",
+      "room": "画像工坊-阶段信号",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20151011_因为才能与天赋的天时地利人和所创造出来的需求是时代的产物-而并非培养得出来的-md.md",
+      "relativePath": "20151011_因为才能与天赋的天时地利人和所创造出来的需求是时代的产物-而并非培养得出来的-md.md",
+      "year": 2015,
+      "title": "因为才能与天赋的天时地利人和所创造出来的需求是时代的产物 而并非培养得出来的 md",
+      "wing": "profiling",
+      "hall": "consciousness",
+      "room": "画像工坊-阶段信号",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20151125_意识存在的一切过往都只是个测试-md.md",
+      "relativePath": "20151125_意识存在的一切过往都只是个测试-md.md",
+      "year": 2015,
+      "title": "意识存在的一切过往都只是个测试 md",
+      "wing": "profiling",
+      "hall": "consciousness",
+      "room": "画像工坊-阶段信号",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20141202_我讨厌父母用憧憬-渴望-欣赏-悲伤或者疑惑的眼光看着我-所以这就是我不想要孩子的原因之一-恶心-md.md",
+      "relativePath": "20141202_我讨厌父母用憧憬-渴望-欣赏-悲伤或者疑惑的眼光看着我-所以这就是我不想要孩子的原因之一-恶心-md.md",
+      "year": 2014,
+      "title": "我讨厌父母用憧憬 渴望 欣赏 悲伤或者疑惑的眼光看着我 所以这就是我不想要孩子的原因之一 恶心 md",
+      "wing": "wishes",
+      "hall": "family",
+      "room": "关系-亲密与协同",
+      "confidence": 0.69
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20160309_我现在想到了-最佳伴侣的前提是最佳搭档-因为-在此过程中产生了感情-所以变成为了伴侣-愉快-我希望你用心去感受-相信自己的直觉-md.md",
+      "relativePath": "20160309_我现在想到了-最佳伴侣的前提是最佳搭档-因为-在此过程中产生了感情-所以变成为了伴侣-愉快-我希望你用心去感受-相信自己的直觉-md.md",
+      "year": 2016,
+      "title": "我现在想到了 最佳伴侣的前提是最佳搭档 因为 在此过程中产生了感情 所以变成为了伴侣 愉快 我希望你用心去感受 相信自己的直觉 md",
+      "wing": "wishes",
+      "hall": "family",
+      "room": "关系-亲密与协同",
+      "confidence": 0.69
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140901_您觉得呢-看来有时候我发过去的话语-就像瞬间没了踪影的信息-更别说任何的时效性了-这句-是大家一直想问的吧-支付的东西-它们是已经-md.md",
+      "relativePath": "20140901_您觉得呢-看来有时候我发过去的话语-就像瞬间没了踪影的信息-更别说任何的时效性了-这句-是大家一直想问的吧-支付的东西-它们是已经-md.md",
+      "year": 2014,
+      "title": "您觉得呢 看来有时候我发过去的话语 就像瞬间没了踪影的信息 更别说任何的时效性了 这句 是大家一直想问的吧 支付的东西 它们是已经 md",
+      "wing": "wishes",
+      "hall": "emotions",
+      "room": "心愿-未竟召唤",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20160107_希望这次旅行对你来说不是一种突然-对于他人来说亦是如此-为什么这么说呢-因为据我所知最为简单的快乐便是-期待-or-满足-md.md",
+      "relativePath": "20160107_希望这次旅行对你来说不是一种突然-对于他人来说亦是如此-为什么这么说呢-因为据我所知最为简单的快乐便是-期待-or-满足-md.md",
+      "year": 2016,
+      "title": "希望这次旅行对你来说不是一种突然 对于他人来说亦是如此 为什么这么说呢 因为据我所知最为简单的快乐便是 期待 or 满足 md",
+      "wing": "wishes",
+      "hall": "emotions",
+      "room": "心愿-未竟召唤",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20160328_在看不到什么希望以及明确的目标之间纠结-纠结着是否继续坚持着去处理眼前令人心烦的事项-还是辞职去找一条能令自己带来更多机会与希望的-md.md",
+      "relativePath": "20160328_在看不到什么希望以及明确的目标之间纠结-纠结着是否继续坚持着去处理眼前令人心烦的事项-还是辞职去找一条能令自己带来更多机会与希望的-md.md",
+      "year": 2016,
+      "title": "在看不到什么希望以及明确的目标之间纠结 纠结着是否继续坚持着去处理眼前令人心烦的事项 还是辞职去找一条能令自己带来更多机会与希望的 md",
+      "wing": "wishes",
+      "hall": "emotions",
+      "room": "心愿-未竟召唤",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20170624_你为什么不想要孩子-md.md",
+      "relativePath": "20170624_你为什么不想要孩子-md.md",
+      "year": 2017,
+      "title": "你为什么不想要孩子 md",
+      "wing": "wishes",
+      "hall": "emotions",
+      "room": "心愿-未竟召唤",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20170905_真希望你能够多领悟到一些道理之外并且更接近本质的事-md.md",
+      "relativePath": "20170905_真希望你能够多领悟到一些道理之外并且更接近本质的事-md.md",
+      "year": 2017,
+      "title": "真希望你能够多领悟到一些道理之外并且更接近本质的事 md",
+      "wing": "wishes",
+      "hall": "emotions",
+      "room": "心愿-未竟召唤",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20181209_-想要-被骗其实是一种有趣的潜质-md.md",
+      "relativePath": "20181209_-想要-被骗其实是一种有趣的潜质-md.md",
+      "year": 2018,
+      "title": "想要 被骗其实是一种有趣的潜质 md",
+      "wing": "wishes",
+      "hall": "emotions",
+      "room": "心愿-未竟召唤",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20190305_想要-夺取-你的处女之身并非我本意-因为我只想与你有更多的连接-你能明白为什么吗-毕竟-记忆是赐予无奈的礼物-md.md",
+      "relativePath": "20190305_想要-夺取-你的处女之身并非我本意-因为我只想与你有更多的连接-你能明白为什么吗-毕竟-记忆是赐予无奈的礼物-md.md",
+      "year": 2019,
+      "title": "想要 夺取 你的处女之身并非我本意 因为我只想与你有更多的连接 你能明白为什么吗 毕竟 记忆是赐予无奈的礼物 md",
+      "wing": "wishes",
+      "hall": "emotions",
+      "room": "心愿-未竟召唤",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20190713_我一直想头像是否要跟真人有很高的拟合度的-但在看了你的头像时就会觉得真实有特色的一面能够大体跟现实中的自己相吻合就够了-突然想到-md.md",
+      "relativePath": "20190713_我一直想头像是否要跟真人有很高的拟合度的-但在看了你的头像时就会觉得真实有特色的一面能够大体跟现实中的自己相吻合就够了-突然想到-md.md",
+      "year": 2019,
+      "title": "我一直想头像是否要跟真人有很高的拟合度的 但在看了你的头像时就会觉得真实有特色的一面能够大体跟现实中的自己相吻合就够了 突然想到 md",
+      "wing": "wishes",
+      "hall": "emotions",
+      "room": "心愿-未竟召唤",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20201208_我很中意你的内在-因为跟我很契合-不过-我会由于你的外在而更喜欢你-但我不希望你这样反过来爱我与爱其它人-这样会很没意思-md.md",
+      "relativePath": "20201208_我很中意你的内在-因为跟我很契合-不过-我会由于你的外在而更喜欢你-但我不希望你这样反过来爱我与爱其它人-这样会很没意思-md.md",
+      "year": 2020,
+      "title": "我很中意你的内在 因为跟我很契合 不过 我会由于你的外在而更喜欢你 但我不希望你这样反过来爱我与爱其它人 这样会很没意思 md",
+      "wing": "wishes",
+      "hall": "emotions",
+      "room": "心愿-未竟召唤",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20230513_希望这条信息不会打扰到你-嗯-其实有一个人如果他很忙-说他干什么看什么都觉得很忙-然后一个人很苦的时候-很很压抑的说他做什么或看什么-md.md",
+      "relativePath": "20230513_希望这条信息不会打扰到你-嗯-其实有一个人如果他很忙-说他干什么看什么都觉得很忙-然后一个人很苦的时候-很很压抑的说他做什么或看什么-md.md",
+      "year": 2023,
+      "title": "希望这条信息不会打扰到你 嗯 其实有一个人如果他很忙 说他干什么看什么都觉得很忙 然后一个人很苦的时候 很很压抑的说他做什么或看什么 md",
+      "wing": "wishes",
+      "hall": "emotions",
+      "room": "心愿-未竟召唤",
+      "confidence": 0.63
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140210_我们总是努力地追求着自己想要感受的体验-md.md",
+      "relativePath": "20140210_我们总是努力地追求着自己想要感受的体验-md.md",
+      "year": 2014,
+      "title": "我们总是努力地追求着自己想要感受的体验 md",
+      "wing": "wishes",
+      "hall": "emotions",
+      "room": "心愿-未竟召唤",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20160322_守护到-一个比我更有担当-更能够付出一切-更有耐心与包容心-更懂得用心去了解你-更疼爱你以及守护你家人的人出现-当然-我希望至始-md.md",
+      "relativePath": "20160322_守护到-一个比我更有担当-更能够付出一切-更有耐心与包容心-更懂得用心去了解你-更疼爱你以及守护你家人的人出现-当然-我希望至始-md.md",
+      "year": 2016,
+      "title": "守护到 一个比我更有担当 更能够付出一切 更有耐心与包容心 更懂得用心去了解你 更疼爱你以及守护你家人的人出现 当然 我希望至始 md",
+      "wing": "wishes",
+      "hall": "family",
+      "room": "关系-亲密与协同",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20170224_你想要的是一个能让你安静思考的伴侣-md.md",
+      "relativePath": "20170224_你想要的是一个能让你安静思考的伴侣-md.md",
+      "year": 2017,
+      "title": "你想要的是一个能让你安静思考的伴侣 md",
+      "wing": "wishes",
+      "hall": "family",
+      "room": "关系-亲密与协同",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20210406_在平复极度痛苦与确定中找到希望-才是真正的强大-md.md",
+      "relativePath": "20210406_在平复极度痛苦与确定中找到希望-才是真正的强大-md.md",
+      "year": 2021,
+      "title": "在平复极度痛苦与确定中找到希望 才是真正的强大 md",
+      "wing": "wishes",
+      "hall": "emotions",
+      "room": "心愿-未竟召唤",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20221208_我不愿活在恐惧中-我只想要僻静-md.md",
+      "relativePath": "20221208_我不愿活在恐惧中-我只想要僻静-md.md",
+      "year": 2022,
+      "title": "我不愿活在恐惧中 我只想要僻静 md",
+      "wing": "wishes",
+      "hall": "emotions",
+      "room": "心愿-未竟召唤",
+      "confidence": 0.58
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20151027_我说永远爱你-不是因为我会永远爱你-而是我希望此时此刻你可以对我全心全意-md.md",
+      "relativePath": "20151027_我说永远爱你-不是因为我会永远爱你-而是我希望此时此刻你可以对我全心全意-md.md",
+      "year": 2015,
+      "title": "我说永远爱你 不是因为我会永远爱你 而是我希望此时此刻你可以对我全心全意 md",
+      "wing": "wishes",
+      "hall": "emotions",
+      "room": "心愿-未竟召唤",
+      "confidence": 0.52
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140116_关键在于意识到-为什么我们会有自我-不仅仅是本体运行的原理-而是应该搞清它的起源-原理及其意图-它值得是存在的整体-为何我们希望-md.md",
+      "relativePath": "20140116_关键在于意识到-为什么我们会有自我-不仅仅是本体运行的原理-而是应该搞清它的起源-原理及其意图-它值得是存在的整体-为何我们希望-md.md",
+      "year": 2014,
+      "title": "关键在于意识到 为什么我们会有自我 不仅仅是本体运行的原理 而是应该搞清它的起源 原理及其意图 它值得是存在的整体 为何我们希望 md",
+      "wing": "worldview",
+      "hall": "emotions",
+      "room": "情绪-渴望与波动",
+      "confidence": 0.95
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140115_在本能的基础上-我们拥有了自我意识-所以我更应该懂得如何去控制欲望-md.md",
+      "relativePath": "20140115_在本能的基础上-我们拥有了自我意识-所以我更应该懂得如何去控制欲望-md.md",
+      "year": 2014,
+      "title": "在本能的基础上 我们拥有了自我意识 所以我更应该懂得如何去控制欲望 md",
+      "wing": "worldview",
+      "hall": "consciousness",
+      "room": "世界观-时代判断",
+      "confidence": 0.85
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140810_我们总是习惯或者是喜欢用过去的经验去处事与说事-数不这一刻即将成为过去-而未来又有关于未来的处理方案-md.md",
+      "relativePath": "20140810_我们总是习惯或者是喜欢用过去的经验去处事与说事-数不这一刻即将成为过去-而未来又有关于未来的处理方案-md.md",
+      "year": 2014,
+      "title": "我们总是习惯或者是喜欢用过去的经验去处事与说事 数不这一刻即将成为过去 而未来又有关于未来的处理方案 md",
+      "wing": "worldview",
+      "hall": "emotions",
+      "room": "情绪-渴望与波动",
+      "confidence": 0.85
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20141130_问题意识-为什么我们不得不结合技术本身来进化自我-md.md",
+      "relativePath": "20141130_问题意识-为什么我们不得不结合技术本身来进化自我-md.md",
+      "year": 2014,
+      "title": "问题意识 为什么我们不得不结合技术本身来进化自我 md",
+      "wing": "worldview",
+      "hall": "consciousness",
+      "room": "世界观-时代判断",
+      "confidence": 0.85
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20250311_其实绝大多数人都想回到过去-但是当你想回到过去的时候-你就必须得让这个世界所有的存在一起回头-不可能只是你回到过去和其他都不改变-md.md",
+      "relativePath": "20250311_其实绝大多数人都想回到过去-但是当你想回到过去的时候-你就必须得让这个世界所有的存在一起回头-不可能只是你回到过去和其他都不改变-md.md",
+      "year": 2025,
+      "title": "其实绝大多数人都想回到过去 但是当你想回到过去的时候 你就必须得让这个世界所有的存在一起回头 不可能只是你回到过去和其他都不改变 md",
+      "wing": "worldview",
+      "hall": "consciousness",
+      "room": "世界观-时代判断",
+      "confidence": 0.85
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140101_这四类-1-沉浸于回忆当中-时不时会以未来重现温馨的眼光去努力着-一般他们都喜欢因循重蹈覆辙的路子-2-只想活在当下的计较当中-md.md",
+      "relativePath": "20140101_这四类-1-沉浸于回忆当中-时不时会以未来重现温馨的眼光去努力着-一般他们都喜欢因循重蹈覆辙的路子-2-只想活在当下的计较当中-md.md",
+      "year": 2014,
+      "title": "这四类 1 沉浸于回忆当中 时不时会以未来重现温馨的眼光去努力着 一般他们都喜欢因循重蹈覆辙的路子 2 只想活在当下的计较当中 md",
+      "wing": "worldview",
+      "hall": "emotions",
+      "room": "情绪-渴望与波动",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140412_如果-我是能够成为-苏菲的世界-里的苏菲-我真希望-我能在创造者毫无察觉的情况下来观察它的一举一动-md.md",
+      "relativePath": "20140412_如果-我是能够成为-苏菲的世界-里的苏菲-我真希望-我能在创造者毫无察觉的情况下来观察它的一举一动-md.md",
+      "year": 2014,
+      "title": "如果 我是能够成为 苏菲的世界 里的苏菲 我真希望 我能在创造者毫无察觉的情况下来观察它的一举一动 md",
+      "wing": "worldview",
+      "hall": "emotions",
+      "room": "情绪-渴望与波动",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140421_别太在意别人是如何去评价你的-你更应该设身处地地去想想-世界本身是如何看待你的-关于一切的相关联-这道-题-该如何解释-md.md",
+      "relativePath": "20140421_别太在意别人是如何去评价你的-你更应该设身处地地去想想-世界本身是如何看待你的-关于一切的相关联-这道-题-该如何解释-md.md",
+      "year": 2014,
+      "title": "别太在意别人是如何去评价你的 你更应该设身处地地去想想 世界本身是如何看待你的 关于一切的相关联 这道 题 该如何解释 md",
+      "wing": "worldview",
+      "hall": "consciousness",
+      "room": "世界观-时代判断",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140529_时空仿佛因为有了意识才懂得如何开始-md.md",
+      "relativePath": "20140529_时空仿佛因为有了意识才懂得如何开始-md.md",
+      "year": 2014,
+      "title": "时空仿佛因为有了意识才懂得如何开始 md",
+      "wing": "worldview",
+      "hall": "consciousness",
+      "room": "世界观-时代判断",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140626_在我看来-你是很悲哀的存在-因为你已经被社会中的标签以及指标性质的生活给绑架住了-然而-当你发现之时-一开始你会选择了去批判这个社会-md.md",
+      "relativePath": "20140626_在我看来-你是很悲哀的存在-因为你已经被社会中的标签以及指标性质的生活给绑架住了-然而-当你发现之时-一开始你会选择了去批判这个社会-md.md",
+      "year": 2014,
+      "title": "在我看来 你是很悲哀的存在 因为你已经被社会中的标签以及指标性质的生活给绑架住了 然而 当你发现之时 一开始你会选择了去批判这个社会 md",
+      "wing": "worldview",
+      "hall": "consciousness",
+      "room": "世界观-时代判断",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140713_当你发现自己对于世界真相的认知成为一种不可行时-那么你将会在接下来的日子里惧怕失去任何关于一丝一毫的一切-md.md",
+      "relativePath": "20140713_当你发现自己对于世界真相的认知成为一种不可行时-那么你将会在接下来的日子里惧怕失去任何关于一丝一毫的一切-md.md",
+      "year": 2014,
+      "title": "当你发现自己对于世界真相的认知成为一种不可行时 那么你将会在接下来的日子里惧怕失去任何关于一丝一毫的一切 md",
+      "wing": "worldview",
+      "hall": "consciousness",
+      "room": "世界观-时代判断",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140824_我对于自己的存在感到很惊讶-我惊讶我竟然是存在着的-我是有自我意识的-我惊讶并且疑惑这一切存在的契机-其实-与其说惊讶-以-我-的-md.md",
+      "relativePath": "20140824_我对于自己的存在感到很惊讶-我惊讶我竟然是存在着的-我是有自我意识的-我惊讶并且疑惑这一切存在的契机-其实-与其说惊讶-以-我-的-md.md",
+      "year": 2014,
+      "title": "我对于自己的存在感到很惊讶 我惊讶我竟然是存在着的 我是有自我意识的 我惊讶并且疑惑这一切存在的契机 其实 与其说惊讶 以 我 的 md",
+      "wing": "worldview",
+      "hall": "consciousness",
+      "room": "世界观-时代判断",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20140915_如何去记录与描述世界-md.md",
+      "relativePath": "20140915_如何去记录与描述世界-md.md",
+      "year": 2014,
+      "title": "如何去记录与描述世界 md",
+      "wing": "worldview",
+      "hall": "consciousness",
+      "room": "世界观-时代判断",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20141125_如果我的下一代没法在我死之后-继续用意识汇报的方式为我生前的工作进程做贡献的话-那么我是不会想要有后代的-md.md",
+      "relativePath": "20141125_如果我的下一代没法在我死之后-继续用意识汇报的方式为我生前的工作进程做贡献的话-那么我是不会想要有后代的-md.md",
+      "year": 2014,
+      "title": "如果我的下一代没法在我死之后 继续用意识汇报的方式为我生前的工作进程做贡献的话 那么我是不会想要有后代的 md",
+      "wing": "worldview",
+      "hall": "emotions",
+      "room": "情绪-渴望与波动",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20141205_把你曾经有过的领悟与描述-描绘记录在案-总有一天你是能够整合它们的意识的-从而发挥它们的时效性-md.md",
+      "relativePath": "20141205_把你曾经有过的领悟与描述-描绘记录在案-总有一天你是能够整合它们的意识的-从而发挥它们的时效性-md.md",
+      "year": 2014,
+      "title": "把你曾经有过的领悟与描述 描绘记录在案 总有一天你是能够整合它们的意识的 从而发挥它们的时效性 md",
+      "wing": "worldview",
+      "hall": "consciousness",
+      "room": "世界观-时代判断",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20141207_人生在世-你知道什么时候你能意识到自己其实只是在游戏人生吗-当你在清醒的时候-md.md",
+      "relativePath": "20141207_人生在世-你知道什么时候你能意识到自己其实只是在游戏人生吗-当你在清醒的时候-md.md",
+      "year": 2014,
+      "title": "人生在世 你知道什么时候你能意识到自己其实只是在游戏人生吗 当你在清醒的时候 md",
+      "wing": "worldview",
+      "hall": "consciousness",
+      "room": "世界观-时代判断",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20141210_习惯性地活在当下-会让你没法望到时空的尽头-没法看清世界的真相-md.md",
+      "relativePath": "20141210_习惯性地活在当下-会让你没法望到时空的尽头-没法看清世界的真相-md.md",
+      "year": 2014,
+      "title": "习惯性地活在当下 会让你没法望到时空的尽头 没法看清世界的真相 md",
+      "wing": "worldview",
+      "hall": "consciousness",
+      "room": "世界观-时代判断",
+      "confidence": 0.74
+    },
+    {
+      "filePath": "/Users/apple/Documents/Openbasaka_Brain/Wiki/20150115_只有一开始经历过一些极端的人-才会更有清晰的思路以及明确的觉悟去理解未来-理解这个世界-md.md",
+      "relativePath": "20150115_只有一开始经历过一些极端的人-才会更有清晰的思路以及明确的觉悟去理解未来-理解这个世界-md.md",
+      "year": 2015,
+      "title": "只有一开始经历过一些极端的人 才会更有清晰的思路以及明确的觉悟去理解未来 理解这个世界 md",
+      "wing": "worldview",
+      "hall": "consciousness",
+      "room": "世界观-时代判断",
+      "confidence": 0.74
+    }
+  ]
+}

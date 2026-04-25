@@ -1,0 +1,10 @@
+.hex-radar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.hex-radar canvas {
+  filter: drop-shadow(0 0 20px rgba(0, 212, 170, 0.1));
+}

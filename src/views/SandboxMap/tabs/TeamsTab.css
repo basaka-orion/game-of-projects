@@ -1,0 +1,879 @@
+/* ═══════════════════════════════════════════════════════
+   TeamsTab — 群策群力 · 团队协作面板
+   ═══════════════════════════════════════════════════════ */
+
+.teams-tab {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ─── 顶部操作栏 ─── */
+.teams-tab__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--hd-space-sm) var(--hd-space-md);
+  border-bottom: 1px solid var(--hd-border);
+  flex-shrink: 0;
+}
+
+.teams-tab__filters {
+  display: flex;
+  gap: 4px;
+}
+
+.teams-tab__filter-btn {
+  font-family: var(--hd-font-mono);
+  font-size: 0.65rem;
+  padding: 4px 10px;
+  border: 1px solid var(--hd-border);
+  background: transparent;
+  color: var(--hd-text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.teams-tab__filter-btn:hover {
+  border-color: var(--hd-accent-cyan);
+  color: var(--hd-text-primary);
+}
+
+.teams-tab__filter-btn--active {
+  border-color: var(--hd-accent-cyan);
+  color: var(--hd-accent-cyan);
+  background: rgba(0, 212, 170, 0.06);
+}
+
+.teams-tab__badge {
+  font-size: 0.55rem;
+  padding: 1px 4px;
+  border: 1px solid var(--hd-accent-cyan);
+  color: var(--hd-accent-cyan);
+  font-family: var(--hd-font-mono);
+}
+
+.teams-tab__create-btn {
+  font-family: var(--hd-font-mono);
+  font-size: 0.65rem;
+  padding: 4px 14px;
+  border: 1px solid var(--hd-accent-cyan);
+  color: var(--hd-accent-cyan);
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: var(--hd-tracking-wide);
+}
+
+.teams-tab__create-btn:hover {
+  background: var(--hd-accent-cyan);
+  color: var(--hd-bg-deep);
+}
+
+/* ─── 主体 ─── */
+.teams-tab__body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ─── 左侧团队列表 ─── */
+.teams-tab__list {
+  width: 260px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--hd-border);
+  overflow-y: auto;
+}
+
+.teams-tab__card {
+  display: block;
+  width: 100%;
+  padding: 12px var(--hd-space-md);
+  border: none;
+  border-bottom: 1px solid var(--hd-border);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.2s ease;
+  color: var(--hd-text-primary);
+}
+
+.teams-tab__card:hover {
+  background: var(--hd-bg-surface);
+}
+
+.teams-tab__card--active {
+  border-left: 3px solid var(--hd-accent-cyan);
+  background: rgba(0, 212, 170, 0.04);
+}
+
+.teams-tab__card-name {
+  font-family: var(--hd-font-display);
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.teams-tab__card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.teams-tab__type-tag {
+  font-family: var(--hd-font-mono);
+  font-size: 0.55rem;
+  padding: 1px 6px;
+  border: 1px solid;
+  text-transform: uppercase;
+  letter-spacing: var(--hd-tracking-wide);
+}
+
+.teams-tab__card-members {
+  font-family: var(--hd-font-mono);
+  font-size: 0.6rem;
+  color: var(--hd-text-muted);
+}
+
+/* ─── 右侧详情 ─── */
+.teams-tab__detail {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--hd-space-md);
+}
+
+.teams-tab__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--hd-text-muted);
+  font-size: 0.85rem;
+  gap: 8px;
+}
+
+.teams-tab__empty-icon {
+  font-size: 2rem;
+  opacity: 0.4;
+}
+
+.teams-tab__empty-hint {
+  font-size: 0.7rem;
+  opacity: 0.6;
+  margin-top: 4px;
+}
+
+/* ─── 团队信息 ─── */
+.teams-tab__info {
+  margin-bottom: var(--hd-space-md);
+  padding-bottom: var(--hd-space-md);
+  border-bottom: 1px solid var(--hd-border);
+}
+
+.teams-tab__info-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.teams-tab__info-name {
+  font-family: var(--hd-font-display);
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0 0 4px 0;
+  color: var(--hd-text-primary);
+}
+
+.teams-tab__info-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.teams-tab__action-btn {
+  font-family: var(--hd-font-mono);
+  font-size: 0.6rem;
+  padding: 3px 10px;
+  border: 1px solid var(--hd-border);
+  background: transparent;
+  color: var(--hd-text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.teams-tab__action-btn--edit {
+  border-color: var(--hd-accent-cyan);
+  color: var(--hd-accent-cyan);
+}
+
+.teams-tab__action-btn--edit:hover {
+  background: var(--hd-accent-cyan);
+  color: var(--hd-bg-deep);
+}
+
+.teams-tab__action-btn--disband {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.teams-tab__action-btn--disband:hover {
+  background: #ef4444;
+  color: white;
+}
+
+.teams-tab__info-desc {
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.78rem;
+  color: var(--hd-text-secondary);
+  margin: 0 0 6px 0;
+  line-height: 1.5;
+}
+
+.teams-tab__info-config {
+  font-family: var(--hd-font-mono);
+  font-size: 0.6rem;
+  color: var(--hd-text-muted);
+}
+
+/* ─── 成员列表 ─── */
+.teams-tab__members {
+  margin-bottom: var(--hd-space-md);
+  padding-bottom: var(--hd-space-md);
+  border-bottom: 1px solid var(--hd-border);
+}
+
+.teams-tab__section-title {
+  font-family: var(--hd-font-mono);
+  font-size: 0.65rem;
+  color: var(--hd-accent-cyan);
+  text-transform: uppercase;
+  letter-spacing: var(--hd-tracking-wide);
+  margin-bottom: 8px;
+}
+
+.teams-tab__member-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.teams-tab__member {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--hd-border);
+  font-size: 0.75rem;
+}
+
+.teams-tab__member-icon {
+  font-size: 1rem;
+}
+
+.teams-tab__member-name {
+  font-weight: 600;
+  color: var(--hd-text-primary);
+  font-size: 0.75rem;
+}
+
+.teams-tab__member-role {
+  color: var(--hd-text-muted);
+  font-size: 0.65rem;
+  font-family: var(--hd-font-mono);
+}
+
+/* ─── 群聊区 ─── */
+.teams-tab__chat-section {
+  margin-bottom: var(--hd-space-md);
+}
+
+.teams-tab__chat-input-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: var(--hd-space-md);
+}
+
+.teams-tab__chat-input {
+  flex: 1;
+  border: 1px solid var(--hd-border);
+  background: var(--hd-bg-deep);
+  color: var(--hd-text-primary);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.82rem;
+  padding: 8px 12px;
+}
+
+.teams-tab__chat-input:focus {
+  outline: none;
+  border-color: var(--hd-accent-cyan);
+}
+
+.teams-tab__chat-input::placeholder {
+  color: var(--hd-text-muted);
+  opacity: 0.5;
+}
+
+.teams-tab__chat-start-btn {
+  font-family: var(--hd-font-mono);
+  font-size: 0.7rem;
+  padding: 8px 16px;
+  border: 1px solid var(--hd-accent-cyan);
+  color: var(--hd-accent-cyan);
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: var(--hd-tracking-wide);
+  white-space: nowrap;
+}
+
+.teams-tab__chat-start-btn:hover:not(:disabled) {
+  background: var(--hd-accent-cyan);
+  color: var(--hd-bg-deep);
+}
+
+.teams-tab__chat-start-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ─── 群聊消息 ─── */
+.teams-tab__chat-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.teams-tab__chat-msg {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--hd-border);
+  background: var(--hd-bg-surface);
+  animation: fade-in 0.3s ease;
+  transition: border-color 0.2s ease;
+}
+
+/* ─── 彩色 Agent 气泡 ─── */
+.teams-tab__chat-msg--colored {
+  border-left: 3px solid var(--agent-color, #00d4aa);
+}
+
+.teams-tab__chat-msg-avatar--colored {
+  border-color: var(--agent-color, #00d4aa) !important;
+  color: var(--agent-color, #00d4aa) !important;
+}
+
+.teams-tab__chat-msg-name--colored {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.teams-tab__chat-msg--system {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.teams-tab__chat-msg-avatar {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--hd-accent-cyan);
+  color: var(--hd-accent-cyan);
+  font-size: 0.75rem;
+}
+
+.teams-tab__chat-msg-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.teams-tab__chat-msg-name {
+  font-family: var(--hd-font-mono);
+  font-size: 0.65rem;
+  color: var(--hd-accent-cyan);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: var(--hd-tracking-wide);
+}
+
+.teams-tab__chat-msg-content {
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.78rem;
+  line-height: 1.6;
+  color: var(--hd-text-secondary);
+  white-space: pre-wrap;
+}
+
+/* ─── 综合结论 ─── */
+.teams-tab__chat-summary {
+  margin-top: var(--hd-space-md);
+  padding-top: var(--hd-space-md);
+  border-top: 1px solid var(--hd-accent-cyan);
+}
+
+.teams-tab__chat-summary-text {
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: var(--hd-text-primary);
+  padding: var(--hd-space-sm);
+  background: rgba(0, 212, 170, 0.04);
+  border: 1px solid rgba(0, 212, 170, 0.2);
+  white-space: pre-wrap;
+}
+
+/* ─── 模态框 ─── */
+.teams-tab__modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.teams-tab__modal {
+  width: 500px;
+  max-height: 80vh;
+  background: var(--hd-bg-primary);
+  border: 1px solid var(--hd-accent-cyan);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.teams-tab__modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--hd-space-sm) var(--hd-space-md);
+  border-bottom: 1px solid var(--hd-border);
+}
+
+.teams-tab__modal-tabs {
+  display: flex;
+  gap: 0;
+}
+
+.teams-tab__modal-tab {
+  font-family: var(--hd-font-mono);
+  font-size: 0.7rem;
+  padding: 6px 14px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--hd-text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.teams-tab__modal-tab:hover {
+  color: var(--hd-text-primary);
+}
+
+.teams-tab__modal-tab--active {
+  color: var(--hd-accent-cyan);
+  border-bottom-color: var(--hd-accent-cyan);
+}
+
+.teams-tab__modal-header h3 {
+  font-family: var(--hd-font-display);
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--hd-text-primary);
+  margin: 0;
+}
+
+.teams-tab__modal-close {
+  background: transparent;
+  border: none;
+  color: var(--hd-text-muted);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.teams-tab__modal-close:hover {
+  color: var(--hd-text-primary);
+}
+
+.teams-tab__modal-body {
+  padding: var(--hd-space-md);
+  overflow-y: auto;
+  flex: 1;
+}
+
+.teams-tab__form-group {
+  margin-bottom: var(--hd-space-md);
+}
+
+.teams-tab__form-label {
+  display: block;
+  font-family: var(--hd-font-mono);
+  font-size: 0.65rem;
+  color: var(--hd-accent-cyan);
+  text-transform: uppercase;
+  letter-spacing: var(--hd-tracking-wide);
+  margin-bottom: 6px;
+}
+
+.teams-tab__form-input {
+  width: 100%;
+  border: 1px solid var(--hd-border);
+  background: var(--hd-bg-deep);
+  color: var(--hd-text-primary);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.82rem;
+  padding: 8px 12px;
+  box-sizing: border-box;
+}
+
+.teams-tab__form-input:focus {
+  outline: none;
+  border-color: var(--hd-accent-cyan);
+}
+
+.teams-tab__form-input::placeholder {
+  color: var(--hd-text-muted);
+  opacity: 0.5;
+}
+
+.teams-tab__form-radio-group {
+  display: flex;
+  gap: 4px;
+}
+
+.teams-tab__form-radio {
+  font-family: var(--hd-font-mono);
+  font-size: 0.65rem;
+  padding: 4px 10px;
+  border: 1px solid var(--hd-border);
+  background: transparent;
+  color: var(--hd-text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.teams-tab__form-radio:hover {
+  border-color: var(--hd-accent-cyan);
+  color: var(--hd-text-primary);
+}
+
+.teams-tab__form-radio--active {
+  border-color: var(--hd-accent-cyan);
+  color: var(--hd-accent-cyan);
+  background: rgba(0, 212, 170, 0.06);
+}
+
+/* ─── 成员选择器 ─── */
+.teams-tab__member-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.teams-tab__member-pick-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border: 1px solid var(--hd-border);
+  background: transparent;
+  color: var(--hd-text-secondary);
+  cursor: pointer;
+  font-family: var(--hd-font-mono);
+  font-size: 0.65rem;
+  transition: all 0.2s ease;
+}
+
+.teams-tab__member-pick-btn:hover {
+  border-color: var(--hd-accent-cyan);
+  color: var(--hd-text-primary);
+}
+
+.teams-tab__member-pick-btn--active {
+  border-color: var(--hd-accent-cyan);
+  color: var(--hd-accent-cyan);
+  background: rgba(0, 212, 170, 0.06);
+}
+
+.teams-tab__pick-check {
+  color: var(--hd-accent-cyan);
+  font-size: 0.7rem;
+}
+
+/* ─── 模态底部 ─── */
+.teams-tab__modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: var(--hd-space-sm) var(--hd-space-md);
+  border-top: 1px solid var(--hd-border);
+}
+
+.teams-tab__modal-btn {
+  font-family: var(--hd-font-mono);
+  font-size: 0.65rem;
+  padding: 6px 16px;
+  border: 1px solid var(--hd-border);
+  background: transparent;
+  color: var(--hd-text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.teams-tab__modal-btn--cancel:hover {
+  border-color: var(--hd-text-primary);
+  color: var(--hd-text-primary);
+}
+
+.teams-tab__modal-btn--save {
+  border-color: var(--hd-accent-cyan);
+  color: var(--hd-accent-cyan);
+}
+
+.teams-tab__modal-btn--save:hover:not(:disabled) {
+  background: var(--hd-accent-cyan);
+  color: var(--hd-bg-deep);
+}
+
+.teams-tab__modal-btn--save:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ─── PRD 生成区 ─── */
+.teams-tab__prd-section {
+  margin-bottom: var(--hd-space-md);
+  padding-bottom: var(--hd-space-md);
+  border-bottom: 1px solid var(--hd-border);
+}
+
+.teams-tab__prd-desc {
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.72rem;
+  color: var(--hd-text-muted);
+  margin-bottom: 8px;
+}
+
+.teams-tab__prd-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: var(--hd-space-sm);
+}
+
+.teams-tab__prd-btn {
+  font-family: var(--hd-font-mono);
+  font-size: 0.65rem;
+  padding: 5px 14px;
+  border: 1px solid #8b5cf6;
+  color: #8b5cf6;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: var(--hd-tracking-wide);
+}
+
+.teams-tab__prd-btn:hover {
+  background: #8b5cf6;
+  color: var(--hd-bg-deep);
+}
+
+.teams-tab__prd-btn--download {
+  border-color: var(--hd-accent-cyan);
+  color: var(--hd-accent-cyan);
+}
+
+.teams-tab__prd-btn--download:hover {
+  background: var(--hd-accent-cyan);
+  color: var(--hd-bg-deep);
+}
+
+/* ─── PRD 进度 ─── */
+.teams-tab__prd-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #8b5cf6;
+  background: rgba(139, 92, 246, 0.06);
+  font-family: var(--hd-font-mono);
+  font-size: 0.7rem;
+  color: #8b5cf6;
+}
+
+.teams-tab__prd-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(139, 92, 246, 0.3);
+  border-top-color: #8b5cf6;
+  border-radius: 50%;
+  animation: prd-spin 0.8s linear infinite;
+}
+
+@keyframes prd-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ─── PRD 结果 ─── */
+.teams-tab__prd-result {
+  margin-top: var(--hd-space-sm);
+}
+
+.teams-tab__prd-result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #8b5cf6;
+}
+
+.teams-tab__prd-result-title {
+  font-family: var(--hd-font-display);
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #8b5cf6;
+}
+
+.teams-tab__prd-result-meta {
+  font-family: var(--hd-font-mono);
+  font-size: 0.6rem;
+  color: var(--hd-text-muted);
+}
+
+/* ─── PRD 章节 ─── */
+.teams-tab__prd-chapter {
+  margin-bottom: 2px;
+}
+
+.teams-tab__prd-chapter-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--hd-border);
+  background: var(--hd-bg-surface);
+  cursor: pointer;
+  transition: background 0.15s ease;
+  color: var(--hd-text-primary);
+  text-align: left;
+}
+
+.teams-tab__prd-chapter-header:hover {
+  background: rgba(139, 92, 246, 0.06);
+  border-color: #8b5cf6;
+}
+
+.teams-tab__prd-chapter-num {
+  font-family: var(--hd-font-mono);
+  font-size: 0.65rem;
+  color: #8b5cf6;
+  width: 20px;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.teams-tab__prd-chapter-title {
+  flex: 1;
+  font-family: var(--hd-font-display);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.teams-tab__prd-chapter-toggle {
+  font-family: var(--hd-font-mono);
+  font-size: 0.85rem;
+  color: var(--hd-text-muted);
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+}
+
+.teams-tab__prd-chapter-content {
+  padding: 10px 12px;
+  border: 1px solid var(--hd-border);
+  border-top: none;
+  background: rgba(139, 92, 246, 0.02);
+  position: relative;
+}
+
+.teams-tab__prd-chapter-text {
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.78rem;
+  line-height: 1.7;
+  color: var(--hd-text-secondary);
+  white-space: pre-wrap;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.teams-tab__prd-copy-btn {
+  margin-top: 8px;
+  font-family: var(--hd-font-mono);
+  font-size: 0.6rem;
+  padding: 3px 10px;
+  border: 1px solid var(--hd-border);
+  background: transparent;
+  color: var(--hd-text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.teams-tab__prd-copy-btn:hover {
+  border-color: var(--hd-accent-cyan);
+  color: var(--hd-accent-cyan);
+}
+
+/* ─── PRD 模态框加宽 ─── */
+.teams-tab__modal--prd {
+  width: 580px;
+}
+
+.teams-tab__form-textarea {
+  width: 100%;
+  border: 1px solid var(--hd-border);
+  background: var(--hd-bg-deep);
+  color: var(--hd-text-primary);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.82rem;
+  padding: 8px 12px;
+  box-sizing: border-box;
+  resize: vertical;
+  min-height: 60px;
+}
+
+.teams-tab__form-textarea:focus {
+  outline: none;
+  border-color: var(--hd-accent-cyan);
+}
+
+.teams-tab__form-textarea::placeholder {
+  color: var(--hd-text-muted);
+  opacity: 0.5;
+}
+
+.teams-tab__form-textarea:disabled {
+  opacity: 0.5;
+}

@@ -1,0 +1,21 @@
+.agent-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid var(--hd-border);
+}
+
+.agent-avatar--default {
+  background: var(--hd-bg-surface);
+}
+
+.agent-avatar--hermes {
+  border: 1px solid;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.agent-avatar--hermes svg {
+  display: block;
+}

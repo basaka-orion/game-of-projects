@@ -1,0 +1,8 @@
+/* Hermes Dark — Design System Entry */
+@import './tokens.css';
+@import './reset.css';
+@import './grid-system.css';
+@import './animations.css';
+
+/* Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@700;900&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@700&display=swap');

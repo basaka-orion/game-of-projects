@@ -1,0 +1,22 @@
+.grid-card {
+  border: 1px solid var(--hd-border);
+  background: var(--hd-bg-primary);
+  position: relative;
+}
+
+.grid-card--accent {
+  border-color: var(--hd-accent-cyan);
+  box-shadow: 0 0 12px var(--hd-accent-glow);
+}
+
+.grid-card__header {
+  padding: var(--hd-space-sm) var(--hd-space-md);
+  border-bottom: 1px solid var(--hd-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.grid-card__body {
+  padding: var(--hd-space-md);
+}

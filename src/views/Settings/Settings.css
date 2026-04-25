@@ -1,0 +1,210 @@
+/* ═══════════════════════════════════════════════════════
+   Settings — 设置面板
+   ═══════════════════════════════════════════════════════ */
+
+.settings {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--hd-bg-deep);
+  color: var(--hd-text-primary);
+}
+
+.settings__nav {
+  -webkit-app-region: drag;
+  padding-left: 80px;
+}
+
+.settings__nav .hd-nav__item {
+  -webkit-app-region: no-drag;
+}
+
+.settings__content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--hd-space-lg);
+  max-width: 700px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.settings__saved {
+  position: fixed;
+  top: 60px;
+  right: 20px;
+  padding: 8px 20px;
+  background: var(--hd-success);
+  color: var(--hd-bg-deep);
+  font-family: var(--hd-font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  z-index: 100;
+}
+
+.settings__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hd-space-md);
+}
+
+.settings__field {
+  margin-bottom: var(--hd-space-md);
+}
+
+.settings__label {
+  display: block;
+  font-family: var(--hd-font-mono);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: var(--hd-tracking-wide);
+  color: var(--hd-text-muted);
+  margin-bottom: var(--hd-space-xs);
+}
+
+.settings__input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--hd-border);
+  background: var(--hd-bg-deep);
+  color: var(--hd-text-primary);
+  font-family: var(--hd-font-body);
+  font-size: 0.85rem;
+  transition: border-color 0.2s ease;
+  box-sizing: border-box;
+}
+
+.settings__input:focus {
+  outline: none;
+  border-color: var(--hd-accent-cyan);
+}
+
+.settings__input::placeholder {
+  color: var(--hd-text-muted);
+  opacity: 0.5;
+}
+
+.settings__provider-grid {
+  display: flex;
+  gap: var(--hd-space-xs);
+  flex-wrap: wrap;
+}
+
+.settings__provider-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--hd-border);
+  background: transparent;
+  color: var(--hd-text-secondary);
+  font-family: var(--hd-font-mono);
+  font-size: 0.7rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.settings__provider-btn:hover {
+  border-color: var(--hd-accent-cyan);
+  color: var(--hd-text-primary);
+}
+
+.settings__provider-btn--active {
+  border-color: var(--hd-accent-cyan);
+  color: var(--hd-accent-cyan);
+  background: rgba(0, 212, 170, 0.08);
+}
+
+.settings__save-btn {
+  font-family: var(--hd-font-mono);
+  font-size: 0.75rem;
+  padding: 8px 24px;
+  border: 1px solid var(--hd-accent-cyan);
+  background: transparent;
+  color: var(--hd-accent-cyan);
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: var(--hd-tracking-wide);
+  transition: all 0.2s ease;
+}
+
+.settings__save-btn:hover {
+  background: var(--hd-accent-cyan);
+  color: var(--hd-bg-deep);
+}
+
+.settings__data-actions {
+  display: flex;
+  gap: var(--hd-space-md);
+}
+
+.settings__data-btn {
+  flex: 1;
+  padding: 10px;
+  border: 1px solid var(--hd-border);
+  background: transparent;
+  color: var(--hd-text-primary);
+  font-family: var(--hd-font-mono);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.settings__data-btn:hover {
+  background: var(--hd-bg-surface);
+}
+
+.settings__data-btn--export {
+  border-color: var(--hd-accent-cyan);
+  color: var(--hd-accent-cyan);
+}
+
+.settings__data-btn--clear {
+  border-color: var(--hd-danger);
+  color: var(--hd-danger);
+}
+
+.settings__about {
+  text-align: center;
+  padding: var(--hd-space-lg);
+}
+
+.settings__about-logo {
+  font-size: 3rem;
+  margin-bottom: var(--hd-space-md);
+}
+
+.settings__about-title {
+  font-family: var(--hd-font-display);
+  font-size: 1.5rem;
+  font-weight: 900;
+  margin-bottom: var(--hd-space-xs);
+}
+
+.settings__about-version {
+  font-family: var(--hd-font-mono);
+  font-size: 0.7rem;
+  color: var(--hd-accent-cyan);
+  margin-bottom: var(--hd-space-md);
+}
+
+.settings__about-desc {
+  font-size: 0.85rem;
+  color: var(--hd-text-secondary);
+  margin-bottom: var(--hd-space-xs);
+}
+
+.settings__about-tech {
+  display: flex;
+  gap: var(--hd-space-xs);
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: var(--hd-space-md);
+}
+
+.settings__tag {
+  font-family: var(--hd-font-mono);
+  font-size: 0.6rem;
+  padding: 3px 10px;
+  border: 1px solid var(--hd-border);
+  color: var(--hd-text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--hd-tracking-wide);
+}

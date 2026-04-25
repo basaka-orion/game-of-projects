@@ -1,0 +1,132 @@
+{
+  "name": "game-of-projects",
+  "version": "0.1.0",
+  "description": "项目的游戏 — 个人元宇宙外脑操作系统 & 现实世界战略推演沙盘",
+  "main": "dist-electron/main/index.js",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "dev:electron": "vite build && electron .",
+    "build": "vite build",
+    "preview": "vite preview",
+    "health:check": "node tools/project-health-check.mjs",
+    "health:hydrate": "node tools/request-project-hydration.mjs --wait 15",
+    "test:risk": "vitest run src/lib/db/__tests__/backup-format.test.ts src/lib/operating-loop/__tests__/daily-brief.test.ts src/lib/operating-loop/__tests__/project-neural-network.test.ts",
+    "eval:golden": "vitest run src/lib/evals/__tests__/nine-score-golden.test.ts",
+    "smoke:ui": "vitest run src/views/SandboxMap/__tests__/sandbox-ui-smoke.test.tsx",
+    "verify": "npm run health:check && npm run test:risk && npm run eval:golden && npm run smoke:ui && npm run typecheck && npm run build",
+    "typecheck": "tsc --noEmit",
+    "qimeng:preflight": "node --experimental-strip-types tools/qimeng-corpus-preflight.ts",
+    "qimeng:candidates": "node --experimental-strip-types tools/qimeng-candidate-batch.ts",
+    "qimeng:pilot": "node --experimental-strip-types tools/qimeng-pilot-import.ts",
+    "qimeng:compile": "node --experimental-strip-types tools/qimeng-pilot-compile.ts",
+    "qimeng:page-chunks": "node --experimental-strip-types tools/qimeng-page-chunks.ts",
+    "qimeng:rollback": "node --experimental-strip-types tools/qimeng-import-rollback.ts",
+    "lint": "eslint src/ electron/",
+    "lint:fix": "eslint src/ electron/ --fix",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"electron/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"electron/**/*.ts\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "package": "npm run build && electron-builder --mac",
+    "package:dir": "npm run build && electron-builder --mac --dir"
+  },
+  "author": "Boss",
+  "license": "MIT",
+  "build": {
+    "appId": "com.openbasaka.game-of-projects",
+    "productName": "项目的游戏",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "node_modules/better-sqlite3/**/*",
+      "node_modules/bindings/**/*",
+      "node_modules/prebuild-install/**/*",
+      "node_modules/file-uri-to-path/**/*",
+      "node_modules/node-addon-api/**/*",
+      "src/features/profiling-studio/remotion/**/*"
+    ],
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**/*",
+      "**/*.node"
+    ],
+    "npmRebuild": true,
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "darkModeSupport": true,
+      "hardenedRuntime": false,
+      "identity": null
+    },
+    "dmg": {
+      "title": "项目的游戏 ${version}",
+      "artifactName": "GameOfProjects-${version}-${arch}.${ext}"
+    },
+    "fileAssociations": [
+      {
+        "ext": "md",
+        "name": "Markdown PRD",
+        "description": "项目需求文档",
+        "role": "Viewer"
+      },
+      {
+        "ext": "txt",
+        "name": "Text Document",
+        "role": "Viewer"
+      },
+      {
+        "ext": "json",
+        "name": "JSON File",
+        "role": "Viewer"
+      }
+    ]
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@tailwindcss/vite": "^4.2.1",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "electron": "^41.2.0",
+    "electron-builder": "^26.8.1",
+    "esbuild": "^0.28.0",
+    "eslint": "^10.2.0",
+    "jsdom": "^29.0.2",
+    "prettier": "^3.8.3",
+    "tailwindcss": "^4.2.1",
+    "typescript": "^6.0.2",
+    "typescript-eslint": "^8.58.2",
+    "vite": "^8.0.7",
+    "vite-plugin-electron": "^0.29.1",
+    "vitest": "^4.1.4"
+  },
+  "dependencies": {
+    "@insforge/sdk": "^1.1.6",
+    "@remotion/bundler": "4.0.448",
+    "@remotion/player": "4.0.448",
+    "@remotion/renderer": "4.0.448",
+    "better-sqlite3": "^12.8.0",
+    "cron-parser": "^5.5.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "react-router-dom": "^7.13.1",
+    "recharts": "^3.8.0",
+    "redux": "^5.0.1",
+    "remotion": "4.0.448",
+    "scheduler": "^0.27.0",
+    "zod": "^3.25.76",
+    "zustand": "^5.0.11"
+  }
+}

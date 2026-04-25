@@ -1,0 +1,83 @@
+/* ═══════════════════════════════════════════════════════
+   HERMES DARK — 1px Grid System (Brutalist)
+   ═══════════════════════════════════════════════════════ */
+
+.hd-grid {
+  display: grid;
+  border: 1px solid var(--hd-border);
+}
+
+.hd-grid--2col {
+  grid-template-columns: 1fr 1fr;
+}
+
+.hd-grid--3col {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.hd-grid--4col {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.hd-grid__cell {
+  border: 1px solid var(--hd-border);
+  padding: var(--hd-space-md);
+}
+
+/* Hermes-style navbar: 横向 1px 分割 */
+.hd-nav {
+  display: flex;
+  border: 1px solid var(--hd-border);
+}
+
+.hd-nav__item {
+  flex: 1;
+  padding: var(--hd-space-md) var(--hd-space-lg);
+  border-right: 1px solid var(--hd-border);
+  font-family: var(--hd-font-mono);
+  font-size: 0.75rem;
+  letter-spacing: var(--hd-tracking-wide);
+  text-transform: uppercase;
+  color: var(--hd-text-secondary);
+  transition: color var(--hd-transition-fast), background var(--hd-transition-fast);
+  cursor: pointer;
+}
+
+.hd-nav__item:last-child {
+  border-right: none;
+}
+
+.hd-nav__item:hover,
+.hd-nav__item--active {
+  color: var(--hd-text-primary);
+  background: var(--hd-bg-surface);
+}
+
+/* 可点击的 nav item（在拖拽区域内仍可交互） */
+.hd-nav__item--clickable {
+  -webkit-app-region: no-drag;
+  position: relative;
+  z-index: 11;
+}
+
+/* 分隔线 */
+.hd-divider {
+  height: 1px;
+  background: var(--hd-border);
+  width: 100%;
+}
+
+.hd-divider--vertical {
+  width: 1px;
+  height: 100%;
+  background: var(--hd-border);
+}
+
+/* 标签 */
+.hd-label {
+  font-family: var(--hd-font-mono);
+  font-size: 0.65rem;
+  letter-spacing: var(--hd-tracking-wider);
+  text-transform: uppercase;
+  color: var(--hd-text-muted);
+}

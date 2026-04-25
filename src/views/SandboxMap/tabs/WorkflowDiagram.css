@@ -1,0 +1,94 @@
+/* ═══════════════════════════════════════════════════════
+   WorkflowDiagram — 工作流 DAG 可视化
+   ═══════════════════════════════════════════════════════ */
+
+.workflow-diagram {
+  margin-bottom: var(--hd-space-md);
+}
+
+.workflow-diagram__label {
+  font-family: var(--hd-font-mono);
+  font-size: 0.65rem;
+  color: var(--hd-accent-cyan);
+  text-transform: uppercase;
+  letter-spacing: var(--hd-tracking-wide);
+  margin-bottom: 8px;
+}
+
+.workflow-diagram__canvas {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  border: 1px solid var(--hd-border);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.workflow-diagram__layer {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.workflow-diagram__node {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid;
+  background: var(--hd-bg-surface);
+  font-size: 0.75rem;
+  position: relative;
+}
+
+.workflow-diagram__node-icon {
+  font-size: 0.9rem;
+}
+
+.workflow-diagram__node-name {
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.72rem;
+  color: var(--hd-text-secondary);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflow-diagram__arrow {
+  position: absolute;
+  right: -14px;
+  font-size: 0.85rem;
+  color: var(--hd-text-muted);
+}
+
+.workflow-diagram__edges {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--hd-border);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.workflow-diagram__edge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--hd-font-mono);
+  font-size: 0.55rem;
+  color: var(--hd-text-muted);
+}
+
+.workflow-diagram__edge-from,
+.workflow-diagram__edge-to {
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflow-diagram__edge-arrow {
+  color: var(--hd-accent-cyan);
+}

@@ -1,0 +1,207 @@
+/* ═══════════════════════════════════════════════════════
+   OpenBasaka Clipper — Popup Styles (Dark Theme)
+   ═══════════════════════════════════════════════════════ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  width: 360px;
+  font-family: -apple-system, 'SF Mono', 'Menlo', 'Monaco', monospace;
+  background: #021212;
+  color: #e0e0e0;
+  font-size: 13px;
+}
+
+.clipper {
+  padding: 14px;
+}
+
+/* ─── Header ─── */
+
+.clipper__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #1a3a3a;
+}
+
+.clipper__logo {
+  font-size: 1.3rem;
+}
+
+.clipper__title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #00d4aa;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+/* ─── Meta ─── */
+
+.clipper__meta {
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 1px solid #1a3a3a;
+  background: #0a1a1a;
+}
+
+.clipper__meta-title {
+  font-weight: 600;
+  color: #f0f0f0;
+  font-size: 0.82rem;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.clipper__meta-url {
+  font-size: 0.65rem;
+  color: #666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ─── Mode ─── */
+
+.clipper__mode {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.clipper__mode-btn {
+  flex: 1;
+  padding: 7px 10px;
+  border: 1px solid #1a3a3a;
+  background: transparent;
+  color: #888;
+  font-size: 0.75rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.clipper__mode-btn:hover {
+  border-color: #00d4aa;
+  color: #00d4aa;
+}
+
+.clipper__mode-btn--active {
+  border-color: #00d4aa;
+  color: #00d4aa;
+  background: rgba(0, 212, 170, 0.08);
+}
+
+/* ─── Template ─── */
+
+.clipper__template {
+  margin-bottom: 12px;
+}
+
+.clipper__label {
+  display: block;
+  font-size: 0.65rem;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.clipper__select {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid #1a3a3a;
+  background: #0a1a1a;
+  color: #e0e0e0;
+  font-family: inherit;
+  font-size: 0.78rem;
+  outline: none;
+  cursor: pointer;
+}
+
+.clipper__select:focus {
+  border-color: #00d4aa;
+}
+
+/* ─── Preview ─── */
+
+.clipper__preview {
+  margin-bottom: 12px;
+}
+
+.clipper__preview-content {
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 10px;
+  border: 1px solid #1a3a3a;
+  background: #0a1a1a;
+  font-size: 0.72rem;
+  color: #999;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ─── Actions ─── */
+
+.clipper__actions {
+  margin-bottom: 8px;
+}
+
+.clipper__btn {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #1a3a3a;
+  background: transparent;
+  color: #888;
+  font-family: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.clipper__btn--primary {
+  border-color: #00d4aa;
+  color: #00d4aa;
+}
+
+.clipper__btn--primary:hover:not(:disabled) {
+  background: #00d4aa;
+  color: #021212;
+}
+
+.clipper__btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* ─── Status ─── */
+
+.clipper__status {
+  text-align: center;
+  font-size: 0.7rem;
+  color: #666;
+  min-height: 18px;
+}
+
+.clipper__status--processing {
+  color: #00d4aa;
+}
+
+.clipper__status--success {
+  color: #00d4aa;
+  font-weight: 600;
+}
+
+.clipper__status--error {
+  color: #ff6b6b;
+}

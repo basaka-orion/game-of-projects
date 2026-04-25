@@ -1,0 +1,568 @@
+.warroom-tab {
+  height: 100%;
+  overflow-y: auto;
+  padding: var(--hd-space-lg);
+}
+
+.warroom-tab__hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: var(--hd-space-lg);
+  align-items: stretch;
+  margin-bottom: var(--hd-space-lg);
+}
+
+.warroom-tab__eyebrow {
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--hd-accent-cyan);
+  margin-bottom: var(--hd-space-xs);
+}
+
+.warroom-tab__title {
+  font-family: var(--hd-font-display);
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: var(--hd-text-primary);
+  line-height: 1.1;
+  margin-bottom: var(--hd-space-sm);
+}
+
+.warroom-tab__subtitle {
+  max-width: 880px;
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: var(--hd-text-secondary);
+}
+
+.warroom-tab__hero-score {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--hd-space-sm);
+  padding: var(--hd-space-md);
+  background: radial-gradient(circle at top, rgba(0, 212, 170, 0.18), transparent 62%), var(--hd-bg-surface);
+  border: 1px solid var(--hd-border);
+  border-radius: var(--hd-radius-md);
+}
+
+.warroom-tab__hero-score-label {
+  font-size: 0.75rem;
+  color: var(--hd-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.warroom-tab__hero-score-value {
+  font-family: var(--hd-font-display);
+  font-size: 3.4rem;
+  line-height: 1;
+  font-weight: 900;
+  color: var(--hd-text-primary);
+}
+
+.warroom-tab__loading-card {
+  padding: var(--hd-space-lg);
+  background: var(--hd-bg-surface);
+  border: 1px solid var(--hd-border);
+  border-radius: var(--hd-radius-md);
+  color: var(--hd-text-muted);
+  margin-bottom: var(--hd-space-lg);
+}
+
+.warroom-tab__pillars {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--hd-space-md);
+  margin-bottom: var(--hd-space-lg);
+}
+
+.warroom-tab__pillar-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--hd-space-sm);
+  margin-bottom: var(--hd-space-sm);
+}
+
+.warroom-tab__pillar-score {
+  font-family: var(--hd-font-display);
+  font-size: 2rem;
+  font-weight: 900;
+  color: var(--hd-text-primary);
+}
+
+.warroom-tab__pillar-summary {
+  font-size: 0.84rem;
+  line-height: 1.7;
+  color: var(--hd-text-secondary);
+  margin-bottom: var(--hd-space-sm);
+  min-height: 4.2em;
+}
+
+.warroom-tab__chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: var(--hd-space-sm);
+}
+
+.warroom-tab__chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--hd-border);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--hd-text-secondary);
+  font-size: 0.72rem;
+}
+
+.warroom-tab__chip--muted {
+  background: var(--hd-bg-deep);
+}
+
+.warroom-tab__nextmove {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: var(--hd-space-sm);
+  border-top: 1px solid var(--hd-border);
+  font-size: 0.78rem;
+  line-height: 1.6;
+  color: var(--hd-text-secondary);
+}
+
+.warroom-tab__nextmove-label {
+  color: var(--hd-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.66rem;
+}
+
+.warroom-tab__strategy-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--hd-space-md);
+  margin-bottom: var(--hd-space-lg);
+}
+
+.warroom-tab__list-section + .warroom-tab__list-section {
+  margin-top: var(--hd-space-md);
+}
+
+.warroom-tab__list-title {
+  margin-bottom: var(--hd-space-xs);
+  font-size: 0.75rem;
+  color: var(--hd-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.warroom-tab__list-item {
+  display: flex;
+  gap: 8px;
+  font-size: 0.82rem;
+  line-height: 1.7;
+  color: var(--hd-text-secondary);
+}
+
+.warroom-tab__dot {
+  color: var(--hd-accent-cyan);
+}
+
+.warroom-tab__synapse-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hd-space-sm);
+  margin-top: var(--hd-space-md);
+}
+
+.warroom-tab__synapse-item {
+  padding: var(--hd-space-sm);
+  border: 1px solid var(--hd-border);
+  border-radius: var(--hd-radius-sm);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.warroom-tab__synapse-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--hd-space-sm);
+  margin-bottom: 4px;
+  font-size: 0.8rem;
+  color: var(--hd-text-primary);
+}
+
+.warroom-tab__synapse-strength {
+  color: var(--hd-accent-cyan);
+  font-weight: 700;
+}
+
+.warroom-tab__synapse-reason {
+  font-size: 0.76rem;
+  line-height: 1.6;
+  color: var(--hd-text-secondary);
+}
+
+.warroom-tab__project-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--hd-space-md);
+  margin-bottom: var(--hd-space-lg);
+}
+
+.warroom-tab__project-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--hd-space-sm);
+  margin-bottom: var(--hd-space-sm);
+}
+
+.warroom-tab__project-score {
+  font-family: var(--hd-font-display);
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: var(--hd-text-primary);
+}
+
+.warroom-tab__project-meta {
+  font-size: 0.72rem;
+  color: var(--hd-text-muted);
+}
+
+.warroom-tab__inline-section + .warroom-tab__inline-section {
+  margin-top: var(--hd-space-sm);
+}
+
+.warroom-tab__inline-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.68rem;
+  color: var(--hd-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.warroom-tab__inline-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.warroom-tab__setup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hd-space-md);
+  margin-top: var(--hd-space-sm);
+}
+
+.warroom-tab__action-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--hd-space-md);
+  padding: var(--hd-space-md);
+  margin-bottom: var(--hd-space-md);
+  border: 1px solid var(--hd-border);
+  border-radius: var(--hd-radius-md);
+  background: var(--hd-bg-surface);
+}
+
+.warroom-tab__action-title {
+  font-family: var(--hd-font-display);
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--hd-text-primary);
+  margin-bottom: 6px;
+}
+
+.warroom-tab__action-summary {
+  max-width: 760px;
+  font-size: 0.84rem;
+  line-height: 1.7;
+  color: var(--hd-text-secondary);
+}
+
+.warroom-tab__action-control {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--hd-space-sm);
+  min-width: 220px;
+}
+
+.warroom-tab__review-date {
+  font-size: 0.74rem;
+  color: var(--hd-text-muted);
+}
+
+.warroom-tab__action-status {
+  margin-bottom: var(--hd-space-md);
+  color: var(--hd-accent-cyan);
+  font-size: 0.82rem;
+}
+
+.warroom-tab__action-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--hd-space-md);
+  margin-bottom: var(--hd-space-lg);
+}
+
+.warroom-tab__action-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--hd-border);
+  font-size: 0.78rem;
+  line-height: 1.6;
+  color: var(--hd-text-secondary);
+}
+
+.warroom-tab__action-item:last-child {
+  border-bottom: none;
+}
+
+.warroom-tab__action-item-title {
+  color: var(--hd-text-primary);
+  font-weight: 700;
+}
+
+.warroom-tab__project-select,
+.warroom-tab__roles {
+  background: var(--hd-bg-surface);
+  border: 1px solid var(--hd-border);
+  border-radius: var(--hd-radius-md);
+  padding: var(--hd-space-md);
+}
+
+.warroom-tab__field-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.76rem;
+  color: var(--hd-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.warroom-tab__select {
+  width: 100%;
+  font-size: 0.85rem;
+  background: var(--hd-bg-deep);
+  color: var(--hd-text-primary);
+  border: 1px solid var(--hd-border);
+  border-radius: var(--hd-radius-sm);
+  padding: 10px 12px;
+}
+
+.warroom-tab__roles-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--hd-space-sm);
+  margin-bottom: var(--hd-space-sm);
+}
+
+.warroom-tab__inline-btn {
+  background: none;
+  border: none;
+  color: var(--hd-accent-cyan);
+  cursor: pointer;
+  font-size: 0.74rem;
+}
+
+.warroom-tab__role-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.warroom-tab__role-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 0.78rem;
+  background: var(--hd-bg-deep);
+  color: var(--hd-text-secondary);
+  border: 1px solid var(--hd-border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: 0.18s ease;
+}
+
+.warroom-tab__role-chip--active {
+  background: var(--hd-accent-cyan);
+  border-color: var(--hd-accent-cyan);
+  color: var(--hd-bg-deep);
+  font-weight: 700;
+}
+
+.warroom-tab__lock {
+  opacity: 0.7;
+  font-size: 0.72rem;
+}
+
+.warroom-tab__run-btn {
+  align-self: flex-start;
+  padding: 10px 24px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  background: var(--hd-accent-cyan);
+  color: var(--hd-bg-deep);
+  border: none;
+  border-radius: var(--hd-radius-sm);
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.warroom-tab__run-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.warroom-tab__run-btn:not(:disabled):hover {
+  opacity: 0.9;
+}
+
+.warroom-tab__overall {
+  display: flex;
+  align-items: center;
+  gap: var(--hd-space-md);
+  padding: var(--hd-space-md);
+  background: var(--hd-bg-surface);
+  border: 1px solid var(--hd-border);
+  border-radius: var(--hd-radius-md);
+  margin: var(--hd-space-md) 0 var(--hd-space-lg);
+}
+
+.warroom-tab__overall-label {
+  font-size: 0.78rem;
+  color: var(--hd-text-muted);
+}
+
+.warroom-tab__overall-value {
+  font-family: var(--hd-font-display);
+  font-size: 2rem;
+  font-weight: 900;
+  color: var(--hd-text-primary);
+}
+
+.warroom-tab__results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hd-space-sm);
+}
+
+.warroom-tab__result-card {
+  background: var(--hd-bg-surface);
+  border: 1px solid var(--hd-border);
+  border-radius: var(--hd-radius-md);
+  padding: var(--hd-space-md);
+}
+
+.warroom-tab__result-header {
+  display: flex;
+  align-items: center;
+  gap: var(--hd-space-sm);
+  margin-bottom: var(--hd-space-sm);
+  padding-bottom: var(--hd-space-sm);
+  border-bottom: 1px solid var(--hd-border);
+}
+
+.warroom-tab__result-icon {
+  font-size: 1.2rem;
+}
+
+.warroom-tab__result-name {
+  font-weight: 600;
+  color: var(--hd-text-primary);
+}
+
+.warroom-tab__pending {
+  font-size: 0.74rem;
+  color: var(--hd-accent-cyan);
+}
+
+.warroom-tab__error-label {
+  font-size: 0.74rem;
+  color: var(--hd-error);
+}
+
+.warroom-tab__result-body {
+  font-size: 0.82rem;
+  line-height: 1.7;
+}
+
+.warroom-tab__error-body {
+  font-size: 0.8rem;
+  color: var(--hd-error);
+  padding: var(--hd-space-sm);
+}
+
+.warroom-tab__score-grid {
+  display: flex;
+  gap: var(--hd-space-md);
+  flex-wrap: wrap;
+  margin-bottom: var(--hd-space-sm);
+}
+
+.warroom-tab__score-item {
+  text-align: center;
+}
+
+.warroom-tab__score-value {
+  font-family: var(--hd-font-display);
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.warroom-tab__score-label {
+  font-size: 0.65rem;
+  color: var(--hd-text-muted);
+}
+
+.warroom-tab__field-block {
+  margin-bottom: var(--hd-space-xs);
+}
+
+.warroom-tab__field-title {
+  font-size: 0.7rem;
+  color: var(--hd-text-muted);
+  font-weight: 600;
+}
+
+.warroom-tab__field-content {
+  font-size: 0.78rem;
+  color: var(--hd-text-secondary);
+  padding-left: var(--hd-space-sm);
+}
+
+.warroom-tab__field-text {
+  font-size: 0.78rem;
+  color: var(--hd-text-secondary);
+  margin-left: 6px;
+}
+
+@media (max-width: 1080px) {
+  .warroom-tab__hero,
+  .warroom-tab__strategy-grid,
+  .warroom-tab__action-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .warroom-tab__action-head {
+    flex-direction: column;
+  }
+
+  .warroom-tab__action-control {
+    align-items: flex-start;
+    min-width: 0;
+  }
+}

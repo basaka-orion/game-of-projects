@@ -1,0 +1,217 @@
+/* ═══════════════════════════════════════════════════════
+   HERMES DARK — Animations
+   ═══════════════════════════════════════════════════════ */
+
+/* ─── 打字机效果 ─── */
+@keyframes typewriter {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+@keyframes blink-caret {
+  50% { border-color: transparent; }
+}
+
+.hd-typewriter {
+  overflow: hidden;
+  white-space: nowrap;
+  border-right: 2px solid var(--hd-text-primary);
+  animation:
+    typewriter 2s steps(40, end) forwards,
+    blink-caret 0.75s step-end infinite;
+}
+
+/* ─── Vignette Glow (老式显示器边缘光晕) ─── */
+@keyframes vignette-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.7; }
+}
+
+.hd-vignette {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 50%,
+    rgba(0, 212, 170, 0.03) 70%,
+    rgba(0, 212, 170, 0.08) 100%
+  );
+  animation: vignette-pulse 8s ease-in-out infinite;
+}
+
+/* ─── 呼吸脉冲 ─── */
+@keyframes pulse-breathe {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 8px var(--hd-accent-glow);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 24px var(--hd-accent-glow), 0 0 48px rgba(0, 212, 170, 0.08);
+  }
+}
+
+.hd-pulse {
+  animation: pulse-breathe 3s ease-in-out infinite;
+}
+
+/* ─── 淡入 ─── */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.hd-fade-in {
+  animation: fade-in 0.5s ease forwards;
+}
+
+/* ─── 滑入 ─── */
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.hd-slide-in {
+  animation: slide-in-right 0.4s ease forwards;
+}
+
+/* ─── 扫描线（复古 CRT 效果）─── */
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+.hd-scanline::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: rgba(0, 212, 170, 0.06);
+  animation: scanline 6s linear infinite;
+  pointer-events: none;
+}
+
+/* ─── 金色爆发（新物种诞生特效）─── */
+@keyframes gold-burst {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+    filter: brightness(2);
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 1;
+    filter: brightness(1.5);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+    filter: brightness(1);
+  }
+}
+
+.hd-gold-burst {
+  animation: gold-burst 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* ─── 吸入效果（拖拽文件时）─── */
+@keyframes absorb {
+  0% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.3); opacity: 0; }
+}
+
+.hd-absorb {
+  animation: absorb 0.6s ease-in forwards;
+}
+
+/* ─── 数字跳动 ─── */
+@keyframes number-pop {
+  0% { transform: scale(0.5); opacity: 0; }
+  60% { transform: scale(1.2); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.hd-number-pop {
+  animation: number-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* ─── 交错淡入（列表项）─── */
+@keyframes stagger-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.hd-stagger-in > * {
+  opacity: 0;
+  animation: stagger-in 0.35s ease forwards;
+}
+
+.hd-stagger-in > *:nth-child(1) { animation-delay: 0.05s; }
+.hd-stagger-in > *:nth-child(2) { animation-delay: 0.1s; }
+.hd-stagger-in > *:nth-child(3) { animation-delay: 0.15s; }
+.hd-stagger-in > *:nth-child(4) { animation-delay: 0.2s; }
+.hd-stagger-in > *:nth-child(5) { animation-delay: 0.25s; }
+.hd-stagger-in > *:nth-child(6) { animation-delay: 0.3s; }
+
+/* ─── 雷达旋转入场 ─── */
+@keyframes radar-spin-in {
+  0% { opacity: 0; transform: rotate(-90deg) scale(0.6); }
+  100% { opacity: 1; transform: rotate(0deg) scale(1); }
+}
+
+.hd-radar-enter {
+  animation: radar-spin-in 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* ─── 微光流动（加载态）─── */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.hd-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent 30%,
+    rgba(0, 212, 170, 0.05) 50%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+}
+
+/* ─── 边框呼吸（DropZone 激活态）─── */
+@keyframes border-breathe {
+  0%, 100% { border-color: var(--hd-accent-cyan); box-shadow: 0 0 8px var(--hd-accent-glow); }
+  50% { border-color: rgba(0, 212, 170, 0.4); box-shadow: 0 0 24px var(--hd-accent-glow); }
+}
+
+.hd-border-breathe {
+  animation: border-breathe 1.5s ease-in-out infinite;
+}
+
+/* ─── 推演进度条 ─── */
+@keyframes progress-fill {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+.hd-progress-bar {
+  height: 2px;
+  background: var(--hd-bg-surface);
+  overflow: hidden;
+  border-radius: 1px;
+}
+
+.hd-progress-bar::after {
+  content: '';
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--hd-accent-cyan), rgba(0, 212, 170, 0.3));
+  animation: progress-fill 30s ease-out forwards;
+}
+

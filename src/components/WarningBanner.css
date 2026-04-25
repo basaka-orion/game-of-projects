@@ -1,0 +1,77 @@
+.hd-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--hd-space-sm);
+  padding: 8px var(--hd-space-md);
+  font-family: var(--hd-font-mono);
+  font-size: 0.75rem;
+  border-left: 2px solid;
+}
+
+.hd-banner--warning {
+  background: rgba(255, 170, 0, 0.08);
+  border-left-color: var(--hd-warning);
+  color: var(--hd-warning);
+}
+
+.hd-banner--error {
+  background: rgba(255, 68, 68, 0.08);
+  border-left-color: var(--hd-danger);
+  color: var(--hd-danger);
+}
+
+.hd-banner--success {
+  background: rgba(0, 204, 136, 0.08);
+  border-left-color: var(--hd-success);
+  color: var(--hd-success);
+}
+
+.hd-banner--info {
+  background: rgba(0, 212, 170, 0.08);
+  border-left-color: var(--hd-accent-cyan);
+  color: var(--hd-accent-cyan);
+}
+
+.hd-banner__icon {
+  flex-shrink: 0;
+  font-size: 0.85rem;
+}
+
+.hd-banner__message {
+  flex: 1;
+  line-height: 1.4;
+}
+
+.hd-banner__action {
+  padding: 3px 10px;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  font-family: var(--hd-font-mono);
+  font-size: 0.65rem;
+  letter-spacing: var(--hd-tracking-wide);
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all var(--hd-transition-fast);
+  flex-shrink: 0;
+}
+
+.hd-banner__action:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.hd-banner__dismiss {
+  background: none;
+  border: none;
+  color: var(--hd-text-muted);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  transition: color var(--hd-transition-fast);
+  flex-shrink: 0;
+}
+
+.hd-banner__dismiss:hover {
+  color: var(--hd-text-primary);
+}

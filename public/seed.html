@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head><title>Mock Data Seed</title></head>
+<body>
+<script>
+const mockState = {
+  state: {
+    answers: {
+      cognitive: { q1: 4, q2: 5, q3: 3, q4: 4, q5: 5 },
+      personality: { q1: 3, q2: 4, q3: 5, q4: 2, q5: 4 },
+      emotion: { q1: 5, q2: 4, q3: 3, q4: 4, q5: 5 },
+      motivation: { q1: 4, q2: 5, q3: 4, q4: 3, q5: 5 },
+      social: { q1: 3, q2: 4, q3: 4, q4: 5, q5: 3 },
+      aesthetic: { q1: 5, q2: 5, q3: 4, q4: 4, q5: 5 },
+      worldview: { q1: 4, q2: 3, q3: 5, q4: 4, q5: 4 },
+      strengths: { q1: 5, q2: 4, q3: 5, q4: 3, q5: 5 },
+    },
+    avgChoices: { morning_routine: 'creative_start', cafe_encounter: 'deep_conversation', afternoon_choice: 'solo_exploration', evening_event: 'intellectual_gathering', night_reflection: 'journal_writing' },
+    avgProfile: { socialStyle: 'selective_depth', decisionMode: 'intuitive_analytical', energyPattern: 'introvert_bursts' },
+    avgCompleted: true,
+    completedDimensions: ['cognitive', 'personality', 'emotion', 'motivation', 'social', 'aesthetic', 'worldview', 'strengths'],
+    gameResults: [
+      { gameType: 'stroop', data: { correctRate: 0.92, avgResponseTime: 620, interference: 85, trials: 40 }, completedAt: new Date().toISOString() },
+      { gameType: 'nback', data: { accuracy: 0.85, level: 3, hits: 17, misses: 3, falseAlarms: 2 }, completedAt: new Date().toISOString() },
+      { gameType: 'gonogo', data: { correctRate: 0.88, avgResponseTime: 340, commissionErrors: 4, omissionErrors: 1 }, completedAt: new Date().toISOString() },
+      { gameType: 'ultimatum', data: { offers: [50, 60, 40, 55], acceptanceRate: 0.75, avgOffer: 51.25, role: 'proposer' }, completedAt: new Date().toISOString() },
+      { gameType: 'trust', data: { investmentRate: 0.65, returnRate: 0.45, trustScore: 7.2, rounds: 10 }, completedAt: new Date().toISOString() },
+      { gameType: 'publicgoods', data: { contributionRate: 0.58, avgContribution: 5.8, punishmentUsed: true, cooperationIndex: 6.5 }, completedAt: new Date().toISOString() },
+    ],
+    catResponses: {
+      cognitive: [{ itemId: 'cog_1', response: 4, theta: 1.2, se: 0.45 }],
+      personality: [{ itemId: 'per_1', response: 3, theta: 0.8, se: 0.42 }],
+      emotion: [{ itemId: 'emo_1', response: 5, theta: 1.6, se: 0.40 }],
+      motivation: [{ itemId: 'mot_1', response: 5, theta: 1.8, se: 0.38 }],
+      social: [{ itemId: 'soc_1', response: 3, theta: 0.6, se: 0.44 }],
+      aesthetic: [{ itemId: 'aes_1', response: 5, theta: 1.9, se: 0.35 }],
+      worldview: [{ itemId: 'wor_1', response: 4, theta: 1.1, se: 0.41 }],
+      strengths: [{ itemId: 'str_1', response: 5, theta: 1.7, se: 0.37 }],
+    },
+    topology: {
+      id: 'topo-mock-001',
+      selfArchetype: '直觉驱动的系统架构师',
+      narrativeIdentity: '你是一个兼具深度直觉感知与系统化分析能力的思考者。你习惯在纷繁信息中快速捕捉核心模式，然后用结构化思维将直觉洞察转化为可执行的框架。',
+      dimensionTopologies: {
+        cognitive: { dimension: 'cognitive', name: '认知架构', icon: '🧠', color: '#64FFDA', dominantTraits: [{ subDimension: 'fluid_reasoning', subDimensionName: '流体推理', typology: '模式捕捉型', description: '擅长快速识别隐含模式和规律', flowZone: '面对开放性问题', energyDrainer: '按线性步骤逐一验证', evidenceSources: [{ source: 'questionnaire', dimensionId: 'cognitive', observation: '抽象推理题中跳跃式思维', confidence: 0.85 }] }, { subDimension: 'thinking_style', subDimensionName: '思维风格', typology: '直觉-分析双模型', description: '拥有直觉与分析双通道', flowZone: '自由切换直觉与分析', energyDrainer: '被要求单一模式', evidenceSources: [{ source: 'questionnaire', dimensionId: 'cognitive', observation: 'REI量表双高', confidence: 0.78 }] }], energyDynamics: { flowZones: ['开放性问题探索', '系统架构设计'], drainZones: ['重复性信息处理', '纯记忆型任务'] }, collaborationRole: '全局架构师', theoreticalInsight: '接近Kahneman的训练有素的直觉' },
+        personality: { dimension: 'personality', name: '人格结构', icon: '🎭', color: '#BB86FC', dominantTraits: [{ subDimension: 'openness', subDimensionName: '开放性', typology: '探索者', description: '对新体验高度开放', flowZone: '跨学科知识', energyDrainer: '循规蹈矩', evidenceSources: [] }], energyDynamics: { flowZones: ['探索性项目', '跨领域对话'], drainZones: ['行政事务', '微观管理'] }, collaborationRole: '创意催化剂', theoreticalInsight: '高开放性与创新领导力正相关' },
+        emotion: { dimension: 'emotion', name: '情绪与韧性', icon: '💎', color: '#FF80AB', dominantTraits: [{ subDimension: 'emotional_intelligence', subDimensionName: '情绪智力', typology: '感知敏锐型', description: '对情绪变化高度敏感', flowZone: '深度对话', energyDrainer: '长时间社交', evidenceSources: [] }], energyDynamics: { flowZones: ['深度对话', '创作表达'], drainZones: ['情绪高压', '长时间社交'] }, collaborationRole: '团队温度计', theoreticalInsight: 'Salovey-Mayer情绪智力核心能力' },
+        motivation: { dimension: 'motivation', name: '动机与驱力', icon: '🔥', color: '#FFD740', dominantTraits: [{ subDimension: 'intrinsic_motivation', subDimensionName: '内在动机', typology: '意义驱动型', description: '被有意义的事情深度驱动', flowZone: '有使命感的项目', energyDrainer: '纯KPI追逐', evidenceSources: [] }], energyDynamics: { flowZones: ['有使命感的项目', '自主性高的创作'], drainZones: ['纯KPI追逐', '缺乏反馈'] }, collaborationRole: '使命传教士', theoreticalInsight: 'Deci & Ryan自我决定理论' },
+        social: { dimension: 'social', name: '人际与依恋', icon: '🤝', color: '#82B1FF', dominantTraits: [{ subDimension: 'attachment_style', subDimensionName: '依恋风格', typology: '安全-自主型', description: '具备安全依恋基础', flowZone: '少而深的关系', energyDrainer: '大量浅层关系', evidenceSources: [] }], energyDynamics: { flowZones: ['深度友谊', '小团体协作'], drainZones: ['大型社交', '浅层人脉'] }, collaborationRole: '深度连接者', theoreticalInsight: '安全型依恋为创造性冒险提供安全基地' },
+        aesthetic: { dimension: 'aesthetic', name: '审美与感知', icon: '🎨', color: '#EA80FC', dominantTraits: [{ subDimension: 'aesthetic_sensitivity', subDimensionName: '审美敏感度', typology: '跨模态审美型', description: '对多种媒介有敏锐美学感知', flowZone: '设计与创作', energyDrainer: '粗糙视觉环境', evidenceSources: [] }], energyDynamics: { flowZones: ['设计与创作', '沉浸式体验'], drainZones: ['审美缺失环境', '纯功能主义'] }, collaborationRole: '品质守护者', theoreticalInsight: 'Maslow自我实现研究中高审美敏感度表现' },
+        worldview: { dimension: 'worldview', name: '价值与世界观', icon: '🌍', color: '#80CBC4', dominantTraits: [{ subDimension: 'self_direction', subDimensionName: '自主导向', typology: '独立思考者', description: '高度重视独立思考', flowZone: '自由表达价值观', energyDrainer: '服从不认同的规范', evidenceSources: [] }], energyDynamics: { flowZones: ['价值一致的团队', '社会创新'], drainZones: ['价值冲突', '官僚主义'] }, collaborationRole: '价值罗盘', theoreticalInsight: 'Schwartz价值环理论的自我超越象限' },
+        strengths: { dimension: 'strengths', name: '品格优势', icon: '⭐', color: '#FFC107', dominantTraits: [{ subDimension: 'creativity', subDimensionName: '创造力', typology: '连接型创造者', description: '擅长将无关概念联系产生新解', flowZone: '跨领域碰撞', energyDrainer: '框架内思考', evidenceSources: [] }], energyDynamics: { flowZones: ['跨界创作', '解决复杂问题'], drainZones: ['重复执行', '政治博弈'] }, collaborationRole: '灵感引擎', theoreticalInsight: 'VIA研究中创造力与生活满意度正相关' },
+      },
+      crossReactions: [
+        { dimensions: ['cognitive', 'aesthetic'], reactionType: 'resonance', title: '认知-审美共振', narrative: '你不仅追求正确的答案，还追求优雅的答案', implication: '同时把握逻辑正确性和体验美感', evidenceSources: [] },
+        { dimensions: ['motivation', 'personality'], reactionType: 'catalyst', title: '意义驱动×开放性：创业催化剂', narrative: '意义感搭配高开放性', implication: '适合社会创新产品', evidenceSources: [] },
+        { dimensions: ['emotion', 'social'], reactionType: 'friction', title: '高敏感×独处偏好', narrative: '高情绪敏感度让社交能量消耗更快', implication: '需要独处恢复时间', evidenceSources: [] },
+      ],
+      confidenceMap: { cognitive: 0.87, personality: 0.82, emotion: 0.85, motivation: 0.90, social: 0.78, aesthetic: 0.91, worldview: 0.83, strengths: 0.86 },
+      pendingVerification: [],
+      createdAt: new Date().toISOString(),
+    },
+    forgeBlueprint: null,
+    sageSessions: {},
+    activeSageId: null,
+    sageInsights: [],
+    personalOS: null,
+    productJobs: [],
+    productConcepts: [],
+    implementationPlans: [],
+  },
+  version: 0,
+};
+localStorage.setItem('assessment-store-v3', JSON.stringify(mockState));
+document.title = '✅ 数据注入成功';
+document.body.innerHTML = '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0a0a1a;color:#fff;font-family:sans-serif;flex-direction:column;gap:16px"><h1 style="font-size:48px">✅</h1><h2>测评数据注入成功</h2><p style="color:#888">8维度全完成 · 拓扑画像已生成 · 6款游戏已完成</p><a href="/" style="color:#64FFDA;font-size:18px;margin-top:24px">→ 返回首页查看效果</a></div>';
+</script>
+</body>
+</html>

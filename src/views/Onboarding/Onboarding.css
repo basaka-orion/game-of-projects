@@ -1,0 +1,296 @@
+.onboarding {
+  position: fixed;
+  inset: 0;
+  background: var(--hd-bg-deep);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: hd-fadeIn 0.6s ease;
+  padding: 24px;
+  overflow: auto;
+  -webkit-app-region: no-drag;
+}
+
+.onboarding__card {
+  width: 100%;
+  max-width: 520px;
+  border: 1px solid var(--hd-border);
+  background: var(--hd-bg-surface);
+  padding: 0;
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+}
+
+.onboarding__header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--hd-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.onboarding__title {
+  font-family: var(--hd-font-display);
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: var(--hd-tracking-wider);
+  color: var(--hd-text-primary);
+}
+
+.onboarding__step {
+  font-family: var(--hd-font-mono);
+  font-size: 0.75rem;
+  color: var(--hd-accent-cyan);
+}
+
+.onboarding__body {
+  padding: 24px;
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.onboarding__label {
+  display: block;
+  font-family: var(--hd-font-mono);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: var(--hd-tracking-widest);
+  color: var(--hd-text-muted);
+  margin-bottom: 8px;
+}
+
+.onboarding__input {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--hd-bg-deep);
+  border: 1px solid var(--hd-border);
+  color: var(--hd-text-primary);
+  font-family: var(--hd-font-mono);
+  font-size: 0.85rem;
+  transition: border-color 0.3s ease;
+  margin-bottom: 20px;
+  box-sizing: border-box;
+}
+
+.onboarding__input:focus {
+  outline: none;
+  border-color: var(--hd-accent-cyan);
+  box-shadow: 0 0 0 1px rgba(0, 212, 170, 0.2);
+}
+
+.onboarding__input::placeholder {
+  color: var(--hd-text-muted);
+  opacity: 0.5;
+}
+
+/* API Key 行内布局 */
+.onboarding__input-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.onboarding__input--flex {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+/* 验证按钮 */
+.onboarding__verify-btn {
+  padding: 10px 16px;
+  font-family: var(--hd-font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  border: 1px solid var(--hd-border);
+  background: transparent;
+  color: var(--hd-text-secondary);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  min-width: 90px;
+  text-align: center;
+}
+
+.onboarding__verify-btn:hover {
+  border-color: var(--hd-accent-cyan);
+  color: var(--hd-accent-cyan);
+}
+
+.onboarding__verify-btn--testing {
+  border-color: var(--hd-warning);
+  color: var(--hd-warning);
+  cursor: wait;
+  animation: pulse-breathe 1.5s ease-in-out infinite;
+}
+
+.onboarding__verify-btn--success {
+  border-color: var(--hd-success);
+  color: var(--hd-success);
+  background: rgba(0, 204, 136, 0.08);
+}
+
+.onboarding__verify-btn--error {
+  border-color: var(--hd-danger);
+  color: var(--hd-danger);
+}
+
+.onboarding__verify-btn--full {
+  width: 100%;
+  margin-top: 8px;
+}
+
+/* 验证消息 */
+.onboarding__verify-msg {
+  font-family: var(--hd-font-mono);
+  font-size: 0.7rem;
+  padding: 8px 12px;
+  border-left: 2px solid var(--hd-border);
+  margin-top: -8px;
+  margin-bottom: 12px;
+  color: var(--hd-text-muted);
+  background: rgba(0, 0, 0, 0.2);
+  animation: fade-in 0.3s ease;
+}
+
+.onboarding__verify-msg--success {
+  border-left-color: var(--hd-success);
+  color: var(--hd-success);
+}
+
+.onboarding__verify-msg--error {
+  border-left-color: var(--hd-danger);
+  color: var(--hd-danger);
+}
+
+.onboarding__ollama-section {
+  margin-bottom: 12px;
+}
+
+.onboarding__provider-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.onboarding__provider-btn {
+  padding: 16px;
+  border: 1px solid var(--hd-border);
+  background: transparent;
+  color: var(--hd-text-secondary);
+  font-family: var(--hd-font-mono);
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.onboarding__provider-btn:hover {
+  border-color: var(--hd-accent-cyan);
+  color: var(--hd-text-primary);
+}
+
+.onboarding__provider-btn--active {
+  border-color: var(--hd-accent-cyan);
+  color: var(--hd-accent-cyan);
+  background: rgba(0, 212, 170, 0.05);
+}
+
+.onboarding__provider-name {
+  display: block;
+  font-size: 0.9rem;
+  margin-bottom: 4px;
+}
+
+.onboarding__provider-desc {
+  font-size: 0.65rem;
+  color: var(--hd-text-muted);
+}
+
+.onboarding__welcome-icon {
+  font-size: 3rem;
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.onboarding__welcome-text {
+  text-align: center;
+  color: var(--hd-text-secondary);
+  font-size: 0.85rem;
+  line-height: 2;
+  margin-bottom: 24px;
+}
+
+.onboarding__welcome-text strong {
+  color: var(--hd-accent-cyan);
+}
+
+.onboarding__footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--hd-border);
+  display: flex;
+  justify-content: space-between;
+}
+
+.onboarding__btn {
+  padding: 8px 24px;
+  border: 1px solid var(--hd-border);
+  background: transparent;
+  color: var(--hd-text-secondary);
+  font-family: var(--hd-font-mono);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.onboarding__btn:hover {
+  border-color: var(--hd-text-primary);
+  color: var(--hd-text-primary);
+}
+
+.onboarding__btn--primary {
+  background: var(--hd-accent-cyan);
+  color: var(--hd-bg-deep);
+  border-color: var(--hd-accent-cyan);
+  font-weight: 700;
+}
+
+.onboarding__btn--primary:hover {
+  background: #00e6bb;
+  border-color: #00e6bb;
+}
+
+.onboarding__hint {
+  font-family: var(--hd-font-mono);
+  font-size: 0.65rem;
+  color: var(--hd-text-muted);
+  margin-top: 4px;
+}
+
+/* 标签输入 */
+.onboarding__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.onboarding__tag {
+  padding: 4px 12px;
+  border: 1px solid var(--hd-border);
+  font-family: var(--hd-font-mono);
+  font-size: 0.7rem;
+  color: var(--hd-text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.onboarding__tag:hover,
+.onboarding__tag--active {
+  border-color: var(--hd-accent-cyan);
+  color: var(--hd-accent-cyan);
+  background: rgba(0, 212, 170, 0.05);
+}

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <rect width="128" height="128" rx="20" fill="#021212"/>
+  <rect x="16" y="16" width="96" height="96" rx="12" fill="#0a1a1a" stroke="#00d4aa" stroke-width="2"/>
+  <text x="64" y="78" font-size="56" text-anchor="middle" fill="#00d4aa">📚</text>
+</svg>

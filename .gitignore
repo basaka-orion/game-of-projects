@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+dist-electron/
+release/
+
+# Local app/runtime data
+*.db
+*.db-*
+.env
+.env.*
+!.env.example
+
+# macOS / editor noise
+.DS_Store
+.claude/
+
+# iCloud recovery artifacts and stale duplicate configs
+*.dataless-icloud-stub
+package.json.backup
+package.json.recovered
+package-lock 2.json
+tsconfig 2.json
+vite.config 2.ts
+vite-error.log
+
+# Local experiments and sensitive throwaway probes
+test_zhipu.py
+patch_codex.py
+tmp-*.mjs
+
+# Large adjacent workspaces / generated agent environments
+hermes-agent/
+xiaobaixiaobai/
+
+# Generated Qimeng batches may contain raw personal notes or secret-looking source titles.
+docs/qimeng-compiles/
+docs/qimeng-candidates/
+docs/qimeng-imports/
+docs/qimeng-materialize/

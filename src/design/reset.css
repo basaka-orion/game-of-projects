@@ -1,0 +1,67 @@
+/* ═══════════════════════════════════════════════════════
+   HERMES DARK — CSS Reset
+   ═══════════════════════════════════════════════════════ */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  font-family: var(--hd-font-mono), var(--hd-font-cn);
+  background: var(--hd-bg-deep);
+  color: var(--hd-text-primary);
+  line-height: 1.6;
+  overflow: hidden;
+  -webkit-app-region: no-drag;
+}
+
+a {
+  color: var(--hd-accent-cyan);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: inherit;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+[role="button"] {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--hd-bg-deep);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--hd-border);
+  border-radius: 2px;
+}
+
+::selection {
+  background: var(--hd-accent-glow);
+  color: var(--hd-text-primary);
+}

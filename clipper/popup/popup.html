@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=360,initial-scale=1">
+  <title>OpenBasaka Clipper</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="clipper">
+    <div class="clipper__header">
+      <span class="clipper__logo">📚</span>
+      <span class="clipper__title">OpenBasaka Clipper</span>
+    </div>
+
+    <div class="clipper__meta" id="meta">
+      <div class="clipper__meta-title" id="pageTitle">加载中...</div>
+      <div class="clipper__meta-url" id="pageUrl"></div>
+    </div>
+
+    <div class="clipper__mode">
+      <button class="clipper__mode-btn clipper__mode-btn--active" data-mode="full" id="btnFull">📄 全文</button>
+      <button class="clipper__mode-btn" data-mode="selection" id="btnSelection">✂️ 选区</button>
+    </div>
+
+    <div class="clipper__template">
+      <label class="clipper__label">模板</label>
+      <select class="clipper__select" id="templateSelect">
+        <option value="article">📄 文章</option>
+        <option value="academic">🎓 研究论文</option>
+        <option value="tech">💻 代码参考</option>
+        <option value="concept">💡 概念</option>
+        <option value="decision">⚖️ 决策记录</option>
+        <option value="learning">📖 学习笔记</option>
+      </select>
+    </div>
+
+    <div class="clipper__preview">
+      <label class="clipper__label">预览</label>
+      <div class="clipper__preview-content" id="preview">加载中...</div>
+    </div>
+
+    <div class="clipper__actions">
+      <button class="clipper__btn clipper__btn--primary" id="btnClip" disabled>🚀 剪藏到 OpenBasaka</button>
+    </div>
+
+    <div class="clipper__status" id="status"></div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

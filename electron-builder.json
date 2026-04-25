@@ -1,0 +1,24 @@
+{
+  "appId": "com.boss.game-of-projects",
+  "productName": "项目的游戏",
+  "directories": {
+    "output": "release"
+  },
+  "files": [
+    "dist/**/*",
+    "dist-electron/**/*"
+  ],
+  "mac": {
+    "target": ["dmg"],
+    "artifactName": "${productName}-${version}-${arch}.${ext}",
+    "category": "public.app-category.productivity"
+  },
+  "win": {
+    "target": ["nsis"],
+    "artifactName": "${productName}-${version}.${ext}"
+  },
+  "nsis": {
+    "oneClick": true,
+    "perMachine": false
+  }
+}

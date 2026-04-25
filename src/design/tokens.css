@@ -1,0 +1,65 @@
+/* ═══════════════════════════════════════════════════════
+   HERMES DARK — Design Tokens
+   复刻 hermes-agent.nousresearch.com 夜间模式
+   ═══════════════════════════════════════════════════════ */
+
+:root {
+  /* ─── 色板 ─── */
+  --hd-bg-deep:       #021212;
+  --hd-bg-primary:    #041c1c;
+  --hd-bg-surface:    #072a2a;
+  --hd-bg-elevated:   #0a3535;
+  --hd-border:        #1a4a4a;
+  --hd-border-subtle: #103333;
+
+  --hd-text-primary:  rgb(255, 230, 203);
+  --hd-text-secondary: rgba(255, 230, 203, 0.6);
+  --hd-text-muted:    rgba(255, 230, 203, 0.35);
+
+  --hd-accent-cyan:   #00d4aa;
+  --hd-accent-glow:   rgba(0, 212, 170, 0.15);
+  --hd-accent-gold:   #ffd700;
+  --hd-danger:        #ff4444;
+  --hd-warning:       #ffaa00;
+  --hd-success:       #00cc88;
+  --hd-accent-purple: #8b5cf6;
+
+  /* ─── terminal 三点 ─── */
+  --hd-dot-red:    #ff5f57;
+  --hd-dot-yellow: #febc2e;
+  --hd-dot-green:  #28c840;
+
+  /* ─── 字体 ─── */
+  --hd-font-display: 'Playfair Display', 'Noto Serif SC', Georgia, serif;
+  --hd-font-mono: ui-monospace, 'SFMono-Regular', 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  --hd-font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --hd-font-cn: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+
+  /* ─── 间距 ─── */
+  --hd-space-xs: 4px;
+  --hd-space-sm: 8px;
+  --hd-space-md: 16px;
+  --hd-space-lg: 24px;
+  --hd-space-xl: 40px;
+  --hd-space-2xl: 64px;
+
+  /* ─── 圆角（极少使用，Brutalist 优先直角）─── */
+  --hd-radius-sm: 2px;
+  --hd-radius-md: 4px;
+  --hd-radius-lg: 8px;
+
+  /* ─── 过渡 ─── */
+  --hd-transition-fast: 150ms ease;
+  --hd-transition-normal: 300ms ease;
+  --hd-transition-slow: 600ms ease;
+
+  /* ─── 字间距（Hermes 全大写标题用）─── */
+  --hd-tracking-wide: 0.15em;
+  --hd-tracking-wider: 0.25em;
+
+  /* ─── 组件尺寸 ─── */
+  --hd-sidebar-width: 64px;
+  --hd-sidebar-icon-size: 20px;
+  --hd-badge-dot-size: 6px;
+  --hd-search-height: 36px;
+}
