@@ -200,15 +200,14 @@ export default function BiliHelperMacApp() {
     [],
   )
   const uiVisualVars = useMemo(() => {
-    const palette = uiMuseumContext.visual.palette.length > 0 ? uiMuseumContext.visual.palette : ['#06050a', '#8186ff', '#31f6bf', '#f0c674']
     return {
-      '--bili-bg': palette[0] || '#06050a',
-      '--bili-bg-soft': uiMuseumContext.visual.background || '#0d0b14',
-      '--bili-panel': uiMuseumContext.visual.surface || 'rgba(14, 13, 22, 0.88)',
-      '--bili-accent': uiMuseumContext.visual.accent || palette[1] || '#8186ff',
-      '--bili-accent-bright': palette[2] || '#9ea2ff',
-      '--bili-cyan': palette[2] || '#31f6bf',
-      '--bili-gold': palette[3] || '#f0c674',
+      '--bili-bg': '#06111d',
+      '--bili-bg-soft': '#071923',
+      '--bili-panel': 'rgba(11, 14, 24, 0.86)',
+      '--bili-accent': '#6d52f7',
+      '--bili-accent-bright': '#6f91ff',
+      '--bili-cyan': '#28dfcf',
+      '--bili-gold': '#f3d58a',
       '--bili-radius': uiMuseumContext.visual.radius || '22px',
       '--bili-density': uiMuseumContext.visual.density || 'layered',
       '--bili-motion': uiMuseumContext.visual.motion || 'guided',
@@ -507,7 +506,7 @@ export default function BiliHelperMacApp() {
   }
 
   return (
-    <div className={`bili-helper-mac ${hasVideo ? 'bili-helper-mac--active' : ''}`} style={uiVisualVars}>
+    <div className={`bili-helper-mac ${hasVideo ? 'bili-helper-mac--active' : ''}`} style={uiVisualVars} data-guide-focus={guideState.focusTarget}>
       {toast && <div className="bili-helper-mac__toast">{toast}</div>}
 
       <section className="bili-helper-mac__hero" aria-label="万象学习助手">
@@ -525,7 +524,7 @@ export default function BiliHelperMacApp() {
             <small>BibiGPT 式跨平台接入 · NotebookLM 式对话整理 · OpenBasaka 本地归档</small>
           </p>
 
-          <form className="bili-helper-mac__search" onSubmit={handleResolveVideo}>
+          <form className="bili-helper-mac__search" onSubmit={handleResolveVideo} data-guide-target="source-input">
             <label className="bili-helper-mac__search-field">
               <span className="bili-helper-mac__search-icon" aria-hidden="true" />
               <input
@@ -539,6 +538,12 @@ export default function BiliHelperMacApp() {
               {processing === 'resolving' ? '解析中' : '解析'}
             </button>
           </form>
+
+          {(!workspace || processing === 'resolving') && (
+            <div className="bili-helper-mac__hero-guide" aria-label="当前下一步提示">
+              <SourceOsGuidePlayer state={guideState} compact className="sourceos-guide--hero-nudge" />
+            </div>
+          )}
 
           <div className="bili-helper-mac__hero-actions">
             <button type="button" onClick={handleLoadSample}>
@@ -592,8 +597,6 @@ export default function BiliHelperMacApp() {
             </button>
           </div>
         </div>
-
-        <SourceOsGuidePlayer state={guideState} />
 
         <SourceFocusCard
           workspace={workspace}
@@ -712,7 +715,7 @@ export default function BiliHelperMacApp() {
             )}
 
             {view === 'chat' && (
-              <div className="bili-helper-mac__chat-view">
+              <div className="bili-helper-mac__chat-view" data-guide-target="chat-export">
                 <section className="bili-helper-panel bili-helper-panel--chat">
                   <PanelHead label="SOURCE DIALOG" value={String(workspace?.chat.length || 0)} />
                   <div className="bili-helper-mac__messages">
@@ -735,7 +738,7 @@ export default function BiliHelperMacApp() {
             )}
 
             {view === 'downloads' && (
-              <div className="bili-helper-mac__downloads">
+              <div className="bili-helper-mac__downloads" data-guide-target="chat-export">
                 <section className="bili-helper-panel bili-helper-panel--download-actions">
                   <PanelHead label="EXPORT TARGETS" value={workspace?.video.bvid || 'NO_VIDEO'} />
                   <p className="bili-helper-mac__download-hint">
@@ -834,7 +837,7 @@ function SourceFocusCard({
 }) {
   if (!workspace) {
     return (
-      <section className="sourceos-focus-card sourceos-focus-card--empty" data-target={guide.focusTarget}>
+      <section className="sourceos-focus-card sourceos-focus-card--empty" data-target={guide.focusTarget} data-guide-target="source-card">
         <div className="sourceos-focus-card__cover">
           <strong>SourceOS</strong>
           <span>URL / FILE / IMAGE</span>
@@ -851,9 +854,7 @@ function SourceFocusCard({
           </div>
         </div>
         <aside className="sourceos-focus-card__next">
-          <span>{guide.activeStep.label}</span>
-          <strong>{guide.cta}</strong>
-          <i style={{ width: `${guide.progress}%` }} />
+          <SourceOsGuidePlayer state={guide} compact className="sourceos-guide--inline-nudge" />
         </aside>
       </section>
     )
@@ -862,7 +863,7 @@ function SourceFocusCard({
   const { video } = workspace
   const hasStats = Object.values(video.stats).some((value) => value > 0)
   return (
-    <section className="sourceos-focus-card" data-target={guide.focusTarget}>
+    <section className="sourceos-focus-card" data-target={guide.focusTarget} data-guide-target="source-card">
       <div className="sourceos-focus-card__cover">
         {video.cover ? <img src={video.cover} alt="" /> : <strong>{video.platformName.slice(0, 8)}</strong>}
       </div>
@@ -888,11 +889,8 @@ function SourceFocusCard({
         )}
       </div>
       <aside className="sourceos-focus-card__next">
-        <span>{guide.activeStep.label}</span>
-        <strong>{guide.cta}</strong>
-        <p>{guide.activeStep.description}</p>
-        <i style={{ width: `${guide.progress}%` }} />
-        <div>
+        <SourceOsGuidePlayer state={guide} compact className="sourceos-guide--inline-nudge" />
+        <div className="sourceos-focus-card__next-actions">
           <button className="bili-helper-mac__primary" onClick={onGenerate} disabled={isGenerating}>
             {isGenerating ? '生成中' : workspace.pack ? '重新生成' : '生成学习包'}
           </button>
@@ -952,7 +950,7 @@ function ArtifactControls({
 }) {
   const activeMode = BILI_ARTIFACT_MODES.find((item) => item.id === mode) || BILI_ARTIFACT_MODES[0]
   return (
-    <section className="bili-helper-panel bili-helper-panel--artifact-controls">
+    <section className="bili-helper-panel bili-helper-panel--artifact-controls" data-guide-target="artifact-dashboard">
       <PanelHead label="ARTIFACT DASHBOARD" value={activeMode.label} />
       <div className="sourceos-artifact-active" style={{ '--mode-accent': activeMode.accent } as CSSProperties}>
         <span>当前产物</span>
@@ -1219,14 +1217,20 @@ function PackPreview({
   const pack = workspace?.pack
   if (!pack) {
     return (
-      <section className={wide ? 'bili-helper-panel bili-helper-panel--pack bili-helper-panel--wide' : 'bili-helper-panel bili-helper-panel--pack'}>
+      <section
+        className={wide ? 'bili-helper-panel bili-helper-panel--pack bili-helper-panel--wide' : 'bili-helper-panel bili-helper-panel--pack'}
+        data-guide-target="learning-pack"
+      >
         <PanelHead label="LEARNING PACK" value="EMPTY" />
         <div className="bili-helper-mac__empty-note">生成后会出现摘要、资料地图、时间线/OCR 线索、教程、行动清单和可追问问题。</div>
       </section>
     )
   }
   return (
-    <section className={wide ? 'bili-helper-panel bili-helper-panel--pack bili-helper-panel--wide' : 'bili-helper-panel bili-helper-panel--pack'}>
+    <section
+      className={wide ? 'bili-helper-panel bili-helper-panel--pack bili-helper-panel--wide' : 'bili-helper-panel bili-helper-panel--pack'}
+      data-guide-target="learning-pack"
+    >
       <PanelHead label="LEARNING PACK" value={`${pack.generatedBy} · ${pack.mode} · ${pack.depth}%`} />
       <div className="bili-helper-mac__pack-summary">
         <h3>{workspace?.video.title}</h3>

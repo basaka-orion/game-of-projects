@@ -1,24 +1,27 @@
 .bili-helper-mac {
-  --bili-bg: #06050a;
-  --bili-bg-soft: #0d0b14;
-  --bili-panel: rgba(14, 13, 22, 0.88);
-  --bili-panel-strong: rgba(19, 18, 31, 0.94);
-  --bili-line: rgba(255, 255, 255, 0.08);
-  --bili-line-strong: rgba(255, 255, 255, 0.14);
-  --bili-text: #f0eef5;
-  --bili-muted: rgba(240, 238, 245, 0.48);
-  --bili-dim: rgba(240, 238, 245, 0.28);
-  --bili-accent: #8186ff;
-  --bili-accent-bright: #9ea2ff;
-  --bili-cyan: #31f6bf;
-  --bili-gold: #f0c674;
+  --bili-bg: #06111d;
+  --bili-bg-soft: #071923;
+  --bili-panel: rgba(11, 14, 24, 0.86);
+  --bili-panel-strong: rgba(15, 18, 30, 0.94);
+  --bili-line: rgba(170, 195, 230, 0.09);
+  --bili-line-strong: rgba(188, 207, 235, 0.16);
+  --bili-text: #f3f6fb;
+  --bili-muted: rgba(229, 235, 246, 0.5);
+  --bili-dim: rgba(225, 231, 244, 0.3);
+  --bili-accent: #6d52f7;
+  --bili-accent-bright: #6f91ff;
+  --bili-cyan: #28dfcf;
+  --bili-gold: #f3d58a;
   --bili-danger: #ff6b9d;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   color: var(--bili-text);
-  background: var(--bili-bg);
+  background:
+    radial-gradient(circle at 72% 18%, rgba(40, 223, 207, 0.12), transparent 34%),
+    radial-gradient(circle at 48% 65%, rgba(109, 82, 247, 0.09), transparent 36%),
+    linear-gradient(135deg, #081225 0%, #07121f 46%, #052420 100%);
   font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
   position: relative;
 }
@@ -35,10 +38,10 @@
   inset: 0;
   pointer-events: none;
   background:
-    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-    linear-gradient(120deg, rgba(129, 134, 255, 0.13), transparent 34%, rgba(49, 246, 191, 0.08) 72%, transparent);
-  background-size: 60px 60px, 60px 60px, auto, auto;
+    linear-gradient(rgba(158, 184, 220, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(158, 184, 220, 0.07) 1px, transparent 1px),
+    linear-gradient(120deg, rgba(109, 82, 247, 0.12), transparent 34%, rgba(40, 223, 207, 0.1) 72%, transparent);
+  background-size: 72px 72px, 72px 72px, auto, auto;
   mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0.82) 68%, transparent 100%);
 }
 
@@ -210,7 +213,7 @@
 }
 
 .bili-helper-mac__hero-copy {
-  margin: 0 auto 56px;
+  margin: 0 auto 42px;
   max-width: 520px;
   color: var(--bili-muted);
   font-size: 1.05rem;
@@ -226,14 +229,14 @@
 }
 
 .bili-helper-mac__search {
-  width: min(680px, 100%);
+  width: min(780px, 100%);
   margin: 0 auto;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
   border: 1px solid var(--bili-line);
-  border-radius: 18px;
-  background: rgba(14, 13, 22, 0.86);
+  border-radius: 28px;
+  background: rgba(13, 12, 22, 0.86);
   padding: 8px;
   box-shadow:
     0 24px 70px rgba(0, 0, 0, 0.42),
@@ -248,7 +251,7 @@
 }
 
 .bili-helper-mac__search-field input {
-  height: 64px;
+  height: 72px;
   border: 0;
   background: transparent;
   padding: 0 16px 0 48px;
@@ -280,9 +283,14 @@
 
 .bili-helper-mac__parse-btn {
   min-width: 110px;
-  min-height: 64px;
-  border-radius: 14px;
+  min-height: 72px;
+  border-radius: 20px;
   font-weight: 800;
+}
+
+.bili-helper-mac__hero-guide {
+  width: min(560px, 100%);
+  margin: 10px auto 0;
 }
 
 .bili-helper-mac__hero-actions {
@@ -1331,13 +1339,14 @@
 
 .sourceos-studio {
   margin: 0 18px 28px;
-  border-radius: 34px;
+  border-radius: 30px;
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.024)),
-    radial-gradient(circle at 14% 8%, color-mix(in srgb, var(--bili-accent) 28%, transparent), transparent 38%),
-    radial-gradient(circle at 84% 14%, color-mix(in srgb, var(--bili-cyan) 20%, transparent), transparent 32%),
-    var(--bili-bg-soft);
-  box-shadow: 0 36px 120px rgba(0, 0, 0, 0.38);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018)),
+    linear-gradient(rgba(158, 184, 220, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(158, 184, 220, 0.04) 1px, transparent 1px),
+    rgba(7, 17, 29, 0.9);
+  background-size: auto, 64px 64px, 64px 64px, auto;
+  box-shadow: 0 36px 120px rgba(0, 0, 0, 0.42);
 }
 
 .sourceos-studio__head {
@@ -1347,8 +1356,8 @@
 }
 
 .sourceos-studio__head h2 {
-  font-family: Georgia, "Songti SC", serif;
-  font-size: clamp(2rem, 4vw, 3.5rem);
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+  font-size: clamp(1.8rem, 3.5vw, 2.9rem);
   font-weight: 800;
 }
 
@@ -1374,43 +1383,64 @@
 }
 
 .sourceos-guide {
-  margin: 0 20px 18px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 36px;
-  background: rgba(6, 6, 13, 0.62);
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.32);
-  overflow: hidden;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.sourceos-guide--hero-nudge {
+  width: 100%;
+  margin: 0 auto;
+  filter: drop-shadow(0 18px 34px rgba(0, 0, 0, 0.34));
+}
+
+.sourceos-guide--inline-nudge {
+  width: 100%;
+  min-width: 0;
+  filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.28));
 }
 
 .sourceos-guide--compact {
-  border-radius: 28px;
+  border-radius: 0;
 }
 
 .sourceos-guide--static {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.8fr);
-  gap: 18px;
-  padding: 18px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  padding: 0;
 }
 
-.sourceos-guide--static > div span {
-  color: var(--bili-cyan);
+.sourceos-guide__paper {
+  border: 2px solid rgba(10, 22, 32, 0.9);
+  border-radius: 22px;
+  background: linear-gradient(135deg, #fbf5e6, #efe3cb);
+  color: #12202a;
+  padding: 16px 18px;
+  box-shadow: 7px 8px 0 rgba(0, 0, 0, 0.32);
+}
+
+.sourceos-guide__paper span {
+  color: #10665d;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.76rem;
   letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
-.sourceos-guide--static > div strong {
+.sourceos-guide__paper strong {
   display: block;
   margin-top: 8px;
-  color: var(--bili-text);
-  font-family: Georgia, "Songti SC", serif;
-  font-size: 1.6rem;
+  color: #111827;
+  font-size: 1.32rem;
 }
 
-.sourceos-guide--static > div p {
+.sourceos-guide__paper p {
   margin: 8px 0 0;
-  color: var(--bili-muted);
+  color: rgba(16, 32, 42, 0.68);
   line-height: 1.55;
 }
 
@@ -1440,15 +1470,15 @@
 .sourceos-focus-card {
   margin: 0 20px 18px;
   display: grid;
-  grid-template-columns: minmax(220px, 0.56fr) minmax(0, 1fr) minmax(270px, 0.42fr);
+  grid-template-columns: minmax(220px, 0.52fr) minmax(0, 1fr) minmax(320px, 0.58fr);
   gap: 18px;
   align-items: stretch;
   border: 1px solid rgba(255, 255, 255, 0.13);
   border-radius: 30px;
   padding: 16px;
   background:
-    linear-gradient(120deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.028)),
-    rgba(8, 8, 16, 0.74);
+    linear-gradient(120deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.024)),
+    rgba(6, 14, 24, 0.78);
 }
 
 .sourceos-focus-card__cover {
@@ -1493,6 +1523,19 @@
   padding: 18px;
 }
 
+.sourceos-focus-card__next {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px;
+  background:
+    linear-gradient(rgba(158, 184, 220, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(158, 184, 220, 0.035) 1px, transparent 1px),
+    rgba(5, 12, 22, 0.36);
+  background-size: 34px 34px, 34px 34px, auto;
+}
+
 .sourceos-focus-card__eyebrow {
   color: var(--bili-cyan);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -1517,8 +1560,7 @@
 
 .sourceos-focus-card__meta,
 .sourceos-focus-card__stats,
-.sourceos-focus-card__actions,
-.sourceos-focus-card__next div {
+.sourceos-focus-card__actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -1555,6 +1597,30 @@
   border-radius: 999px;
   background: linear-gradient(90deg, var(--bili-cyan), var(--bili-accent), var(--bili-gold));
   box-shadow: 0 0 28px color-mix(in srgb, var(--bili-cyan) 26%, transparent);
+}
+
+.sourceos-focus-card__next-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 8px 6px;
+}
+
+.sourceos-focus-card__next-actions button {
+  flex: 1 1 92px;
+  white-space: nowrap;
+}
+
+.bili-helper-mac[data-guide-focus="source-input"] [data-guide-target="source-input"],
+.bili-helper-mac[data-guide-focus="source-card"] [data-guide-target="source-card"],
+.bili-helper-mac[data-guide-focus="artifact-dashboard"] [data-guide-target="artifact-dashboard"],
+.bili-helper-mac[data-guide-focus="learning-pack"] [data-guide-target="learning-pack"],
+.bili-helper-mac[data-guide-focus="chat-export"] [data-guide-target="chat-export"] {
+  outline: 1px solid color-mix(in srgb, var(--bili-cyan) 52%, transparent);
+  box-shadow:
+    0 0 0 4px rgba(40, 223, 207, 0.07),
+    0 0 38px rgba(40, 223, 207, 0.13);
+  scroll-margin-top: 22px;
 }
 
 .sourceos-studio .bili-helper-mac__stage {

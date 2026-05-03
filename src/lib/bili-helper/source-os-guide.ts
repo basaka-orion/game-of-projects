@@ -39,6 +39,7 @@ export interface SourceOsGuideProps {
   state: SourceOsGuideState
   compact?: boolean
   reducedMotion?: boolean
+  className?: string
 }
 
 export type SourceOsProcessingState = 'idle' | 'resolving' | 'generating' | 'chatting'
