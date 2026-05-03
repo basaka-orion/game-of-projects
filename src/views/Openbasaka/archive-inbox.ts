@@ -1,10 +1,11 @@
-import type { ArchiveCandidate, QimengFacet } from '../../lib/memory/archive-gate'
+import type { ArchiveCandidate, ArchiveTargetKind, QimengFacet } from '../../lib/memory/archive-gate'
 
 export type ArchiveDraft = {
   title: string
   room: string
   tagsText: string
   facets: QimengFacet[]
+  targetKind: ArchiveTargetKind
 }
 
 export type ArchiveInboxRiskFilter = 'all' | 'duplicates' | 'clean'
@@ -40,7 +41,7 @@ export function parseArchiveTags(tagsText: string): string[] {
     new Set(
       tagsText
         .split(/[,\n，、]/)
-        .map(tag => tag.trim())
+        .map((tag) => tag.trim())
         .filter(Boolean),
     ),
   ).slice(0, 8)
@@ -97,6 +98,8 @@ export function buildArchiveInboxSearchText(candidate: ArchiveCandidate): string
   return [
     candidate.title,
     candidate.room,
+    candidate.targetLabel,
+    candidate.targetSection,
     candidate.content,
     candidate.rationale,
     candidate.wingLabel,
@@ -123,7 +126,7 @@ export function filterAndSortPendingArchiveCandidates(
   },
 ): ArchiveCandidate[] {
   const query = options.query.trim().toLowerCase()
-  const filtered = candidates.filter(candidate => {
+  const filtered = candidates.filter((candidate) => {
     if (options.sourceSurface !== 'all' && candidate.sourceSurface !== options.sourceSurface) return false
     if (options.batchSessionId !== 'all' && getArchiveBatchSessionId(candidate) !== options.batchSessionId) return false
     if (options.wing !== 'all' && candidate.wing !== options.wing) return false
@@ -158,24 +161,23 @@ export function filterAndSortPendingArchiveCandidates(
   })
 }
 
-export function applyArchiveInboxBulkPatch(
-  draft: ArchiveDraft,
-  bulkDraft: ArchiveInboxBulkDraft,
-): ArchiveDraft {
+export function applyArchiveInboxBulkPatch(draft: ArchiveDraft, bulkDraft: ArchiveInboxBulkDraft): ArchiveDraft {
   const room = bulkDraft.room.trim() || draft.room
   const currentTags = parseArchiveTags(draft.tagsText)
   const incomingTags = parseArchiveTags(bulkDraft.tagsText)
-  const tags = incomingTags.length === 0
-    ? currentTags
-    : bulkDraft.tagsMode === 'replace'
-      ? incomingTags
-      : mergeUniqueStrings([...currentTags, ...incomingTags]).slice(0, 8)
+  const tags =
+    incomingTags.length === 0
+      ? currentTags
+      : bulkDraft.tagsMode === 'replace'
+        ? incomingTags
+        : mergeUniqueStrings([...currentTags, ...incomingTags]).slice(0, 8)
 
-  const facets = bulkDraft.facets.length === 0
-    ? draft.facets
-    : bulkDraft.facetsMode === 'replace'
-      ? [...bulkDraft.facets]
-      : mergeUniqueFacets([...draft.facets, ...bulkDraft.facets])
+  const facets =
+    bulkDraft.facets.length === 0
+      ? draft.facets
+      : bulkDraft.facetsMode === 'replace'
+        ? [...bulkDraft.facets]
+        : mergeUniqueFacets([...draft.facets, ...bulkDraft.facets])
 
   return {
     ...draft,
@@ -187,18 +189,17 @@ export function applyArchiveInboxBulkPatch(
 
 export function hasArchiveInboxBulkPatch(bulkDraft: ArchiveInboxBulkDraft): boolean {
   return Boolean(
-    bulkDraft.room.trim()
-    || parseArchiveTags(bulkDraft.tagsText).length > 0
-    || bulkDraft.facets.length > 0,
+    bulkDraft.room.trim() || parseArchiveTags(bulkDraft.tagsText).length > 0 || bulkDraft.facets.length > 0,
   )
 }
 
 export function isArchiveDraftEqual(left: ArchiveDraft, right: ArchiveDraft): boolean {
   return (
-    left.title === right.title
-    && left.room.trim() === right.room.trim()
-    && parseArchiveTags(left.tagsText).join('||') === parseArchiveTags(right.tagsText).join('||')
-    && left.facets.join('||') === right.facets.join('||')
+    left.title === right.title &&
+    left.targetKind === right.targetKind &&
+    left.room.trim() === right.room.trim() &&
+    parseArchiveTags(left.tagsText).join('||') === parseArchiveTags(right.tagsText).join('||') &&
+    left.facets.join('||') === right.facets.join('||')
   )
 }
 

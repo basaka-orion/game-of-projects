@@ -7,6 +7,7 @@ import { listAllAgents, AgentDefinition } from '../../../lib/agents/registry'
 import { getSoul, renderSoulPrompt } from '../../../lib/agents/soul'
 import {
   getAllPagesUnbounded,
+  generateSlug,
   getPage,
   updatePage,
   deletePage,
@@ -23,7 +24,9 @@ import {
   ingestClipper,
   ingestFolder,
   ingestSource,
+  getFileIntakeKind,
   isFileSupported,
+  shouldWrapAsCode,
   type IngestResult,
 } from '../../../lib/knowledge/ingest'
 import { queryWikiEnhanced, fileAnswerAsPage, type QueryResult } from '../../../lib/knowledge/query-engine'
@@ -46,21 +49,30 @@ import {
   loadKnowledgeSourceScopeEntries,
   normalizeFolderPath,
   pageMatchesFolderScope,
+  renameKnowledgeFolderPath,
   type KnowledgeFolderOption,
   type KnowledgeSourceScopeEntry,
 } from '../../../lib/knowledge/folders'
+import { ensureTagPagesForKnowledgeTags, parseKnowledgeTagsText } from '../../../lib/knowledge/tag-pages'
 import {
   runGroundedAutoResearch,
   shouldUseAutoResearch,
   synthesizeHybridKnowledgeAnswer,
   type GroundedResearchReport,
 } from '../../../lib/ai/auto-research'
+import {
+  generateNotebookArtifact,
+  getNotebookArtifactSpecs,
+  type NotebookArtifactKind,
+  type NotebookArtifactResult,
+} from '../../../lib/knowledge/notebook-studio'
+import { KNOWLEDGE_MASTERS_ROOT } from '../../../lib/knowledge/default-paths'
 import IntelligencePanel from './knowledge-vault/IntelligencePanel'
 import './KnowledgeVaultTab.css'
 
 // ─── Types ───
 
-type SubTab = 'pages' | 'insights' | 'ingest'
+type SubTab = 'pages' | 'studio' | 'insights' | 'ingest'
 
 type IndexedPage = {
   page: WikiPage
@@ -104,11 +116,94 @@ type IndexedSource = {
   hasImages: boolean
 }
 
+type SourceMediaKind = 'audio' | 'video'
+
+type MediaTranscriptionResult = {
+  success: boolean
+  kind: 'text' | 'document' | 'pdf' | 'image' | 'audio' | 'video' | 'binary'
+  method: string
+  content: string
+  rawContent?: string
+  warnings: string[]
+  metadata?: {
+    fileName: string
+    filePath: string
+    extension: string
+    size: number
+  }
+  transcriptPath?: string
+  missingProvider?: boolean
+  error?: string
+}
+
+type TranscriptionQueueItem = {
+  sourceId: string
+  title: string
+  kind: SourceMediaKind
+  status: 'pending' | 'running' | 'success' | 'error'
+  message: string
+}
+
+type StudioCoachAction = 'ingest' | 'add-visible' | 'transcribe' | 'generate'
+
+type StudioCoachState = {
+  title: string
+  detail: string
+  action: StudioCoachAction
+  cta: string
+}
+
+type KnowledgeDomain = 'all' | 'personal' | 'master' | 'world'
+type KnowledgeDomainBucket = Exclude<KnowledgeDomain, 'all'>
+
+const KNOWLEDGE_DOMAINS: Array<{
+  id: KnowledgeDomainBucket
+  label: string
+  shortLabel: string
+  description: string
+}> = [
+  {
+    id: 'personal',
+    label: '过去的笔记',
+    shortLabel: '笔记',
+    description: '你的经历、思考、愿望与《启蒙》材料。',
+  },
+  {
+    id: 'master',
+    label: '大佬技能与思路',
+    shortLabel: '大佬',
+    description: '高手方法、项目范式、工作流与可复用技能。',
+  },
+  {
+    id: 'world',
+    label: '世界知识',
+    shortLabel: '世界',
+    description: '网页、论文、事实资料与外部知识来源。',
+  },
+]
+
+function inferKnowledgeDomain(source: WikiSource): KnowledgeDomainBucket {
+  const metadataTarget = source.metadata?.targetKind
+  const folderPath = `${source.folderPath || source.metadata?.folderPath || ''}`
+  const text = `${folderPath} ${source.title} ${source.tags.join(' ')}`.toLowerCase()
+
+  if (metadataTarget === 'master' || /大佬|高手|技能|思路|master|hermes|graphify|baoyu|karpathy/.test(text)) {
+    return 'master'
+  }
+  if (metadataTarget === 'qimeng' || /^启蒙\//.test(folderPath) || /启蒙|个人经历|过去的笔记/.test(text)) {
+    return 'personal'
+  }
+  return 'world'
+}
+
 const PAGE_ROW_HEIGHT = 146
 const PAGE_ROW_OVERSCAN = 8
 const MARKDOWN_EXTENSIONS = new Set(['md', 'markdown'])
 const TEXT_EXTENSIONS = new Set(['txt', 'rtf'])
+const TRANSCRIPT_EXTENSIONS = new Set(['srt', 'vtt', 'ass', 'ssa', 'lrc'])
 const DATA_EXTENSIONS = new Set(['json', 'csv', 'tsv', 'yaml', 'yml', 'toml', 'xml', 'sql'])
+const AUDIO_EXTENSIONS = new Set(['mp3', 'm4a', 'wav', 'aac', 'flac', 'ogg'])
+const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'm4v', 'webm', 'mkv'])
 
 function normalizePathSeparators(value: string): string {
   return value.replace(/\\/g, '/')
@@ -194,11 +289,50 @@ function getSourceExtension(source: WikiSource): string {
 
 function classifySourceKind(source: WikiSource): { key: string; label: string } {
   const extension = getSourceExtension(source)
+  const metadataKind = source.metadata?.intakeKind || source.metadata?.extractionKind
+  if (source.sourceType === 'url') return { key: 'web', label: '网页' }
+  if (source.sourceType === 'paste') return { key: 'paste', label: '粘贴' }
+  if (source.sourceType === 'clipper') return { key: 'clipper', label: '剪藏' }
+  if (source.sourceType === 'auto') return { key: 'auto', label: '自动' }
   if (MARKDOWN_EXTENSIONS.has(extension)) return { key: 'markdown', label: 'Markdown' }
-  if (TEXT_EXTENSIONS.has(extension)) return { key: 'text', label: '文本' }
+  if (TEXT_EXTENSIONS.has(extension) || TRANSCRIPT_EXTENSIONS.has(extension)) return { key: 'text', label: '文本' }
   if (DATA_EXTENSIONS.has(extension)) return { key: 'data', label: '数据' }
+  if (metadataKind === 'audio' || AUDIO_EXTENSIONS.has(extension)) return { key: 'audio', label: '音频' }
+  if (metadataKind === 'video' || VIDEO_EXTENSIONS.has(extension)) return { key: 'video', label: '视频' }
   if (extension) return { key: 'code', label: '代码' }
   return { key: 'other', label: '其他' }
+}
+
+function getSourceMediaKind(source: WikiSource): SourceMediaKind | null {
+  const extension = getSourceExtension(source)
+  const metadataKind = source.metadata?.intakeKind || source.metadata?.extractionKind
+  if (metadataKind === 'audio' || AUDIO_EXTENSIONS.has(extension)) return 'audio'
+  if (metadataKind === 'video' || VIDEO_EXTENSIONS.has(extension)) return 'video'
+  return null
+}
+
+function isSourceTranscriptionReady(source: WikiSource): boolean {
+  const method = String(source.metadata?.extractionMethod || '')
+  return method === 'sidecar-transcript' || method === 'whisper-local'
+}
+
+function isSourceTranscriptionCandidate(source: WikiSource): boolean {
+  return Boolean(getSourceMediaKind(source) && source.filePath && !isSourceTranscriptionReady(source))
+}
+
+function getArtifactHumanIntent(kind: NotebookArtifactKind): string {
+  const intents: Record<NotebookArtifactKind, string> = {
+    'source-map': '先看懂',
+    briefing: '做汇报',
+    faq: '问清楚',
+    timeline: '看顺序',
+    'study-guide': '变课程',
+    'podcast-script': '讲出来',
+    'mind-map': '画结构',
+    quiz: '考自己',
+    'action-plan': '去行动',
+  }
+  return intents[kind]
 }
 
 function getSourceDisplayPath(source: WikiSource): string {
@@ -212,6 +346,8 @@ function getSourceDisplayPath(source: WikiSource): string {
 
 function getSourceProjectLabel(source: WikiSource): string {
   if (!source.folderPath || source.folderPath === '.' || source.folderPath === '__unfiled__') {
+    if (source.sourceType === 'url') return '网页剪藏'
+    if (source.sourceType === 'paste') return '粘贴素材'
     return '未分项目'
   }
   return source.folderPath.split('/')[0] || getFolderDisplayPath(source.folderPath)
@@ -504,6 +640,7 @@ function buildIndexedPage(page: WikiPage): IndexedPage {
 export default function KnowledgeVaultTab() {
   const [subTab, setSubTab] = useState<SubTab>('pages')
   const [searchText, setSearchText] = useState('')
+  const [activeDomain, setActiveDomain] = useState<KnowledgeDomain>('all')
   const [activeCategory, setActiveCategory] = useState<string>('all')
   const [showPageView, setShowPageView] = useState(false)
 
@@ -529,6 +666,13 @@ export default function KnowledgeVaultTab() {
   const [currentDrawer, setCurrentDrawer] = useState<Drawer | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState('')
+  const [editTitle, setEditTitle] = useState('')
+  const [editFolderPath, setEditFolderPath] = useState('')
+  const [editTagsText, setEditTagsText] = useState('')
+  const [tagPageNotice, setTagPageNotice] = useState('')
+  const [renamingFolderPath, setRenamingFolderPath] = useState('')
+  const [renameFolderText, setRenameFolderText] = useState('')
+  const [renameFolderNotice, setRenameFolderNotice] = useState('')
 
   // Ingest
   const [isIngesting, setIsIngesting] = useState(false)
@@ -557,6 +701,19 @@ export default function KnowledgeVaultTab() {
   const [queryResearch, setQueryResearch] = useState<GroundedResearchReport | null>(null)
   const [showQueryResult, setShowQueryResult] = useState(false)
 
+  // Notebook 联动实验室
+  const [studioSelectedSourceIds, setStudioSelectedSourceIds] = useState<string[]>([])
+  const [studioKind, setStudioKind] = useState<NotebookArtifactKind>('source-map')
+  const [studioInstruction, setStudioInstruction] = useState('')
+  const [studioArtifact, setStudioArtifact] = useState<NotebookArtifactResult | null>(null)
+  const [studioNotice, setStudioNotice] = useState('')
+  const [isStudioRunning, setIsStudioRunning] = useState(false)
+  const [isTranscribingSource, setIsTranscribingSource] = useState(false)
+  const [sourceTranscriptionNotice, setSourceTranscriptionNotice] = useState('')
+  const [isTranscriptionQueueRunning, setIsTranscriptionQueueRunning] = useState(false)
+  const [transcriptionQueueItems, setTranscriptionQueueItems] = useState<TranscriptionQueueItem[]>([])
+  const [transcriptionQueueNotice, setTranscriptionQueueNotice] = useState('')
+
   // Agent 视角
   const [agents, setAgents] = useState<AgentDefinition[]>([])
   const [selectedAgentId, setSelectedAgentId] = useState<string>('')
@@ -573,7 +730,7 @@ export default function KnowledgeVaultTab() {
   const [autoCompile, setAutoCompile] = useState(true)
 
   // Obsidian Vault 导入
-  const [vaultPath, setVaultPath] = useState(() => localStorage.getItem('kv_last_vault_path') || '')
+  const [vaultPath, setVaultPath] = useState(() => localStorage.getItem('kv_last_vault_path') || KNOWLEDGE_MASTERS_ROOT)
   const [isVaultImporting, setIsVaultImporting] = useState(false)
   const [vaultResult, setVaultResult] = useState<{ imported: number; skipped: number; errors: string[] } | null>(null)
 
@@ -591,9 +748,10 @@ export default function KnowledgeVaultTab() {
   // ─── Sub-tabs ───
 
   const subTabs: Array<{ id: SubTab; icon: string; label: string }> = [
-    { id: 'pages', icon: '📖', label: '知识索引' },
-    { id: 'insights', icon: '✦', label: '知识策展' },
-    { id: 'ingest', icon: '➕', label: '导入知识' },
+    { id: 'pages', icon: '📖', label: '知识＋大佬' },
+    { id: 'studio', icon: '◎', label: 'Notebook 联动' },
+    { id: 'insights', icon: '✦', label: '策展与大佬' },
+    { id: 'ingest', icon: '➕', label: '导入素材' },
   ]
 
   // ─── Data Loading ───
@@ -608,7 +766,7 @@ export default function KnowledgeVaultTab() {
     ])
     const allPages = await getAllPagesUnbounded(500)
     setPages(sortPagesForIndex(allPages))
-    setSources(sortSourcesForIndex(allSources.filter((source) => source.sourceType === 'file' || !!source.filePath)))
+    setSources(sortSourcesForIndex(allSources))
     setSourceScopeEntries(sourceEntries)
     setStats({
       totalPages: st.totalPages,
@@ -688,6 +846,7 @@ export default function KnowledgeVaultTab() {
       setSelectedSourceId(null)
       setShowPageView(true)
       setIsEditing(false)
+      setSourceTranscriptionNotice('')
     }
   }
 
@@ -701,6 +860,7 @@ export default function KnowledgeVaultTab() {
       setSelectedSourceId(id)
       setShowPageView(true)
       setIsEditing(false)
+      setSourceTranscriptionNotice('')
     }
   }
 
@@ -714,6 +874,7 @@ export default function KnowledgeVaultTab() {
       setSelectedSourceId(null)
       setShowPageView(true)
       setIsEditing(false)
+      setSourceTranscriptionNotice('')
     }
   }
 
@@ -725,6 +886,29 @@ export default function KnowledgeVaultTab() {
     setCurrentSource(null)
     setCurrentDrawer(null)
     setIsEditing(false)
+    setEditTitle('')
+    setEditFolderPath('')
+    setEditTagsText('')
+    setTagPageNotice('')
+    setSourceTranscriptionNotice('')
+  }
+
+  function beginPageEdit(page: WikiPage) {
+    setIsEditing(true)
+    setEditTitle(page.title)
+    setEditFolderPath(page.folderPath || '')
+    setEditTagsText((page.tags || []).join('，'))
+    setEditContent(page.content)
+    setTagPageNotice('')
+  }
+
+  function beginSourceEdit(source: WikiSource) {
+    setIsEditing(true)
+    setEditTitle(source.title || getPathLeafName(source.filePath) || '未命名来源')
+    setEditFolderPath(source.folderPath || '')
+    setEditTagsText((source.tags || []).join('，'))
+    setEditContent(source.rawContent || source.content || '')
+    setTagPageNotice('')
   }
 
   // Wiki link click handler — search for page by name
@@ -877,7 +1061,10 @@ export default function KnowledgeVaultTab() {
       return
     }
 
-    const folderPath = await electronAPI.chooseFolder()
+    const folderPath = await electronAPI.chooseFolder({
+      defaultPath: KNOWLEDGE_MASTERS_ROOT,
+      title: '选择任意本地文件夹导入知识＋大佬',
+    })
     if (!folderPath) return
 
     const folderName = getPathLeafName(folderPath)
@@ -946,13 +1133,34 @@ export default function KnowledgeVaultTab() {
       setIngestPhase(`[${i + 1}/${supportedFiles.length}] ${fileName}`)
 
       try {
-        const content = await readFileAsText(file)
-        const language = fileName.match(/\.([^.]+)$/)?.[1] || 'text'
-        const isCode = !['md', 'txt', 'json', 'csv', 'tsv', 'markdown'].includes(language)
         const absoluteFilePath = (file as any).path as string | undefined
         const folderPath =
           deriveFolderPathFromRelativeFile(relativePath || file.webkitRelativePath) ||
           deriveFolderPathFromAbsoluteFilePath(absoluteFilePath)
+        const language = fileName.match(/\.([^.]+)$/)?.[1] || 'text'
+        const intakeKind = getFileIntakeKind(absoluteFilePath || relativePath || file.webkitRelativePath || fileName)
+        let content = ''
+        let rawContent = ''
+        let extractionMetadata: Record<string, unknown> = {}
+
+        const electronAPI = (window as any)?.electronAPI
+        if (absoluteFilePath && electronAPI?.extractFileContent) {
+          const extracted = await electronAPI.extractFileContent(absoluteFilePath)
+          if (!extracted?.success) throw new Error(extracted?.error || `无法解析文件: ${fileName}`)
+          content = extracted.content || ''
+          rawContent = extracted.rawContent || extracted.content || ''
+          extractionMetadata = {
+            extractionKind: extracted.kind,
+            extractionMethod: extracted.method,
+            extractionWarnings: extracted.warnings || [],
+            extractionSize: extracted.metadata?.size,
+          }
+        } else {
+          content = await readFileAsText(file)
+          rawContent = content
+        }
+
+        const isCode = shouldWrapAsCode(absoluteFilePath || relativePath || fileName)
         const wrappedContent = isCode
           ? `文件: ${fileName}\n语言: ${language}\n\n\`\`\`${language}\n${content}\n\`\`\``
           : content
@@ -962,10 +1170,12 @@ export default function KnowledgeVaultTab() {
             sourceType: 'file',
             title: fileName,
             content: wrappedContent,
-            rawContent: content,
+            rawContent,
             filePath: absoluteFilePath || relativePath || file.webkitRelativePath || fileName,
             metadata: {
               language,
+              intakeKind,
+              ...extractionMetadata,
               ...(folderPath ? { folderPath } : {}),
             },
           },
@@ -1123,17 +1333,42 @@ export default function KnowledgeVaultTab() {
 
   async function handleSavePageEdit() {
     if (!currentPage) return
-    await updatePage(currentPage.id, { content: editContent })
+    const title = editTitle.trim() || currentPage.title
+    const tags = parseKnowledgeTagsText(editTagsText)
+    const folderPath = editFolderPath.trim() ? normalizeFolderPath(editFolderPath) : currentPage.folderPath
+    await updatePage(currentPage.id, {
+      title,
+      slug: title !== currentPage.title ? generateSlug(title) : currentPage.slug,
+      content: editContent,
+      tags,
+      folderPath,
+      metadata: {
+        ...(currentPage.metadata || {}),
+        folderPath,
+      },
+    })
+    const tagPages = await ensureTagPagesForKnowledgeTags(tags)
+    setTagPageNotice(tagPages.length > 0 ? `已同步 ${tagPages.length} 个标签专题页` : '')
     await loadData()
     selectPage(currentPage.id)
+    setIsEditing(false)
   }
 
   async function handleSaveSourceEdit() {
     if (!currentSource) return
     const nextContent = editContent
+    const tags = parseKnowledgeTagsText(editTagsText)
+    const folderPath = editFolderPath.trim() ? normalizeFolderPath(editFolderPath) : currentSource.folderPath
     await updateSource(currentSource.id, {
+      title: editTitle.trim() || currentSource.title || getPathLeafName(currentSource.filePath) || '未命名来源',
       content: nextContent,
       rawContent: nextContent,
+      tags,
+      folderPath,
+      metadata: {
+        ...(currentSource.metadata || {}),
+        folderPath,
+      },
     })
 
     const linkedDrawer = await findDrawerBySourceId(currentSource.id)
@@ -1141,8 +1376,173 @@ export default function KnowledgeVaultTab() {
       await updateDrawer(linkedDrawer.id, { rawContent: nextContent })
     }
 
+    const tagPages = await ensureTagPagesForKnowledgeTags(tags)
+    setTagPageNotice(tagPages.length > 0 ? `已同步 ${tagPages.length} 个标签专题页` : '')
     await loadData()
     selectSource(currentSource.id)
+    setIsEditing(false)
+  }
+
+  async function applyMediaTranscriptionResult(
+    source: WikiSource,
+    mediaKind: SourceMediaKind,
+    result: MediaTranscriptionResult,
+  ): Promise<string> {
+    const nextMetadata = {
+      ...(source.metadata || {}),
+      intakeKind: mediaKind,
+      extractionKind: result.kind || mediaKind,
+      extractionMethod: result.method,
+      extractionWarnings: result.warnings || [],
+      extractionSize: result.metadata?.size,
+      transcriptPath: result.transcriptPath || source.metadata?.transcriptPath,
+      transcriptionUpdatedAt: new Date().toISOString(),
+      transcriptionError: result.success ? '' : result.error || '',
+    }
+
+    if (result.content) {
+      await updateSource(source.id, {
+        content: result.content,
+        rawContent: result.rawContent || result.content,
+        status: result.success ? 'processed' : source.status,
+        errorMessage: result.success ? '' : result.error || source.errorMessage,
+        metadata: nextMetadata,
+      })
+
+      const linkedDrawer = await findDrawerBySourceId(source.id)
+      if (linkedDrawer) {
+        await updateDrawer(linkedDrawer.id, {
+          rawContent: result.content,
+          isCompiled: result.success ? false : linkedDrawer.isCompiled,
+          metadata: {
+            ...(linkedDrawer.metadata || {}),
+            ...nextMetadata,
+          },
+        })
+      }
+    } else {
+      await updateSource(source.id, {
+        errorMessage: result.error || source.errorMessage,
+        metadata: nextMetadata,
+      })
+    }
+
+    if (result.success) {
+      return result.method === 'sidecar-transcript'
+        ? `已吃到同名字幕：${result.transcriptPath || '字幕文件'}`
+        : `本地 Whisper 转写完成：${result.transcriptPath || '已写回知识库'}`
+    }
+    return result.error || '转写没有完成，请查看解析提示。'
+  }
+
+  async function handleTranscribeCurrentSource() {
+    if (!currentSource || !currentSource.filePath || isTranscribingSource) return
+    const mediaKind = getSourceMediaKind(currentSource)
+    if (!mediaKind) return
+
+    const electronAPI = (window as any)?.electronAPI
+    if (!electronAPI?.transcribeMediaFile) {
+      setSourceTranscriptionNotice('当前运行环境没有开放本地转写通道，请重启 Electron 应用后再试。')
+      return
+    }
+
+    setIsTranscribingSource(true)
+    setSourceTranscriptionNotice('正在查找同名字幕；如果没有字幕，会尝试调用本地 Whisper 转写...')
+
+    try {
+      const result = await electronAPI.transcribeMediaFile(currentSource.filePath)
+      const message = await applyMediaTranscriptionResult(currentSource, mediaKind, result)
+      await loadData()
+      await selectSource(currentSource.id)
+      setSourceTranscriptionNotice(message)
+      if (result.success) triggerAutoCompile()
+    } catch (err) {
+      setSourceTranscriptionNotice(`转写失败：${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setIsTranscribingSource(false)
+    }
+  }
+
+  async function handleRunMediaTranscriptionQueue() {
+    if (isTranscriptionQueueRunning || mediaTranscriptionCandidates.length === 0) return
+    const electronAPI = (window as any)?.electronAPI
+    if (!electronAPI?.transcribeMediaFile) {
+      setTranscriptionQueueNotice('当前运行环境没有开放本地转写通道，请重启 Electron 应用后再试。')
+      return
+    }
+
+    const queue = mediaTranscriptionCandidates.map((source) => ({
+      sourceId: source.id,
+      title: source.title || getPathLeafName(source.filePath) || '未命名媒体',
+      kind: getSourceMediaKind(source) || 'audio',
+      status: 'pending' as const,
+      message: '等待处理',
+    }))
+
+    setIsTranscriptionQueueRunning(true)
+    setTranscriptionQueueItems(queue)
+    setTranscriptionQueueNotice(`已创建 ${queue.length} 个媒体解析任务，正在按顺序处理。`)
+
+    let successCount = 0
+    let failedCount = 0
+    const successIds: string[] = []
+
+    for (let index = 0; index < mediaTranscriptionCandidates.length; index++) {
+      const source = mediaTranscriptionCandidates[index]
+      const mediaKind = getSourceMediaKind(source)
+      if (!mediaKind || !source.filePath) continue
+
+      setTranscriptionQueueItems((prev) =>
+        prev.map((item) =>
+          item.sourceId === source.id
+            ? { ...item, status: 'running', message: `处理中 ${index + 1}/${mediaTranscriptionCandidates.length}` }
+            : item,
+        ),
+      )
+
+      try {
+        const result = await electronAPI.transcribeMediaFile(source.filePath)
+        const message = await applyMediaTranscriptionResult(source, mediaKind, result)
+        if (result.success) {
+          successCount += 1
+          successIds.push(source.id)
+        } else {
+          failedCount += 1
+        }
+        setTranscriptionQueueItems((prev) =>
+          prev.map((item) =>
+            item.sourceId === source.id
+              ? { ...item, status: result.success ? 'success' : 'error', message }
+              : item,
+          ),
+        )
+      } catch (err) {
+        failedCount += 1
+        setTranscriptionQueueItems((prev) =>
+          prev.map((item) =>
+            item.sourceId === source.id
+              ? {
+                  ...item,
+                  status: 'error',
+                  message: err instanceof Error ? err.message : String(err),
+                }
+              : item,
+          ),
+        )
+      }
+    }
+
+    if (successIds.length > 0) {
+      setStudioSelectedSourceIds((prev) => Array.from(new Set([...prev, ...successIds])))
+    }
+    await loadData()
+    if (successCount > 0) triggerAutoCompile()
+    setTranscriptionQueueNotice(
+      successCount > 0
+        ? `解析队列完成：${successCount} 个成功，${failedCount} 个需要处理；成功项已加入 Notebook。`
+        : `解析队列完成：暂时没有成功项，${failedCount} 个需要处理。`,
+    )
+    setIsTranscriptionQueueRunning(false)
   }
 
   async function handleDeletePage(id: string) {
@@ -1170,6 +1570,43 @@ export default function KnowledgeVaultTab() {
     }
   }
 
+  function beginRenameSelectedFolder() {
+    if (!effectiveFolderScope) return
+    setRenamingFolderPath(effectiveFolderScope)
+    setRenameFolderText(getFolderDisplayPath(effectiveFolderScope))
+    setRenameFolderNotice('')
+  }
+
+  async function handleRenameSelectedFolder() {
+    if (!renamingFolderPath) return
+    const nextName = renameFolderText.trim()
+    if (!nextName) {
+      setRenameFolderNotice('请输入新的目录名')
+      return
+    }
+    const nextPath = normalizeFolderPath(nextName)
+    const oldPath = renamingFolderPath
+    if (nextPath === oldPath) {
+      setRenamingFolderPath('')
+      setRenameFolderText('')
+      return
+    }
+
+    setRenameFolderNotice('正在重命名目录...')
+    const result = await renameKnowledgeFolderPath(oldPath, nextPath)
+    setSelectedFolderPath(nextPath)
+    setRenameFolderNotice(`已重命名目录：${result.sources} 个来源，${result.pages} 个页面`)
+    setRenamingFolderPath('')
+    setRenameFolderText('')
+    await loadData()
+  }
+
+  function cancelRenameFolder() {
+    setRenamingFolderPath('')
+    setRenameFolderText('')
+    setRenameFolderNotice('')
+  }
+
   async function openPageEditor(id: string) {
     const page = await getPage(id)
     if (!page) return
@@ -1178,8 +1615,7 @@ export default function KnowledgeVaultTab() {
     setCurrentDrawer(null)
     setSelectedPageId(id)
     setShowPageView(true)
-    setIsEditing(true)
-    setEditContent(page.content)
+    beginPageEdit(page)
   }
 
   async function openSourceEditor(id: string) {
@@ -1191,8 +1627,7 @@ export default function KnowledgeVaultTab() {
     setSelectedPageId(null)
     setSelectedSourceId(id)
     setShowPageView(true)
-    setIsEditing(true)
-    setEditContent(source.rawContent || source.content || '')
+    beginSourceEdit(source)
   }
 
   // ─── Query ───
@@ -1327,6 +1762,63 @@ export default function KnowledgeVaultTab() {
     selectPage(pageId)
   }
 
+  function toggleStudioSource(sourceId: string) {
+    setStudioSelectedSourceIds((prev) =>
+      prev.includes(sourceId) ? prev.filter((id) => id !== sourceId) : [...prev, sourceId],
+    )
+    setStudioNotice('')
+  }
+
+  function clearStudioSources() {
+    setStudioSelectedSourceIds([])
+    setStudioArtifact(null)
+    setStudioNotice('')
+  }
+
+  function addVisibleSourcesToStudio() {
+    const ids = filteredSources.slice(0, 12).map((item) => item.source.id)
+    setStudioSelectedSourceIds((prev) => Array.from(new Set([...prev, ...ids])))
+    setStudioNotice(`已把当前列表前 ${ids.length} 个来源加入联动实验室`)
+  }
+
+  async function handleStudioCoachAction(action: StudioCoachAction) {
+    if (action === 'ingest') {
+      setSubTab('ingest')
+      setStudioNotice('')
+      return
+    }
+    if (action === 'add-visible') {
+      addVisibleSourcesToStudio()
+      return
+    }
+    if (action === 'transcribe') {
+      await handleRunMediaTranscriptionQueue()
+      return
+    }
+    await handleGenerateNotebookArtifact()
+  }
+
+  async function handleGenerateNotebookArtifact() {
+    if (studioSelectedSources.length === 0 || isStudioRunning) return
+    setIsStudioRunning(true)
+    setStudioNotice('正在把资料源编排成可归档成果物...')
+    setStudioArtifact(null)
+    try {
+      const artifact = await generateNotebookArtifact({
+        kind: studioKind,
+        sources: studioSelectedSources,
+        llmConfig: getLLMConfig(),
+        instruction: studioInstruction,
+      })
+      setStudioArtifact(artifact)
+      setStudioNotice(`已生成并归档：${artifact.title}`)
+      await loadData()
+    } catch (err) {
+      setStudioNotice(`生成失败：${String(err)}`)
+    }
+    setIsStudioRunning(false)
+  }
+
   async function handleRunExternalResearch() {
     const question = queryText.trim()
     if (!question || isResearching || isQuerying) return
@@ -1409,11 +1901,26 @@ export default function KnowledgeVaultTab() {
   }, [scopedPages, scopedSources])
   const intelligence = useMemo(() => buildKnowledgeIntelligence(scopedPages), [scopedPages])
   const indexedSources = useMemo(() => scopedSources.map(buildIndexedSource), [scopedSources])
+  const domainStats = useMemo(() => {
+    const counts: Record<Exclude<KnowledgeDomain, 'all'>, number> = {
+      personal: 0,
+      master: 0,
+      world: 0,
+    }
+    for (const item of indexedSources) {
+      counts[inferKnowledgeDomain(item.source)] += 1
+    }
+    return counts
+  }, [indexedSources])
+  const domainScopedSources = useMemo(() => {
+    if (activeDomain === 'all') return indexedSources
+    return indexedSources.filter((item) => inferKnowledgeDomain(item.source) === activeDomain)
+  }, [activeDomain, indexedSources])
   const searchTerms = useMemo(() => normalizeSearchTerms(deferredSearchText), [deferredSearchText])
   const searchMatchedSources = useMemo(() => {
-    if (searchTerms.length === 0) return indexedSources
-    return indexedSources.filter((item) => matchesSearchTerms(item.searchBlob, searchTerms))
-  }, [indexedSources, searchTerms])
+    if (searchTerms.length === 0) return domainScopedSources
+    return domainScopedSources.filter((item) => matchesSearchTerms(item.searchBlob, searchTerms))
+  }, [domainScopedSources, searchTerms])
   const categoryFilters = useMemo<CategoryFilter[]>(() => {
     const counts = new Map<string, number>()
     const labels = new Map<string, string>()
@@ -1445,12 +1952,99 @@ export default function KnowledgeVaultTab() {
     if (activeCategory === 'all') return searchMatchedSources
     return searchMatchedSources.filter((item) => item.sourceKind === activeCategory)
   }, [activeCategory, searchMatchedSources])
+  const notebookArtifactSpecs = useMemo(() => getNotebookArtifactSpecs(), [])
+  const studioSelectedSourceSet = useMemo(() => new Set(studioSelectedSourceIds), [studioSelectedSourceIds])
+  const studioSelectedSources = useMemo(
+    () => studioSelectedSourceIds.map((id) => sources.find((source) => source.id === id)).filter(Boolean) as WikiSource[],
+    [sources, studioSelectedSourceIds],
+  )
+  const mediaTranscriptionCandidates = useMemo(
+    () =>
+      scopedSources
+        .filter(isSourceTranscriptionCandidate)
+        .sort((left, right) =>
+          (right.updatedAt || right.createdAt || '').localeCompare(left.updatedAt || left.createdAt || ''),
+        ),
+    [scopedSources],
+  )
+  const selectedMediaTranscriptionCount = useMemo(
+    () => studioSelectedSources.filter(isSourceTranscriptionCandidate).length,
+    [studioSelectedSources],
+  )
+  const studioCoachState = useMemo<StudioCoachState>(() => {
+    if (scopedSources.length === 0) {
+      return {
+        title: '先把资料放进来',
+        detail: '这里还没有可研究的资料。先放网页、PDF、截图、视频、音频或文字，系统才有东西可以读。',
+        action: 'ingest',
+        cta: '去导入素材',
+      }
+    }
+
+    if (studioSelectedSources.length === 0) {
+      return {
+        title: '先选这次要研究的资料',
+        detail: '左侧资料池里已经有内容。你可以点资料加入 Notebook，或者让我先把当前列表放进来。',
+        action: 'add-visible',
+        cta: '加入当前资料',
+      }
+    }
+
+    if (selectedMediaTranscriptionCount > 0 || mediaTranscriptionCandidates.length > 0) {
+      return {
+        title: '先把音视频读成文字',
+        detail: '有些视频或音频还只是文件。先补字幕或转写，后面生成的学习包和行动清单才不会空。',
+        action: 'transcribe',
+        cta: '批量补字幕',
+      }
+    }
+
+    return {
+      title: `现在适合生成：${getNotebookArtifactSpecs().find((spec) => spec.kind === studioKind)?.label || '成果物'}`,
+      detail: '资料已经选好，也没有明显的待解析媒体。点一下就会生成页面，并自动归档到知识库。',
+      action: 'generate',
+      cta: '生成并归档',
+    }
+  }, [mediaTranscriptionCandidates.length, scopedSources.length, selectedMediaTranscriptionCount, studioKind, studioSelectedSources.length])
+  const notebookCapabilityCards = useMemo(
+    () => [
+      {
+        label: '接收万物',
+        value: scopeStats.totalSources,
+        detail: '网页、文件、截图、音视频都会先成为可追踪来源',
+      },
+      {
+        label: '读成文字',
+        value: mediaTranscriptionCandidates.length,
+        detail: mediaTranscriptionCandidates.length > 0 ? '仍有媒体等待补字幕/转写' : '当前范围没有待解析媒体',
+      },
+      {
+        label: '联动资料',
+        value: studioSelectedSources.length,
+        detail: '被选中的来源会一起生成 Notebook 成果物',
+      },
+      {
+        label: '归档成果',
+        value: studioArtifact ? 1 : 0,
+        detail: studioArtifact ? '最近一次成果物已写回知识库' : '生成后会自动留下页面和来源链',
+      },
+    ],
+    [mediaTranscriptionCandidates.length, scopeStats.totalSources, studioArtifact, studioSelectedSources.length],
+  )
   useEffect(() => {
     if (selectedFolderPath === ALL_FOLDERS_SCOPE) return
     if (sources.length === 0 && fileSourceEntries.length === 0) return
     if (folderOptions.some((option) => option.path === selectedFolderPath)) return
     setSelectedFolderPath(ALL_FOLDERS_SCOPE)
   }, [fileSourceEntries.length, folderOptions, selectedFolderPath, sources.length])
+  useEffect(() => {
+    if (studioSelectedSourceIds.length === 0) return
+    const knownIds = new Set(sources.map((source) => source.id))
+    const nextIds = studioSelectedSourceIds.filter((id) => knownIds.has(id))
+    if (nextIds.length !== studioSelectedSourceIds.length) {
+      setStudioSelectedSourceIds(nextIds)
+    }
+  }, [sources, studioSelectedSourceIds])
   const handleCategoryFilterSelect = useCallback((nextCategory: string) => {
     startTransition(() => {
       setActiveCategory(nextCategory)
@@ -1492,7 +2086,7 @@ export default function KnowledgeVaultTab() {
   )
 
   useEffect(() => {
-    if (subTab !== 'pages') return
+    if (subTab !== 'pages' && subTab !== 'studio') return
     listRef.current?.scrollTo({ top: 0 })
     setListScrollTop(0)
   }, [activeCategory, deferredSearchText, effectiveFolderScope, subTab])
@@ -1508,7 +2102,7 @@ export default function KnowledgeVaultTab() {
   )
   const visibleQueryAnswer = queryAnswer || queryBaseAnswer || queryStreamContent
   const queryStatusText = isResearching
-    ? '正在联网补强，并把外部前沿信息与你的知识库证据一起综合判断…'
+    ? '正在联网补强，并把外部前沿信息与你的知识＋大佬证据一起综合判断…'
     : isQuerying
       ? queryStreamContent
         ? '正在整理侦查结论与证据链…'
@@ -1531,7 +2125,7 @@ export default function KnowledgeVaultTab() {
         type="file"
         multiple
         style={{ display: 'none' }}
-        accept=".md,.txt,.json,.csv,.ts,.tsx,.js,.jsx,.py,.go,.rs,.java,.html,.css,.yaml,.yml,.sql,.sh"
+        accept=".md,.txt,.srt,.vtt,.ass,.ssa,.lrc,.json,.csv,.ts,.tsx,.js,.jsx,.py,.go,.rs,.java,.html,.css,.yaml,.yml,.sql,.sh,.pdf,.doc,.docx,.rtf,.odt,.png,.jpg,.jpeg,.webp,.gif,.heic,.mp3,.m4a,.wav,.aac,.flac,.mp4,.mov,.m4v,.webm"
         onChange={handleFileInput}
       />
 
@@ -1557,13 +2151,13 @@ export default function KnowledgeVaultTab() {
         </div>
 
         {/* 搜索框兼提问 */}
-        {subTab === 'pages' && (
+        {(subTab === 'pages' || subTab === 'studio') && (
           <div className="kv-tab__search">
             <div className="kv-tab__finder-card">
               <div className="kv-tab__finder-row">
                 <input
                   className="kv-tab__search-input kv-tab__search-input--sidebar"
-                  placeholder="搜索文件，或直接发问"
+                  placeholder={subTab === 'studio' ? '搜索资料源，勾选进 Notebook' : '搜索来源，或直接发问'}
                   value={searchText}
                   onChange={(e) => {
                     setSearchText(e.target.value)
@@ -1577,7 +2171,8 @@ export default function KnowledgeVaultTab() {
                     }
                     if (filteredSources[0]) {
                       event.preventDefault()
-                      selectSource(filteredSources[0].source.id)
+                      if (subTab === 'studio') toggleStudioSource(filteredSources[0].source.id)
+                      else selectSource(filteredSources[0].source.id)
                     }
                   }}
                   style={{ flex: 1 }}
@@ -1585,7 +2180,7 @@ export default function KnowledgeVaultTab() {
                 <button
                   className="kv-tab__btn kv-tab__ask-btn"
                   disabled={!searchText.trim() || isQuerying}
-                  title="向知识库提问"
+                  title="向知识＋大佬提问"
                   onClick={handleSidebarAsk}
                 >
                   {isQuerying ? '⏳' : '提问'}
@@ -1594,7 +2189,7 @@ export default function KnowledgeVaultTab() {
 
               <div className="kv-tab__scope-row kv-tab__scope-row--stacked">
                 <div className="kv-tab__scope-heading">
-                  <span className="kv-tab__scope-label">文件项目</span>
+                  <span className="kv-tab__scope-label">资料项目</span>
                   <span className="kv-tab__scope-current">
                     {effectiveFolderScope
                       ? selectedFolderOption?.displayPath || getFolderDisplayPath(effectiveFolderScope)
@@ -1611,21 +2206,72 @@ export default function KnowledgeVaultTab() {
                       setActiveCategory('all')
                     })
                   }}
-                  title={effectiveFolderScope ? getFolderDisplayPath(effectiveFolderScope) : '全部文件项目'}
+                  title={effectiveFolderScope ? getFolderDisplayPath(effectiveFolderScope) : '全部资料项目'}
                 >
-                  <option value={ALL_FOLDERS_SCOPE}>全部文件项目</option>
+                  <option value={ALL_FOLDERS_SCOPE}>全部资料项目</option>
                   {folderOptions.map((option) => (
                     <option key={option.path} value={option.path}>
                       {`${'  '.repeat(option.depth)}${option.label} · ${option.sourceCount}`}
                     </option>
                   ))}
                 </select>
+                {effectiveFolderScope && (
+                  <button className="kv-tab__scope-rename" onClick={beginRenameSelectedFolder} title="重命名当前目录">
+                    重命名目录
+                  </button>
+                )}
+                {renamingFolderPath && (
+                  <div className="kv-tab__folder-rename-panel">
+                    <input
+                      value={renameFolderText}
+                      onChange={(event) => setRenameFolderText(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') handleRenameSelectedFolder()
+                        if (event.key === 'Escape') cancelRenameFolder()
+                      }}
+                      autoFocus
+                    />
+                    <button onClick={handleRenameSelectedFolder}>保存</button>
+                    <button onClick={cancelRenameFolder}>取消</button>
+                  </div>
+                )}
+                {renameFolderNotice && <div className="kv-tab__folder-rename-notice">{renameFolderNotice}</div>}
               </div>
 
               <div className="kv-tab__finder-meta">
-                <span>{scopeStats.totalFiles} 文件</span>
+                <span>{scopeStats.totalFiles} 来源</span>
                 <span>{scopeStats.totalProjects} 项目</span>
                 <span>{isFilteringDeferred ? '整理中' : `${filteredSources.length} 命中`}</span>
+                {subTab === 'studio' && <span>{studioSelectedSourceIds.length} 已选</span>}
+              </div>
+
+              <div className="kv-tab__domain-group">
+                <button
+                  className={`kv-tab__domain-chip ${activeDomain === 'all' ? 'kv-tab__domain-chip--active' : ''}`}
+                  onClick={() => {
+                    startTransition(() => {
+                      setActiveDomain('all')
+                      setActiveCategory('all')
+                    })
+                  }}
+                >
+                  全部 {indexedSources.length}
+                </button>
+                {KNOWLEDGE_DOMAINS.map((domain) => (
+                  <button
+                    key={domain.id}
+                    className={`kv-tab__domain-chip ${activeDomain === domain.id ? 'kv-tab__domain-chip--active' : ''}`}
+                    onClick={() => {
+                      startTransition(() => {
+                        setActiveDomain(domain.id)
+                        setActiveCategory('all')
+                      })
+                    }}
+                    title={domain.description}
+                  >
+                    {domain.shortLabel} {domainStats[domain.id]}
+                  </button>
+                ))}
               </div>
 
               <div className="kv-tab__filter-group kv-tab__filter-group--minimal">
@@ -1644,12 +2290,13 @@ export default function KnowledgeVaultTab() {
                     {category.label} {category.count}
                   </button>
                 ))}
-                {(activeCategory !== 'all' || searchText.trim()) && (
+                {(activeDomain !== 'all' || activeCategory !== 'all' || searchText.trim()) && (
                   <button
                     className="kv-tab__filter-chip"
                     onClick={() => {
                       startTransition(() => {
                         setSearchText('')
+                        setActiveDomain('all')
                         setActiveCategory('all')
                       })
                     }}
@@ -1659,7 +2306,21 @@ export default function KnowledgeVaultTab() {
                 )}
               </div>
 
-              <div className="kv-tab__filter-note">回车打开首条，⌘/Ctrl + Enter 直接向知识库发问</div>
+              <div className="kv-tab__filter-note">回车打开首条，⌘/Ctrl + Enter 直接向知识＋大佬发问</div>
+              {subTab === 'studio' && (
+                <div className="kv-tab__studio-sidebar-actions">
+                  <button className="kv-tab__filter-chip" onClick={addVisibleSourcesToStudio}>
+                    加入当前命中
+                  </button>
+                  <button
+                    className="kv-tab__filter-chip"
+                    disabled={studioSelectedSourceIds.length === 0}
+                    onClick={clearStudioSources}
+                  >
+                    清空已选
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1701,8 +2362,12 @@ export default function KnowledgeVaultTab() {
           </div>
         )}
 
-        <div ref={listRef} className="kv-tab__list" onScroll={subTab === 'pages' ? handleListScroll : undefined}>
-          {subTab === 'pages' &&
+        <div
+          ref={listRef}
+          className="kv-tab__list"
+          onScroll={subTab === 'pages' || subTab === 'studio' ? handleListScroll : undefined}
+        >
+          {(subTab === 'pages' || subTab === 'studio') &&
             (filteredSources.length === 0 ? (
               <div className="kv-tab__list-empty kv-tab__list-empty--poetic">
                 <div className="kv-tab__list-empty-orbit" />
@@ -1710,9 +2375,11 @@ export default function KnowledgeVaultTab() {
                   {effectiveFolderScope ? '这个项目还没有被点亮' : '这里还很安静'}
                 </div>
                 <div className="kv-tab__list-empty-hint">
-                  {effectiveFolderScope
-                    ? '把这个项目里的文件轻轻置入进来，索引、图片与可编辑内容就会在这里慢慢展开。'
-                    : '选择一个文件项目，或者从左上角“+”页置入整个文件夹，让这里慢慢长出清晰的目录。'}
+                  {subTab === 'studio'
+                    ? '先从“+”页置入资料，或回到知识索引选择已有来源；这里会作为 Notebook 联动的资料池。'
+                    : effectiveFolderScope
+                      ? '把这个项目里的资料轻轻置入进来，索引、图片与可编辑内容就会在这里慢慢展开。'
+                      : '选择一个资料项目，或者从左上角“+”页置入整个文件夹，让这里慢慢长出清晰的目录。'}
                 </div>
                 <div className="kv-tab__empty-actions">
                   {(activeCategory !== 'all' || searchText.trim()) && (
@@ -1751,11 +2418,20 @@ export default function KnowledgeVaultTab() {
                   return (
                     <div
                       key={source.id}
-                      className={`kv-tab__list-item kv-tab__list-item--virtual ${selectedSourceId === source.id ? 'kv-tab__list-item--active' : ''}`}
+                      className={`kv-tab__list-item kv-tab__list-item--virtual ${selectedSourceId === source.id ? 'kv-tab__list-item--active' : ''} ${studioSelectedSourceSet.has(source.id) ? 'kv-tab__list-item--selected' : ''}`}
                       style={{ top, height: PAGE_ROW_HEIGHT }}
-                      onClick={() => selectSource(source.id)}
+                      onClick={() => {
+                        if (subTab === 'studio') {
+                          toggleStudioSource(source.id)
+                          return
+                        }
+                        selectSource(source.id)
+                      }}
                       onKeyDown={(event) => {
-                        if (event.key === 'Enter') selectSource(source.id)
+                        if (event.key === 'Enter') {
+                          if (subTab === 'studio') toggleStudioSource(source.id)
+                          else selectSource(source.id)
+                        }
                       }}
                       role="button"
                       tabIndex={0}
@@ -1770,13 +2446,14 @@ export default function KnowledgeVaultTab() {
                         <div className="kv-tab__list-item-actions">
                           <button
                             className="kv-tab__list-action-btn"
-                            title="快速编辑"
+                            title={subTab === 'studio' ? '加入/移出 Notebook' : '快速编辑'}
                             onClick={(e) => {
                               e.stopPropagation()
-                              openSourceEditor(source.id)
+                              if (subTab === 'studio') toggleStudioSource(source.id)
+                              else openSourceEditor(source.id)
                             }}
                           >
-                            ✏️
+                            {subTab === 'studio' ? (studioSelectedSourceSet.has(source.id) ? '✓' : '+') : '✏️'}
                           </button>
                         </div>
                       </div>
@@ -1823,23 +2500,22 @@ export default function KnowledgeVaultTab() {
           <div className="kv-tab__home">
             {effectiveFolderScope && (
               <div className="kv-tab__scope-banner">
-                当前文件项目：{selectedFolderOption?.displayPath || getFolderDisplayPath(effectiveFolderScope)}
+                当前资料项目：{selectedFolderOption?.displayPath || getFolderDisplayPath(effectiveFolderScope)}
               </div>
             )}
             <div className="kv-tab__home-icon">📚</div>
-            <div className="kv-tab__home-title">知识库</div>
+            <div className="kv-tab__home-title">知识＋大佬</div>
             <div className="kv-tab__home-subtitle">
-              这里展示的是已置入文件项目及其文件索引；支持切换单个项目或查看全部项目，Markdown
-              文件中的图片也会直接读取显示。
+              这里展示的是你的过去笔记、大佬技能与世界知识；底层继续沿用 Karpathy Wiki 的来源、页面、证据三层结构。
               {effectiveFolderScope
-                ? ' 当前视图与左侧索引都已收束到这个文件项目范围。'
-                : ' 右上角“+”页负责把单文件、整个文件夹与 Vault 批量置入这里。'}
+                ? ' 当前视图与左侧索引都已收束到这个资料项目范围。'
+                : ' 右上角“+”页负责把网页、粘贴、单文件、整个文件夹与 Vault 批量置入这里。'}
             </div>
             {scopeStats && (
               <div className="kv-tab__home-stats">
                 <div className="kv-tab__stat-card">
                   <div className="kv-tab__stat-value">{scopeStats.totalFiles}</div>
-                  <div className="kv-tab__stat-label">文件</div>
+                  <div className="kv-tab__stat-label">来源</div>
                 </div>
                 <div className="kv-tab__stat-card">
                   <div className="kv-tab__stat-value">{scopeStats.totalProjects}</div>
@@ -1852,9 +2528,28 @@ export default function KnowledgeVaultTab() {
               </div>
             )}
 
+            <div className="kv-tab__domain-cards">
+              {KNOWLEDGE_DOMAINS.map((domain) => (
+                <button
+                  key={domain.id}
+                  className={`kv-tab__domain-card ${activeDomain === domain.id ? 'kv-tab__domain-card--active' : ''}`}
+                  onClick={() => {
+                    startTransition(() => {
+                      setActiveDomain(domain.id)
+                      setActiveCategory('all')
+                    })
+                  }}
+                >
+                  <span>{domain.label}</span>
+                  <strong>{domainStats[domain.id]}</strong>
+                  <small>{domain.description}</small>
+                </button>
+              ))}
+            </div>
+
             <div className="kv-tab__home-panels">
               <div className="kv-tab__home-panel">
-                <div className="kv-tab__home-panel-title">{effectiveFolderScope ? '当前项目索引' : '文件项目'}</div>
+                <div className="kv-tab__home-panel-title">{effectiveFolderScope ? '当前项目索引' : '资料项目'}</div>
                 {effectiveFolderScope
                   ? filteredSources.slice(0, 4).map((item) => (
                       <button
@@ -1878,15 +2573,15 @@ export default function KnowledgeVaultTab() {
                         }}
                       >
                         <span>{project.displayPath}</span>
-                        <span>{project.sourceCount} 个文件</span>
+                        <span>{project.sourceCount} 个来源</span>
                       </button>
                     ))}
                 {(effectiveFolderScope ? filteredSources.length === 0 : featuredProjects.length === 0) && (
-                  <div className="kv-tab__home-signal">这里会在你导入文件项目后，显示当前项目索引或全部项目入口。</div>
+                  <div className="kv-tab__home-signal">这里会在你导入资料项目后，显示当前项目索引或全部项目入口。</div>
                 )}
               </div>
               <div className="kv-tab__home-panel">
-                <div className="kv-tab__home-panel-title">最近文件</div>
+                <div className="kv-tab__home-panel-title">最近来源</div>
                 {recentScopedSources.map((source) => (
                   <button key={source.id} className="kv-tab__home-link" onClick={() => selectSource(source.id)}>
                     <span>{source.title || getPathLeafName(source.filePath)}</span>
@@ -1895,7 +2590,7 @@ export default function KnowledgeVaultTab() {
                 ))}
                 {recentScopedSources.length === 0 && (
                   <div className="kv-tab__home-signal">
-                    从左上角“+”页置入单文件、整个文件夹或 Vault 后，最近文件会出现在这里。
+                    从左上角“+”页置入网页、粘贴、单文件、整个文件夹或 Vault 后，最近来源会出现在这里。
                   </div>
                 )}
               </div>
@@ -1903,11 +2598,11 @@ export default function KnowledgeVaultTab() {
 
             {/* 提问框 */}
             <div className="kv-tab__home-query">
-              <div className="kv-tab__home-query-title">直接向知识库提问</div>
+              <div className="kv-tab__home-query-title">直接向知识＋大佬提问</div>
               <div className="kv-tab__home-query-row">
                 <input
                   className="kv-tab__search-input"
-                  placeholder="向知识库提问..."
+                  placeholder="向知识＋大佬提问..."
                   value={queryText}
                   onChange={(e) => setQueryText(e.target.value)}
                   onKeyDown={(e) => {
@@ -1966,6 +2661,229 @@ export default function KnowledgeVaultTab() {
           </div>
         )}
 
+        {!showPageView && !showQueryResult && subTab === 'studio' && (
+          <div className="kv-tab__studio">
+            <div className="kv-tab__studio-hero">
+              <div>
+                <div className="kv-tab__studio-kicker">Notebook 联动实验室</div>
+                <div className="kv-tab__studio-title">放资料，读懂它，变成成果</div>
+                <div className="kv-tab__studio-subtitle">
+                  这是知识库的智能工作台。你不需要记复杂流程，只要看“现在最该做什么”：先放资料，再让系统读懂，最后生成可归档的页面。
+                </div>
+              </div>
+              <div className="kv-tab__studio-meter">
+                <strong>{studioSelectedSources.length}</strong>
+                <span>已选来源</span>
+              </div>
+            </div>
+
+            <div className="kv-tab__studio-capability-grid">
+              {notebookCapabilityCards.map((card) => (
+                <div key={card.label} className="kv-tab__studio-capability-card">
+                  <span>{card.label}</span>
+                  <strong>{card.value}</strong>
+                  <small>{card.detail}</small>
+                </div>
+              ))}
+            </div>
+
+            <div className="kv-tab__studio-flow">
+              <div className={`kv-tab__studio-flow-card ${scopedSources.length === 0 ? 'kv-tab__studio-flow-card--active' : ''}`}>
+                <span>1</span>
+                <strong>放资料</strong>
+                <small>{scopedSources.length} 个来源</small>
+              </div>
+              <div
+                className={`kv-tab__studio-flow-card ${
+                  mediaTranscriptionCandidates.length > 0 ? 'kv-tab__studio-flow-card--active' : ''
+                }`}
+              >
+                <span>2</span>
+                <strong>读懂资料</strong>
+                <small>{mediaTranscriptionCandidates.length} 个待解析媒体</small>
+              </div>
+              <div
+                className={`kv-tab__studio-flow-card ${
+                  studioSelectedSources.length > 0 && mediaTranscriptionCandidates.length === 0
+                    ? 'kv-tab__studio-flow-card--active'
+                    : ''
+                }`}
+              >
+                <span>3</span>
+                <strong>生成成果</strong>
+                <small>{studioSelectedSources.length} 个已选来源</small>
+              </div>
+            </div>
+
+            <div className="kv-tab__studio-coach">
+              <div>
+                <div className="kv-tab__studio-coach-kicker">现在最该做</div>
+                <div className="kv-tab__studio-coach-title">{studioCoachState.title}</div>
+                <div className="kv-tab__studio-coach-detail">{studioCoachState.detail}</div>
+              </div>
+              <button
+                className="kv-tab__btn kv-tab__btn--gold"
+                disabled={
+                  (studioCoachState.action === 'transcribe' &&
+                    (mediaTranscriptionCandidates.length === 0 || isTranscriptionQueueRunning)) ||
+                  (studioCoachState.action === 'generate' &&
+                    (studioSelectedSources.length === 0 || isStudioRunning))
+                }
+                onClick={() => handleStudioCoachAction(studioCoachState.action)}
+              >
+                {studioCoachState.action === 'transcribe' && isTranscriptionQueueRunning
+                  ? '正在处理'
+                  : studioCoachState.action === 'generate' && isStudioRunning
+                    ? '生成中'
+                    : studioCoachState.cta}
+              </button>
+            </div>
+
+            <div className="kv-tab__studio-source-strip">
+              {studioSelectedSources.length === 0 ? (
+                <div className="kv-tab__studio-empty">
+                  从左侧资料池点击来源，或点“加入当前命中”。这一步相当于 NotebookLM 的“选择当前笔记本资料源”。
+                </div>
+              ) : (
+                studioSelectedSources.map((source, index) => (
+                  <button
+                    key={source.id}
+                    className="kv-tab__studio-source-chip"
+                    onClick={() => toggleStudioSource(source.id)}
+                    title="点击移出联动实验室"
+                  >
+                    <span>S{index + 1}</span>
+                    {source.title || getPathLeafName(source.filePath) || source.url || source.id}
+                  </button>
+                ))
+              )}
+            </div>
+
+            <div className="kv-tab__studio-media-queue">
+              <div className="kv-tab__studio-media-queue-head">
+                <div>
+                  <div className="kv-tab__studio-user-guide-title">媒体解析队列</div>
+                  <div className="kv-tab__studio-media-queue-subtitle">
+                    当前范围内还有 {mediaTranscriptionCandidates.length} 个音频/视频等待被读成文字。
+                  </div>
+                </div>
+                <button
+                  className="kv-tab__btn"
+                  disabled={mediaTranscriptionCandidates.length === 0 || isTranscriptionQueueRunning}
+                  onClick={handleRunMediaTranscriptionQueue}
+                >
+                  {isTranscriptionQueueRunning ? '队列运行中...' : '批量补字幕'}
+                </button>
+              </div>
+              {transcriptionQueueNotice && (
+                <div className="kv-tab__studio-media-queue-notice">{transcriptionQueueNotice}</div>
+              )}
+              <div className="kv-tab__studio-media-queue-list">
+                {(transcriptionQueueItems.length > 0
+                  ? transcriptionQueueItems
+                  : mediaTranscriptionCandidates.slice(0, 6).map((source) => ({
+                      sourceId: source.id,
+                      title: source.title || getPathLeafName(source.filePath) || '未命名媒体',
+                      kind: getSourceMediaKind(source) || 'audio',
+                      status: 'pending' as const,
+                      message: String(source.metadata?.transcriptionError || source.metadata?.extractionMethod || '待解析'),
+                    }))
+                ).map((item) => (
+                  <button
+                    key={item.sourceId}
+                    className={`kv-tab__studio-media-queue-item kv-tab__studio-media-queue-item--${item.status}`}
+                    onClick={() => selectSource(item.sourceId)}
+                  >
+                    <span>{item.kind === 'video' ? '视频' : '音频'}</span>
+                    <strong>{item.title}</strong>
+                    <small>{item.message}</small>
+                  </button>
+                ))}
+                {mediaTranscriptionCandidates.length === 0 && transcriptionQueueItems.length === 0 && (
+                  <div className="kv-tab__studio-media-queue-empty">
+                    暂时没有待解析媒体。已有字幕或已完成转写的音视频，可以直接加入 Notebook 生成成果物。
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="kv-tab__studio-user-guide">
+              <div className="kv-tab__studio-user-guide-title">你需要做什么</div>
+              <div className="kv-tab__studio-user-guide-grid">
+                <div>看到好网页：复制链接，到“导入素材”里抓取。</div>
+                <div>本地资料：拖入 PDF、Word、Markdown、代码、图片、音频、视频或字幕。</div>
+                <div>想综合理解：回到这里，选资料源，再生成解析/FAQ/学习包/行动清单。</div>
+                <div>图片音视频：截图会尝试 OCR；视频/音频可放同名字幕，也可进详情点“转写/补字幕”。</div>
+              </div>
+            </div>
+
+            <div className="kv-tab__studio-kind-grid">
+              {notebookArtifactSpecs.map((spec) => (
+                <button
+                  key={spec.kind}
+                  className={`kv-tab__studio-kind ${studioKind === spec.kind ? 'kv-tab__studio-kind--active' : ''}`}
+                  onClick={() => setStudioKind(spec.kind)}
+                >
+                  <span>{getArtifactHumanIntent(spec.kind)}</span>
+                  <strong>{spec.label}</strong>
+                  <small>{spec.description}</small>
+                </button>
+              ))}
+            </div>
+
+            <div className="kv-tab__studio-command">
+              <textarea
+                className="kv-tab__query-textarea"
+                placeholder="可选：告诉它你希望如何处理这些资料，例如：更适合小白理解、重点挖出项目启发、生成可直接给群策团队使用的材料..."
+                value={studioInstruction}
+                onChange={(event) => setStudioInstruction(event.target.value)}
+              />
+              <div className="kv-tab__studio-command-actions">
+                <div className="kv-tab__studio-command-note">
+                  默认会要求模型标注 [S1] [S2] 来源编号，并列出冲突、不确定性和下一步。
+                </div>
+                <button
+                  className="kv-tab__btn kv-tab__btn--gold"
+                  disabled={studioSelectedSources.length === 0 || isStudioRunning}
+                  onClick={handleGenerateNotebookArtifact}
+                >
+                  {isStudioRunning ? '生成中...' : '生成并归档'}
+                </button>
+              </div>
+              {studioNotice && <div className="kv-tab__studio-notice">{studioNotice}</div>}
+            </div>
+
+            {studioArtifact && (
+              <div className="kv-tab__studio-artifact">
+                <div className="kv-tab__studio-artifact-header">
+                  <div>
+                    <div className="kv-tab__studio-artifact-kicker">已归档成果物</div>
+                    <div className="kv-tab__studio-artifact-title">{studioArtifact.title}</div>
+                  </div>
+                  <div className="kv-tab__studio-artifact-actions">
+                    <button
+                      className="kv-tab__btn kv-tab__btn--subtle"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(studioArtifact.content)
+                        } catch {}
+                      }}
+                    >
+                      复制
+                    </button>
+                    <button className="kv-tab__btn" onClick={() => selectPage(studioArtifact.pageId)}>
+                      打开页面
+                    </button>
+                  </div>
+                </div>
+                <div className="kv-tab__studio-artifact-body">
+                  {renderMarkdown(studioArtifact.content, selectDrawer, handleWikiLinkClick)}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {!showPageView && !showQueryResult && subTab === 'insights' && (
           <IntelligencePanel intelligence={intelligence} pages={scopedPages} onSelectPage={selectPage} />
         )}
@@ -1996,10 +2914,7 @@ export default function KnowledgeVaultTab() {
                 ) : (
                   <button
                     className="kv-tab__btn kv-tab__btn--subtle"
-                    onClick={() => {
-                      setIsEditing(true)
-                      setEditContent(currentPage.content)
-                    }}
+                    onClick={() => beginPageEdit(currentPage)}
                   >
                     ✏️ 编辑
                   </button>
@@ -2019,6 +2934,31 @@ export default function KnowledgeVaultTab() {
                 </button>
               </div>
             </div>
+            {isEditing && (
+              <div className="kv-tab__edit-meta-grid">
+                <label className="kv-tab__edit-field">
+                  <span>显示名</span>
+                  <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
+                </label>
+                <label className="kv-tab__edit-field">
+                  <span>项目目录</span>
+                  <input
+                    value={editFolderPath}
+                    onChange={(e) => setEditFolderPath(e.target.value)}
+                    placeholder="例如：知识＋大佬/世界知识"
+                  />
+                </label>
+                <label className="kv-tab__edit-field kv-tab__edit-field--wide">
+                  <span>标签</span>
+                  <input
+                    value={editTagsText}
+                    onChange={(e) => setEditTagsText(e.target.value)}
+                    placeholder="用逗号分隔；保存后会自动生成/更新标签专题页"
+                  />
+                </label>
+                {tagPageNotice && <div className="kv-tab__edit-notice">{tagPageNotice}</div>}
+              </div>
+            )}
             <div className="kv-tab__page-body">
               {isEditing ? (
                 <textarea
@@ -2071,10 +3011,7 @@ export default function KnowledgeVaultTab() {
                 ) : (
                   <button
                     className="kv-tab__btn kv-tab__btn--subtle"
-                    onClick={() => {
-                      setIsEditing(true)
-                      setEditContent(currentSource.rawContent || currentSource.content || '')
-                    }}
+                    onClick={() => beginSourceEdit(currentSource)}
                   >
                     ✏️ 编辑
                   </button>
@@ -2089,6 +3026,15 @@ export default function KnowledgeVaultTab() {
                 >
                   📋 复制
                 </button>
+                {getSourceMediaKind(currentSource) && currentSource.filePath && (
+                  <button
+                    className="kv-tab__btn"
+                    disabled={isTranscribingSource}
+                    onClick={handleTranscribeCurrentSource}
+                  >
+                    {isTranscribingSource ? '⏳ 转写中' : '🎧 转写/补字幕'}
+                  </button>
+                )}
                 {currentSource.url && (
                   <a
                     className="kv-tab__btn kv-tab__btn--subtle"
@@ -2099,8 +3045,46 @@ export default function KnowledgeVaultTab() {
                     ↗ 打开链接
                   </a>
                 )}
+                <button
+                  className="kv-tab__btn kv-tab__btn--gold"
+                  onClick={() => {
+                    toggleStudioSource(currentSource.id)
+                    setSubTab('studio')
+                    setShowPageView(false)
+                  }}
+                >
+                  {studioSelectedSourceSet.has(currentSource.id) ? '移出 Notebook' : '加入 Notebook'}
+                </button>
               </div>
             </div>
+            {isEditing && (
+              <div className="kv-tab__edit-meta-grid">
+                <label className="kv-tab__edit-field">
+                  <span>显示名</span>
+                  <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
+                </label>
+                <label className="kv-tab__edit-field">
+                  <span>项目目录</span>
+                  <input
+                    value={editFolderPath}
+                    onChange={(e) => setEditFolderPath(e.target.value)}
+                    placeholder="例如：启蒙/过去的笔记"
+                  />
+                </label>
+                <label className="kv-tab__edit-field kv-tab__edit-field--wide">
+                  <span>标签</span>
+                  <input
+                    value={editTagsText}
+                    onChange={(e) => setEditTagsText(e.target.value)}
+                    placeholder="用逗号分隔；保存后会自动生成/更新标签专题页"
+                  />
+                </label>
+                {tagPageNotice && <div className="kv-tab__edit-notice">{tagPageNotice}</div>}
+              </div>
+            )}
+            {sourceTranscriptionNotice && (
+              <div className="kv-tab__source-notice">{sourceTranscriptionNotice}</div>
+            )}
             <div className="kv-tab__page-body">
               <div className="kv-tab__detail-meta">
                 <div className="kv-tab__detail-meta-row">
@@ -2121,6 +3105,27 @@ export default function KnowledgeVaultTab() {
                     <span className="kv-tab__detail-meta-value">{currentSource.filePath}</span>
                   </div>
                 )}
+                {typeof currentSource.metadata?.extractionMethod === 'string' && (
+                  <div className="kv-tab__detail-meta-row">
+                    <span className="kv-tab__detail-meta-label">解析方式</span>
+                    <span className="kv-tab__detail-meta-value">{currentSource.metadata.extractionMethod}</span>
+                  </div>
+                )}
+                {typeof currentSource.metadata?.transcriptPath === 'string' && currentSource.metadata.transcriptPath && (
+                  <div className="kv-tab__detail-meta-row">
+                    <span className="kv-tab__detail-meta-label">字幕 / 转写稿</span>
+                    <span className="kv-tab__detail-meta-value">{currentSource.metadata.transcriptPath}</span>
+                  </div>
+                )}
+                {Array.isArray(currentSource.metadata?.extractionWarnings) &&
+                  currentSource.metadata.extractionWarnings.length > 0 && (
+                    <div className="kv-tab__detail-meta-row">
+                      <span className="kv-tab__detail-meta-label">解析提示</span>
+                      <span className="kv-tab__detail-meta-value">
+                        {currentSource.metadata.extractionWarnings.join('；')}
+                      </span>
+                    </div>
+                  )}
               </div>
               {isEditing ? (
                 <textarea
@@ -2199,7 +3204,7 @@ export default function KnowledgeVaultTab() {
               )}
               <textarea
                 className="kv-tab__query-textarea"
-                placeholder="输入问题查询知识库..."
+                placeholder="输入问题查询知识＋大佬..."
                 value={queryText}
                 onChange={(e) => setQueryText(e.target.value)}
                 onKeyDown={(e) => {
@@ -2350,7 +3355,7 @@ export default function KnowledgeVaultTab() {
                   <div className="kv-tab__query-sources-header">
                     <span className="kv-tab__query-sources-title">外部前沿来源</span>
                     <span className="kv-tab__query-sources-subtitle">
-                      这些来源用于补强时效性、趋势性与权威性信息，避免知识库只在内部自我循环。
+                      这些来源用于补强时效性、趋势性与权威性信息，避免知识＋大佬只在内部自我循环。
                     </span>
                   </div>
                   <div className="kv-tab__query-citation-grid">
@@ -2505,7 +3510,8 @@ export default function KnowledgeVaultTab() {
         {subTab === 'ingest' && (
           <div className="kv-tab__ingest">
             <div className="kv-tab__ingest-note">
-              这里只有置入入口。浏览、筛选和打开已入库文件，请回到左侧的知识索引页。
+              这里只有置入入口。你可以把网页、粘贴文本、Markdown、PDF、Word、图片、音频、视频都先放进来；
+              系统会优先抽取可读正文，暂时不能深读的媒体会先成为“待解析来源”，后续继续接 OCR、字幕与转写。
             </div>
 
             {/* URL */}
@@ -2569,8 +3575,9 @@ export default function KnowledgeVaultTab() {
                 </button>
               </div>
               <div className="kv-tab__ingest-note kv-tab__ingest-note--compact">
-                支持单文件、整个文件夹、拖放置入，以及 .md .txt .json .py .ts .js .go .rs .html .css .yaml .sql
-                等常见格式。
+                可选择任意本地文件夹；默认打开 {KNOWLEDGE_MASTERS_ROOT}。导入后会按所选文件夹名与内部相对路径分组；支持单文件、整个文件夹、拖放置入，以及 .md .txt .pdf
+                .docx .rtf .json .py .ts .js .go .rs .html .css .yaml .sql .png .jpg .srt .vtt .mp3 .m4a
+                .mp4 .mov 等常见格式。
               </div>
               <div
                 className={`kv-tab__dropzone ${isDragOver ? 'kv-tab__dropzone--active' : ''}`}
@@ -2588,15 +3595,22 @@ export default function KnowledgeVaultTab() {
             <div className="kv-tab__ingest-section">
               <div className="kv-tab__ingest-label">🏛️ Obsidian Vault 导入</div>
               <div style={{ fontSize: '0.75rem', color: 'var(--hd-text-muted)', marginBottom: 'var(--hd-space-xs)' }}>
-                扫描 Obsidian Vault 目录中的 Markdown 文件，批量摄入知识库
+                默认扫描项目根目录下的 Notes-知识库+大佬；也可以改成任何本地 Vault / 笔记文件夹。
               </div>
               <div className="kv-tab__ingest-row">
                 <input
                   className="kv-tab__ingest-input"
-                  placeholder="Vault 路径，如 /path/to/vault/Clippings"
+                  placeholder={KNOWLEDGE_MASTERS_ROOT}
                   value={vaultPath}
                   onChange={(e) => setVaultPath(e.target.value)}
                 />
+                <button
+                  className="kv-tab__btn kv-tab__btn--subtle"
+                  disabled={isVaultImporting}
+                  onClick={() => setVaultPath(KNOWLEDGE_MASTERS_ROOT)}
+                >
+                  默认目录
+                </button>
                 <button
                   className="kv-tab__btn"
                   disabled={!vaultPath.trim() || isVaultImporting}
@@ -2713,12 +3727,12 @@ export default function KnowledgeVaultTab() {
         >
           <div className="kv-tab__welcome" onClick={(e) => e.stopPropagation()}>
             <div className="kv-tab__welcome-icon">📚</div>
-            <div className="kv-tab__welcome-title">知识库 — Karpathy 三层架构</div>
+            <div className="kv-tab__welcome-title">知识＋大佬 — Karpathy 三层架构</div>
             <div className="kv-tab__welcome-steps">
               <div className="kv-tab__welcome-step">
                 <div className="kv-tab__welcome-step-num">①</div>
                 <div>
-                  <div className="kv-tab__welcome-step-title">导入知识</div>
+                  <div className="kv-tab__welcome-step-title">导入素材</div>
                   <div className="kv-tab__welcome-step-desc">
                     在左上角“+”页拖入文件或整个文件夹，也可以粘贴文本、抓取网页。所有内容先进入"抽屉"暂存。
                   </div>
@@ -2738,7 +3752,7 @@ export default function KnowledgeVaultTab() {
                 <div>
                   <div className="kv-tab__welcome-step-title">查询 & 交叉引用</div>
                   <div className="kv-tab__welcome-step-desc">
-                    在搜索框中提问，AI 基于知识库回答。点击 [[蓝色链接]] 在页面间跳转。
+                    在搜索框中提问，AI 基于知识＋大佬回答。点击 [[蓝色链接]] 在页面间跳转。
                   </div>
                 </div>
               </div>

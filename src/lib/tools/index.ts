@@ -9,7 +9,7 @@
  *
  * 工具分 Tier：
  * Tier 1（核心）：web_search, web_extract, clarify, vision_analyze
- * Tier 2（扩展）：terminal, file_read, file_write, code_execute, tts, image_gen
+ * Tier 2（扩展）：terminal, file_read, file_write, desktop_screenshot, desktop_control, xcode_action, code_execute, tts, image_gen
  * Tier 3（集成）：browser, send_message, calendar, email
  */
 import { query, run } from '../db/repository'
@@ -234,6 +234,18 @@ export function parseToolCall(text: string): { tool: string; params: Record<stri
     }
   }
 
+  const colonXmlMatch = text.match(/<tool_call:\s*([a-zA-Z0-9_-]+)\s*>\s*([\s\S]*?)\s*<\/tool_call(?:_use)?>/)
+  if (colonXmlMatch) {
+    try {
+      return {
+        tool: colonXmlMatch[1],
+        params: JSON.parse(colonXmlMatch[2]),
+      }
+    } catch {
+      /* invalid json */
+    }
+  }
+
   return null
 }
 
@@ -358,9 +370,9 @@ function initBuiltinTools(): void {
     },
   )
 
-  registerTool(
-    {
-      id: 'vision_analyze',
+	  registerTool(
+	    {
+	      id: 'vision_analyze',
       name: '图像分析',
       description: '分析图片内容（需要提供图片 URL 或 base64）',
       tier: 1,
@@ -399,11 +411,117 @@ function initBuiltinTools(): void {
     },
   )
 
-  // Tier 2: 扩展工具
+	  // Tier 2: 扩展工具
 
-  registerTool(
-    {
-      id: 'terminal',
+	  registerTool(
+	    {
+	      id: 'desktop_screenshot',
+	      name: '桌面截图观察',
+	      description: '截取当前 Mac 屏幕并可执行 OCR，用于 UI/桌面状态观察',
+	      tier: 2,
+	      enabled: true,
+	      parameters: [
+	        { name: 'includeOcr', type: 'boolean', required: false, description: '是否同时识别截图文字', default: true },
+	        { name: 'fileBaseName', type: 'string', required: false, description: '截图文件名标识', default: 'screen' },
+	        { name: 'region', type: 'object', required: false, description: '可选截图区域 {x,y,width,height}' },
+	      ],
+	    },
+	    async (params) => {
+	      try {
+	        const result = await (window as any).electronAPI?.captureScreen?.({
+	          includeOcr: params.includeOcr !== false,
+	          fileBaseName: String(params.fileBaseName || 'screen'),
+	          region: params.region,
+	        })
+	        return {
+	          success: Boolean(result?.success),
+	          data: result,
+	          error: result?.success ? undefined : result?.error || '截图失败',
+	        }
+	      } catch (err) {
+	        return { success: false, data: null, error: (err as Error).message }
+	      }
+	    },
+	  )
+
+	  registerTool(
+	    {
+	      id: 'desktop_control',
+	      name: 'Mac 桌面控制',
+	      description: '通过受限模板控制 Mac：激活 App、打开路径/URL、快捷键、输入文本、点击坐标、菜单点击',
+	      tier: 2,
+	      enabled: true,
+	      parameters: [
+	        { name: 'action', type: 'string', required: true, description: 'activate_app|open_path|open_url|keystroke|shortcut|press_key|click|menu_click' },
+	        { name: 'appName', type: 'string', required: false, description: '目标 App 名称，如 Xcode、Safari' },
+	        { name: 'path', type: 'string', required: false, description: 'open_path 目标路径' },
+	        { name: 'url', type: 'string', required: false, description: 'open_url 目标 URL' },
+	        { name: 'text', type: 'string', required: false, description: 'keystroke 输入文本' },
+	        { name: 'key', type: 'string', required: false, description: 'shortcut/press_key 按键' },
+	        { name: 'modifiers', type: 'array', required: false, description: 'command/shift/option/control' },
+	        { name: 'x', type: 'number', required: false, description: 'click 坐标 x' },
+	        { name: 'y', type: 'number', required: false, description: 'click 坐标 y' },
+	        { name: 'menuPath', type: 'array', required: false, description: 'menu_click 菜单路径，如 [File, Open...]' },
+	      ],
+	    },
+	    async (params) => {
+	      try {
+	        const result = await (window as any).electronAPI?.desktopControl?.(params)
+	        return {
+	          success: Boolean(result?.success),
+	          data: result,
+	          error: result?.success ? undefined : result?.error || '桌面控制失败',
+	        }
+	      } catch (err) {
+	        return { success: false, data: null, error: (err as Error).message }
+	      }
+	    },
+	  )
+
+	  registerTool(
+	    {
+	      id: 'xcode_action',
+	      name: 'Xcode 动作',
+	      description: '执行 Xcode 专属动作：list/build/test/clean/archive/open/simctl-list',
+	      tier: 2,
+	      enabled: true,
+	      parameters: [
+	        { name: 'action', type: 'string', required: true, description: '动作 list|build|test|clean|archive|open|simctl-list' },
+	        { name: 'projectPath', type: 'string', required: false, description: '项目根目录、.xcodeproj 或 .xcworkspace 路径' },
+	        { name: 'scheme', type: 'string', required: false, description: 'Xcode scheme' },
+	        { name: 'destination', type: 'string', required: false, description: '构建/测试 destination' },
+	        { name: 'configuration', type: 'string', required: false, description: 'Debug/Release 等配置' },
+	        { name: 'sdk', type: 'string', required: false, description: '可选 SDK' },
+	        { name: 'simctlKind', type: 'string', required: false, description: 'simctl-list 类型 devices/runtimes/devicetypes' },
+	        { name: 'timeout', type: 'number', required: false, description: '超时时间(ms)', default: 120000 },
+	      ],
+	    },
+	    async (params) => {
+	      try {
+	        const result = await (window as any).electronAPI?.xcodeAction?.({
+	          action: params.action,
+	          projectPath: params.projectPath,
+	          scheme: params.scheme,
+	          destination: params.destination,
+	          configuration: params.configuration,
+	          sdk: params.sdk,
+	          simctlKind: params.simctlKind,
+	          timeout: params.timeout,
+	        })
+	        return {
+	          success: Boolean(result?.success),
+	          data: result,
+	          error: result?.success ? undefined : result?.error || 'Xcode 动作失败',
+	        }
+	      } catch (err) {
+	        return { success: false, data: null, error: (err as Error).message }
+	      }
+	    },
+	  )
+
+	  registerTool(
+	    {
+	      id: 'terminal',
       name: '终端执行',
       description: '执行终端命令（需要用户确认）',
       tier: 2,

@@ -144,6 +144,84 @@
   font-weight: 600;
 }
 
+.openbasaka__md-heading {
+  margin: 4px 0 8px;
+  color: var(--hd-text-primary);
+  font-size: 0.94rem;
+  font-weight: 700;
+}
+
+.openbasaka__md-paragraph {
+  margin: 0 0 8px;
+}
+
+.openbasaka__md-paragraph:last-child {
+  margin-bottom: 0;
+}
+
+.openbasaka__md-list {
+  display: grid;
+  gap: 5px;
+  margin: 6px 0 10px;
+  padding-left: 18px;
+}
+
+.openbasaka__md-list li {
+  padding-left: 2px;
+}
+
+.openbasaka__md-table-wrap {
+  overflow-x: auto;
+  margin: 8px 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.openbasaka__md-table {
+  width: 100%;
+  min-width: 460px;
+  border-collapse: collapse;
+  font-size: 0.76rem;
+}
+
+.openbasaka__md-table th,
+.openbasaka__md-table td {
+  padding: 7px 9px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  text-align: left;
+  vertical-align: top;
+}
+
+.openbasaka__md-table th {
+  color: var(--hd-text-primary);
+  background: rgba(0, 212, 170, 0.07);
+  font-weight: 650;
+}
+
+.openbasaka__md-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.openbasaka__md-citation {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  padding: 0 5px;
+  border: 1px solid rgba(0, 212, 170, 0.28);
+  background: rgba(0, 212, 170, 0.08);
+  color: var(--hd-accent-cyan);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.openbasaka__msg-content code {
+  padding: 1px 5px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--hd-text-primary);
+  font-family: var(--hd-font-mono);
+  font-size: 0.74rem;
+}
+
 .openbasaka__msg-content--streaming {
   border-color: rgba(0, 212, 170, 0.3);
 }
@@ -157,23 +235,37 @@
   flex-wrap: wrap;
 }
 
+.openbasaka__archive-tags {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
 .openbasaka__archive-tag {
   border: 1px solid rgba(0, 212, 170, 0.24);
-  background:
-    linear-gradient(135deg, rgba(0, 212, 170, 0.12), rgba(0, 212, 170, 0.04));
+  background: linear-gradient(135deg, rgba(0, 212, 170, 0.12), rgba(0, 212, 170, 0.04));
   color: rgba(232, 250, 246, 0.92);
   padding: 4px 10px;
   font-family: var(--hd-font-cn), var(--hd-font-body);
   font-size: 0.72rem;
   letter-spacing: 0.02em;
   cursor: pointer;
-  transition: border-color 0.2s ease, transform 0.2s ease, background 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    transform 0.2s ease,
+    background 0.2s ease;
+}
+
+.openbasaka__archive-tag--active {
+  border-color: rgba(0, 212, 170, 0.48);
+  background: linear-gradient(135deg, rgba(0, 212, 170, 0.2), rgba(0, 212, 170, 0.08));
+  color: rgba(229, 252, 247, 0.96);
 }
 
 .openbasaka__archive-tag:hover:not(:disabled) {
   border-color: rgba(0, 212, 170, 0.45);
-  background:
-    linear-gradient(135deg, rgba(0, 212, 170, 0.18), rgba(0, 212, 170, 0.08));
+  background: linear-gradient(135deg, rgba(0, 212, 170, 0.18), rgba(0, 212, 170, 0.08));
   transform: translateY(-1px);
 }
 
@@ -183,8 +275,7 @@
 
 .openbasaka__archive-tag--archived {
   border-color: rgba(122, 240, 201, 0.26);
-  background:
-    linear-gradient(135deg, rgba(122, 240, 201, 0.14), rgba(122, 240, 201, 0.05));
+  background: linear-gradient(135deg, rgba(122, 240, 201, 0.14), rgba(122, 240, 201, 0.05));
   color: rgba(214, 249, 236, 0.9);
 }
 
@@ -203,8 +294,7 @@
   margin-top: 8px;
   padding: 14px;
   border: 1px solid rgba(0, 212, 170, 0.12);
-  background:
-    linear-gradient(160deg, rgba(9, 24, 25, 0.94), rgba(7, 18, 19, 0.98));
+  background: linear-gradient(160deg, rgba(9, 24, 25, 0.94), rgba(7, 18, 19, 0.98));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
   display: flex;
   flex-direction: column;
@@ -247,6 +337,63 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 10px;
+}
+
+.openbasaka__archive-targets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.openbasaka__archive-target-option {
+  position: relative;
+  min-height: 72px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--hd-text-secondary);
+  padding: 10px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    transform 0.2s ease;
+}
+
+.openbasaka__archive-target-option:hover:not(:disabled) {
+  border-color: rgba(0, 212, 170, 0.28);
+  background: rgba(0, 212, 170, 0.06);
+  transform: translateY(-1px);
+}
+
+.openbasaka__archive-target-option--active {
+  border-color: rgba(0, 212, 170, 0.42);
+  background: rgba(0, 212, 170, 0.09);
+}
+
+.openbasaka__archive-target-label {
+  color: rgba(230, 250, 245, 0.95);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.openbasaka__archive-target-section {
+  color: var(--hd-text-muted);
+  font-size: 0.66rem;
+  line-height: 1.4;
+}
+
+.openbasaka__archive-target-recommended {
+  width: fit-content;
+  border: 1px solid rgba(255, 196, 112, 0.24);
+  background: rgba(255, 196, 112, 0.08);
+  color: rgba(255, 226, 180, 0.92);
+  padding: 2px 6px;
+  font-size: 0.58rem;
+  letter-spacing: 0.03em;
 }
 
 .openbasaka__archive-preview-meta-card {
@@ -310,7 +457,9 @@
   font-size: 0.76rem;
   font-family: var(--hd-font-cn), var(--hd-font-body);
   outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .openbasaka__archive-input:focus {
@@ -332,7 +481,10 @@
   font-size: 0.7rem;
   font-family: var(--hd-font-cn), var(--hd-font-body);
   cursor: pointer;
-  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease,
+    background 0.2s ease;
 }
 
 .openbasaka__archive-facet:hover {
@@ -362,7 +514,10 @@
   font-size: 0.74rem;
   font-family: var(--hd-font-cn), var(--hd-font-body);
   cursor: pointer;
-  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease,
+    background 0.2s ease;
 }
 
 .openbasaka__archive-confirm {
@@ -406,6 +561,10 @@
   .openbasaka__archive-preview-grid {
     grid-template-columns: 1fr;
   }
+
+  .openbasaka__archive-targets {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* 打字光标 */
@@ -431,12 +590,24 @@
   animation: dot-bounce 1.4s ease-in-out infinite;
 }
 
-.openbasaka__dot:nth-child(2) { animation-delay: 0.2s; }
-.openbasaka__dot:nth-child(3) { animation-delay: 0.4s; }
+.openbasaka__dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.openbasaka__dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
 
 @keyframes dot-bounce {
-  0%, 80%, 100% { transform: scale(0.6); opacity: 0.3; }
-  40% { transform: scale(1); opacity: 1; }
+  0%,
+  80%,
+  100% {
+    transform: scale(0.6);
+    opacity: 0.3;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 /* ─── 快速操作 ─── */
@@ -613,8 +784,7 @@
   max-height: 460px;
   overflow-y: auto;
   border-bottom: 1px solid rgba(0, 212, 170, 0.16);
-  background:
-    linear-gradient(180deg, rgba(4, 14, 15, 0.96), rgba(5, 16, 17, 0.92));
+  background: linear-gradient(180deg, rgba(4, 14, 15, 0.96), rgba(5, 16, 17, 0.92));
 }
 
 .openbasaka__history-section {
@@ -852,7 +1022,10 @@
   font-size: 0.7rem;
   font-family: var(--hd-font-cn), var(--hd-font-body);
   cursor: pointer;
-  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease;
 }
 
 .openbasaka__archive-inbox-reset:hover,
@@ -917,7 +1090,10 @@
   font-size: 0.68rem;
   font-family: var(--hd-font-cn), var(--hd-font-body);
   cursor: pointer;
-  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease;
 }
 
 .openbasaka__archive-inbox-page-btn:hover:not(:disabled) {
@@ -1122,9 +1298,18 @@
 }
 
 @keyframes expert-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(0, 212, 170, 0.6); transform: scale(1); }
-  50% { box-shadow: 0 0 12px 4px rgba(0, 212, 170, 0.3); transform: scale(1.05); }
-  100% { box-shadow: 0 0 0 0 rgba(0, 212, 170, 0); transform: scale(1); }
+  0% {
+    box-shadow: 0 0 0 0 rgba(0, 212, 170, 0.6);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 12px 4px rgba(0, 212, 170, 0.3);
+    transform: scale(1.05);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 212, 170, 0);
+    transform: scale(1);
+  }
 }
 
 /* 专家栏提示文字 */

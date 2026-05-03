@@ -6,6 +6,7 @@
  * - report: 生成项目报告
  * - memory-scan: 扫描最近活动提取记忆
  * - custom: 执行指定工作流
+ * - team-workflow: 调用群策团队工作流
  */
 import { query, run } from '../db/repository'
 import { generateId } from '../db/schema'
@@ -20,7 +21,15 @@ export interface ScheduledTask {
   id: string
   name: string
   cronExpression: string
-  taskType: 'research' | 'report' | 'memory-scan' | 'custom' | 'agent-task' | 'wiki-compile' | 'lint'
+  taskType:
+    | 'research'
+    | 'report'
+    | 'memory-scan'
+    | 'custom'
+    | 'agent-task'
+    | 'team-workflow'
+    | 'wiki-compile'
+    | 'lint'
   taskConfig: Record<string, string>
   lastRun: string
   nextRun: string
@@ -29,6 +38,17 @@ export interface ScheduledTask {
   agentId?: string
   /** 平台推送目标列表 */
   platformTargets?: PlatformTarget[]
+}
+
+function normalizeCronExpression(expression: string): string {
+  const text = String(expression || '').trim()
+  const daily = text.match(/^(?:每天\s*)?(\d{1,2})[:：](\d{1,2})$/)
+  if (daily) {
+    const hour = Math.max(0, Math.min(23, Number(daily[1])))
+    const minute = Math.max(0, Math.min(59, Number(daily[2])))
+    return `${minute} ${hour} * * *`
+  }
+  return text
 }
 
 /** 创建定时任务 */
@@ -40,7 +60,7 @@ export async function createScheduledTask(task: Omit<ScheduledTask, 'id' | 'last
     [
       id,
       task.name,
-      task.cronExpression,
+      normalizeCronExpression(task.cronExpression),
       task.taskType,
       JSON.stringify(task.taskConfig),
       task.enabled ? 1 : 0,
@@ -101,7 +121,7 @@ export async function updateScheduledTask(
   }
   if (updates.cronExpression !== undefined) {
     sets.push('cron_expression = ?')
-    values.push(updates.cronExpression)
+    values.push(normalizeCronExpression(updates.cronExpression))
   }
   if (updates.taskConfig !== undefined) {
     sets.push('task_config_json = ?')

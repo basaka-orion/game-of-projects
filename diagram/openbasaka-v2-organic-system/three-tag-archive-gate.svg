@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 760">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap');
+      text { font-family: 'JetBrains Mono', 'Noto Sans SC', 'PingFang SC', sans-serif; }
+      .title { fill: #e2e8f0; font-size: 18px; font-weight: 700; }
+      .subtitle { fill: #94a3b8; font-size: 10px; }
+      .box-title { fill: #fff; font-size: 12px; font-weight: 700; }
+      .box-note { fill: #94a3b8; font-size: 9px; }
+      .label { fill: #cbd5e1; font-size: 9px; }
+    </style>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/>
+    </pattern>
+    <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-cyan" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#22d3ee"/>
+    </marker>
+    <marker id="arrow-amber" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#fbbf24"/>
+    </marker>
+    <marker id="arrow-emerald" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#34d399"/>
+    </marker>
+  </defs>
+
+  <rect width="1180" height="760" fill="#0f172a"/>
+  <rect width="1180" height="760" fill="url(#grid)"/>
+
+  <text x="40" y="42" class="title">三标签归档门：不让长期记忆被污染</text>
+  <text x="40" y="62" class="subtitle">每条内容都先变成候选，Boss 选择去哪里；不点击，就不进入长期系统。</text>
+
+  <rect x="45" y="140" width="170" height="72" rx="6" fill="#0f172a"/>
+  <rect x="45" y="140" width="170" height="72" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="130" y="168" class="box-title" text-anchor="middle">新内容出现</text>
+  <text x="130" y="187" class="box-note" text-anchor="middle">对话 / 创作 / 灵感</text>
+
+  <path d="M 215 176 L 295 176" fill="none" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrow-cyan)"/>
+
+  <rect x="295" y="120" width="220" height="112" rx="8" fill="#0f172a"/>
+  <rect x="295" y="120" width="220" height="112" rx="8" fill="rgba(120,53,15,0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="405" y="148" class="box-title" text-anchor="middle">系统生成 3 个标签</text>
+  <text x="405" y="174" fill="#22d3ee" font-size="10" font-weight="600" text-anchor="middle">✦ 归入启蒙</text>
+  <text x="405" y="195" fill="#a78bfa" font-size="10" font-weight="600" text-anchor="middle">✦ 放入知识</text>
+  <text x="405" y="216" fill="#34d399" font-size="10" font-weight="600" text-anchor="middle">✦ 收为大佬技能</text>
+
+  <path d="M 515 176 L 595 176" fill="none" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#arrow-amber)"/>
+
+  <g transform="translate(660,176)">
+    <polygon points="0,-52 72,0 0,52 -72,0" fill="#0f172a"/>
+    <polygon points="0,-52 72,0 0,52 -72,0" fill="rgba(120,53,15,0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+    <text y="-6" class="box-title" text-anchor="middle">Boss 点了?</text>
+    <text y="14" class="box-note" text-anchor="middle">点击才归档</text>
+  </g>
+
+  <path d="M 660 228 L 660 306" fill="none" stroke="#64748b" stroke-width="1.4" marker-end="url(#arrow)"/>
+  <text x="684" y="270" class="label">不点</text>
+
+  <rect x="575" y="306" width="170" height="72" rx="6" fill="#0f172a"/>
+  <rect x="575" y="306" width="170" height="72" rx="6" fill="rgba(30,41,59,0.5)" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="660" y="334" class="box-title" text-anchor="middle">短期流动区</text>
+  <text x="660" y="353" class="box-note" text-anchor="middle">草稿 / 临时上下文</text>
+
+  <path d="M 730 176 L 850 118" fill="none" stroke="#22d3ee" stroke-width="1.4" marker-end="url(#arrow-cyan)"/>
+  <path d="M 735 176 L 850 176" fill="none" stroke="#a78bfa" stroke-width="1.4" marker-end="url(#arrow)"/>
+  <path d="M 730 176 L 850 236" fill="none" stroke="#34d399" stroke-width="1.4" marker-end="url(#arrow-emerald)"/>
+  <text x="775" y="132" fill="#22d3ee" font-size="9">点启蒙</text>
+  <text x="774" y="166" fill="#a78bfa" font-size="9">点知识</text>
+  <text x="775" y="232" fill="#34d399" font-size="9">点大佬</text>
+
+  <rect x="850" y="76" width="210" height="84" rx="8" fill="#0f172a"/>
+  <rect x="850" y="76" width="210" height="84" rx="8" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="955" y="106" class="box-title" text-anchor="middle">启蒙：我的经历与思考</text>
+  <text x="955" y="126" class="box-note" text-anchor="middle">进入记忆宫殿 Drawer</text>
+  <text x="955" y="144" class="box-note" text-anchor="middle">用于理解“我是谁”</text>
+
+  <rect x="850" y="188" width="210" height="84" rx="8" fill="#0f172a"/>
+  <rect x="850" y="188" width="210" height="84" rx="8" fill="rgba(76,29,149,0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="955" y="218" class="box-title" text-anchor="middle">知识：世界知识</text>
+  <text x="955" y="238" class="box-note" text-anchor="middle">进入 Karpathy Wiki</text>
+  <text x="955" y="256" class="box-note" text-anchor="middle">用于解释“世界是什么”</text>
+
+  <rect x="850" y="300" width="210" height="84" rx="8" fill="#0f172a"/>
+  <rect x="850" y="300" width="210" height="84" rx="8" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+  <text x="955" y="330" class="box-title" text-anchor="middle">大佬：技能与思路</text>
+  <text x="955" y="350" class="box-note" text-anchor="middle">进入 Skill / Pattern 库</text>
+  <text x="955" y="368" class="box-note" text-anchor="middle">用于学习“怎么做事”</text>
+
+  <path d="M 955 160 L 955 188" fill="none" stroke="#64748b" stroke-width="1" stroke-dasharray="5,5"/>
+  <path d="M 955 272 L 955 300" fill="none" stroke="#64748b" stroke-width="1" stroke-dasharray="5,5"/>
+
+  <rect x="120" y="510" width="945" height="120" rx="12" fill="rgba(30,41,59,0.65)" stroke="#475569" stroke-width="1.2"/>
+  <text x="150" y="540" fill="#e2e8f0" font-size="13" font-weight="700">给小朋友也能懂的解释</text>
+  <text x="150" y="568" fill="#cbd5e1" font-size="11">启蒙像你的日记本：记录“我经历了什么、我怎么想”。</text>
+  <text x="150" y="594" fill="#cbd5e1" font-size="11">知识像图书馆：记录“这个世界有哪些事实、理论、资料”。</text>
+  <text x="150" y="620" fill="#cbd5e1" font-size="11">大佬像武功秘籍：记录“高手怎么思考、怎么做事、哪些方法值得我学”。</text>
+
+  <rect x="120" y="655" width="945" height="48" rx="8" fill="rgba(120,53,15,0.3)" stroke="#fbbf24" stroke-width="1"/>
+  <text x="592" y="683" fill="#fbbf24" font-size="11" font-weight="700" text-anchor="middle">核心规矩：AI 只能递标签，Boss 点击才算正式归档。</text>
+</svg>

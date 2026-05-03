@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "health:check": "node tools/project-health-check.mjs",
     "health:hydrate": "node tools/request-project-hydration.mjs --wait 15",
+    "health:app-identity": "node tools/check-app-identity.mjs",
     "test:risk": "vitest run src/lib/db/__tests__/backup-format.test.ts src/lib/operating-loop/__tests__/daily-brief.test.ts src/lib/operating-loop/__tests__/project-neural-network.test.ts",
     "eval:golden": "vitest run src/lib/evals/__tests__/nine-score-golden.test.ts",
     "smoke:ui": "vitest run src/views/SandboxMap/__tests__/sandbox-ui-smoke.test.tsx",
@@ -126,6 +127,7 @@
     "redux": "^5.0.1",
     "remotion": "4.0.448",
     "scheduler": "^0.27.0",
+    "telegram": "^2.26.22",
     "zod": "^3.25.76",
     "zustand": "^5.0.11"
   }

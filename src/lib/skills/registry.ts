@@ -31,6 +31,7 @@ export type SkillCategory =
   | '商业分析'   // 商业模式与变现
   | '记忆系统'   // 记忆存储与回忆
   | '画像引擎'   // Boss与用户画像
+  | '视觉交互'   // UI/UX、动效、图文表达
   | '环境感知'   // 外部信息获取
   | '执行工具'   // 报告生成、数据导出
 
@@ -52,8 +53,9 @@ export const SKILL_CATEGORIES: SkillCategoryMeta[] = [
   { id: '商业分析', label: '商业分析', icon: '💰', order: 4 },
   { id: '记忆系统', label: '记忆系统', icon: '🧠', order: 5 },
   { id: '画像引擎', label: '画像引擎', icon: '👤', order: 6 },
-  { id: '环境感知', label: '环境感知', icon: '📡', order: 7 },
-  { id: '执行工具', label: '执行工具', icon: '⚡', order: 8 },
+  { id: '视觉交互', label: '视觉交互', icon: '🎨', order: 7 },
+  { id: '环境感知', label: '环境感知', icon: '📡', order: 8 },
+  { id: '执行工具', label: '执行工具', icon: '⚡', order: 9 },
 ]
 
 /**
@@ -655,6 +657,39 @@ export const DEFAULT_SKILLS: Skill[] = [
     icon: '🧩',
     requires: ['mcp'],
     mcpDeps: ['mcp-sequential-thinking'],
+  },
+  {
+    id: 'remotion-motion-design',
+    name: 'Remotion 动效叙事',
+    description: '以 Remotion 的时间轴、镜头、节奏和可生成组件思维，为产品设计可实现、可复用、可验收的动效系统',
+    enabled: true,
+    source: 'builtin',
+    category: '视觉交互',
+    icon: '🎬',
+    requires: ['llm', 'filesystem'],
+    module: 'features/profiling-studio/components/RemotionNarrativeStage',
+  },
+  {
+    id: 'baoyu-visual-kit',
+    name: '宝玉图文表达套件',
+    description: '借鉴 baoyu-skills 的图卡、信息图、封面、幻灯片和 Markdown 转 HTML 方法，把复杂产品变成小白也能看懂的图文表达',
+    enabled: true,
+    source: 'builtin',
+    category: '视觉交互',
+    icon: '🖼️',
+    requires: ['llm', 'filesystem'],
+    module: 'baoyu-skills/skills',
+  },
+  {
+    id: 'openbasaka-visual-master',
+    name: 'Openbasaka 视觉大师 Skill',
+    description: '为每个项目定义独有视觉气质、交互法则、信息密度、动效语法、组件规范、响应式策略和 UI 验收标准',
+    enabled: true,
+    source: 'custom',
+    category: '视觉交互',
+    icon: '✨',
+    requires: ['llm', 'filesystem'],
+    module: 'skills/openbasaka-visual-master/SKILL.md',
   },
 ]
 

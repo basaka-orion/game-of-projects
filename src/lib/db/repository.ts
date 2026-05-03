@@ -191,6 +191,9 @@ export interface ProjectRow {
   recommendation: string
   war_logs_json: string
   raw_content: string
+  is_pinned: number
+  is_starred: number
+  priority_level: string
   created_at: string
   updated_at: string
 }
@@ -207,6 +210,9 @@ export async function dbSaveProject(project: {
   recommendation: string
   warLogs: unknown[]
   rawContent: string
+  isPinned?: boolean
+  isStarred?: boolean
+  priorityLevel?: string
 }): Promise<string> {
   const id = project.id || generateId()
   const now = new Date().toISOString()
@@ -214,8 +220,8 @@ export async function dbSaveProject(project: {
   await run(
     `INSERT OR REPLACE INTO projects
      (id, title, one_liner, tags, radar_json, survival_rate, survival_grade,
-      summary, recommendation, war_logs_json, raw_content, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      summary, recommendation, war_logs_json, raw_content, is_pinned, is_starred, priority_level, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       project.title,
@@ -228,6 +234,9 @@ export async function dbSaveProject(project: {
       project.recommendation,
       JSON.stringify(project.warLogs),
       project.rawContent,
+      project.isPinned ? 1 : 0,
+      project.isStarred ? 1 : 0,
+      project.priorityLevel || 'normal',
       now,
       now,
     ],
@@ -252,7 +261,13 @@ export async function dbSaveProject(project: {
 }
 
 export async function dbGetAllProjects(): Promise<ProjectRow[]> {
-  return query<ProjectRow>('SELECT * FROM projects ORDER BY created_at DESC')
+  return query<ProjectRow>(
+    `SELECT * FROM projects
+     ORDER BY is_pinned DESC,
+       CASE priority_level WHEN 'urgent' THEN 4 WHEN 'high' THEN 3 WHEN 'normal' THEN 2 WHEN 'low' THEN 1 ELSE 2 END DESC,
+       is_starred DESC,
+       updated_at DESC`,
+  )
 }
 
 export async function dbGetProject(id: string): Promise<ProjectRow | undefined> {
@@ -266,7 +281,12 @@ export async function dbDeleteProject(id: string): Promise<void> {
 
 export async function dbUpdateProject(
   id: string,
-  updates: Partial<Pick<import('./store').StoredProject, 'title' | 'oneLiner' | 'tags' | 'summary' | 'recommendation'>>,
+  updates: Partial<
+    Pick<
+      import('./store').StoredProject,
+      'title' | 'oneLiner' | 'tags' | 'summary' | 'recommendation' | 'isPinned' | 'isStarred' | 'priorityLevel'
+    >
+  >,
 ): Promise<void> {
   const sets: string[] = []
   const params: unknown[] = []
@@ -290,6 +310,18 @@ export async function dbUpdateProject(
   if (updates.recommendation !== undefined) {
     sets.push('recommendation = ?')
     params.push(updates.recommendation)
+  }
+  if (updates.isPinned !== undefined) {
+    sets.push('is_pinned = ?')
+    params.push(updates.isPinned ? 1 : 0)
+  }
+  if (updates.isStarred !== undefined) {
+    sets.push('is_starred = ?')
+    params.push(updates.isStarred ? 1 : 0)
+  }
+  if (updates.priorityLevel !== undefined) {
+    sets.push('priority_level = ?')
+    params.push(updates.priorityLevel)
   }
 
   if (sets.length === 0) return

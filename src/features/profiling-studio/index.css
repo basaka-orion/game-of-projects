@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@source not "../../../bili-helper-web";
 /* Fonts: system stack for body (zero cost), Noto Serif SC for headings (loaded in HTML with display:optional) */
 
 /* ══════════════════════════════════════════════════════════

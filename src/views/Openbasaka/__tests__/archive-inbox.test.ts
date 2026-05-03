@@ -20,8 +20,26 @@ function makeCandidate(overrides: Partial<ArchiveCandidate> = {}): ArchiveCandid
     content: '我想把自己的世界模型和系统方法整理进启蒙。',
     sourceSurface: 'openbasaka',
     agentRole: 'general',
+    targetKind: 'qimeng',
+    targetLabel: '归入启蒙',
+    targetSection: 'personal',
+    suggestedTargets: [
+      {
+        kind: 'qimeng',
+        label: '归入启蒙',
+        section: 'personal',
+        sectionLabel: '过往经历与思考',
+        title: '属于你的经历、想法、愿望、创作与关键对话。',
+        path: '启蒙/worldview/consciousness/方法论-系统归纳',
+        reason: '保留为你的个人经历、思考、创意或关键对话。',
+        confidence: 0.82,
+        recommended: true,
+      },
+    ],
     status: 'pending',
     archivedDrawerId: '',
+    archivedSourceId: '',
+    archivedPageId: '',
     metadata: {},
     createdAt: '2026-04-22T09:00:00.000Z',
     updatedAt: '2026-04-22T10:00:00.000Z',
@@ -51,6 +69,7 @@ describe('archive inbox helpers', () => {
       room: '方法论-系统归纳',
       tagsText: '启蒙，方法',
       facets: ['decision'],
+      targetKind: 'qimeng',
     }
 
     const bulkDraft = createEmptyArchiveInboxBulkDraft()
@@ -111,7 +130,7 @@ describe('archive inbox helpers', () => {
       sort: 'duplicates',
     })
 
-    expect(filtered.map(candidate => candidate.id)).toEqual(['cand-a'])
+    expect(filtered.map((candidate) => candidate.id)).toEqual(['cand-a'])
     expect(hasArchiveInboxBulkPatch(createEmptyArchiveInboxBulkDraft())).toBe(false)
   })
 
@@ -156,6 +175,6 @@ describe('archive inbox helpers', () => {
       sort: 'latest',
     })
 
-    expect(filtered.map(candidate => candidate.id)).toEqual(['cand-b1', 'cand-b2'])
+    expect(filtered.map((candidate) => candidate.id)).toEqual(['cand-b1', 'cand-b2'])
   })
 })

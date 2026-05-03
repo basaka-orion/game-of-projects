@@ -13,6 +13,7 @@
  * - lint: lint.ts（Wiki 体检）
  * - custom: Agent ReAct 循环
  * - agent-task: 完整 Agent 任务（router + Soul）
+ * - team-workflow: 群策团队工作流
  */
 
 import { getLLMConfig, resolveAgentConfig, chatCompletion } from '../ai/provider'
@@ -20,8 +21,11 @@ import { runCompileCycle } from '../knowledge/wiki-compiler'
 import { runLint } from '../knowledge/lint'
 import { getUncompiledDrawers } from '../knowledge/drawer'
 import { searchPages } from '../knowledge/wiki'
-import { query } from '../db/repository'
+import { query, run as dbRun } from '../db/repository'
 import { recordScheduledTaskOutcome } from './task-outcome'
+import { getTeam, listTeams } from '../teams/store'
+import { runTeamSession } from '../teams/engine'
+import type { TeamWorkflowType } from '../teams/types'
 
 // ─── 类型 ───
 
@@ -91,6 +95,9 @@ async function executeTask(task: CronTaskMessage): Promise<void> {
       case 'agent-task':
         result = await executeAgentTask(task)
         break
+      case 'team-workflow':
+        result = await executeTeamWorkflowTask(task)
+        break
       default:
         result = `未知任务类型: ${task.taskType}`
     }
@@ -134,6 +141,66 @@ function getTaskLLMConfig(task: CronTaskMessage) {
     return resolveAgentConfig(task.agentId)
   }
   return getLLMConfig()
+}
+
+function getTaskGoal(task: CronTaskMessage): string {
+  const config = task.taskConfig || {}
+  const candidates = [
+    config.goal,
+    config.prompt,
+    config.query,
+    config.topic,
+    config.description,
+    config.objective,
+    task.name,
+  ]
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) return candidate.trim()
+  }
+  return task.name || '未命名任务'
+}
+
+function extractUrls(text: string, limit = 3): string[] {
+  const urls = text.match(/https?:\/\/[^\s)\]}>，。！？、；；"'`]+/g) || []
+  return Array.from(new Set(urls.map((url) => url.replace(/[.,;:!?]+$/, '')))).slice(0, limit)
+}
+
+function hasSearchEvidence(text: string): boolean {
+  return /https?:\/\//i.test(text) || /"url"\s*:/i.test(text) || /title|description|snippet/i.test(text)
+}
+
+function buildSourceLine(searchContent: string, usedLiveSearch: boolean): string {
+  if (!usedLiveSearch) return '来源: 未接入实时搜索，本条为模型知识合成，需二次核验'
+  const urls = extractUrls(searchContent)
+  if (urls.length === 0) return '来源: 已调用实时搜索，但搜索结果未返回可展示 URL'
+  return `来源: ${urls.join(' | ')}`
+}
+
+function buildResearchTaskJson(task: CronTaskMessage, taskGoal: string): string {
+  return JSON.stringify(
+    {
+      name: task.name,
+      goal: taskGoal,
+      config: task.taskConfig || {},
+    },
+    null,
+    2,
+  )
+}
+
+const TEAM_WORKFLOW_TYPES: TeamWorkflowType[] = [
+  'prd',
+  'research',
+  'build',
+  'xcode-mac-app',
+  'visual-review',
+  'automation',
+  'custom',
+]
+
+function normalizeTeamWorkflowType(value: unknown): TeamWorkflowType | undefined {
+  if (typeof value !== 'string') return undefined
+  return TEAM_WORKFLOW_TYPES.includes(value as TeamWorkflowType) ? (value as TeamWorkflowType) : undefined
 }
 
 async function getBossResearchContext(): Promise<{
@@ -231,12 +298,14 @@ async function getAgentSystemPrompt(agentId: string): Promise<string> {
 async function executeResearch(task: CronTaskMessage): Promise<string> {
   const config = getTaskLLMConfig(task)
   if (!config.apiKey && config.provider !== 'ollama') {
-    return 'LLM API Key 未配置'
+    throw new Error('LLM API Key 未配置')
   }
 
   // 1. 获取 Boss 兴趣和反馈
   const boss = await getBossResearchContext()
   const bossInterests = boss.interests
+  const taskGoal = getTaskGoal(task)
+  const runTime = new Date().toLocaleString('zh-CN')
 
   const feedbackRows = (await query(
     "SELECT content, confidence FROM boss_memory WHERE source LIKE 'innovation_%' AND created_at > datetime('now', '-7 days') ORDER BY created_at DESC LIMIT 10",
@@ -254,36 +323,41 @@ async function executeResearch(task: CronTaskMessage): Promise<string> {
     .slice(0, 200)
 
   // 2. 生成搜索查询
-  const systemPrompt = getAgentSystemPrompt(task.agentId || 'general')
+  const systemPrompt = await getAgentSystemPrompt(task.agentId || 'general')
   const queriesResponse = await chatCompletion(config, [
     { role: 'system', content: `${systemPrompt}\n\n你是研究策划引擎。生成高价值搜索查询。` },
     {
       role: 'user',
-      content: `Boss兴趣: ${bossInterests || '全领域'}
+      content: `任务名称: ${task.name}
+用户原始需求: ${taskGoal}
+执行时间: ${runTime}
+任务配置: ${buildResearchTaskJson(task, taskGoal)}
+
+Boss兴趣: ${bossInterests || '全领域'}
 Boss当前焦点: ${boss.currentFocus || '未明确'}
 Boss长期愿景: ${boss.longTermVision || '未明确'}
 画像摘要: ${boss.profilingPromptSummary || '暂无'}
 建议研究方向: ${boss.recommendedTopics.join('、') || '暂无'}
 近期积极反馈: ${positive || '无'}
 近期消极反馈: ${negative || '无'}
-任务: ${JSON.stringify(task.taskConfig)}
 
 生成3个搜索主题。输出 JSON 数组: [{"topic":"主题","query":"关键词"}]
 要求：
-- 优先围绕当前焦点、长期愿景和建议研究方向生成主题
-- 不要只泛泛围绕兴趣
+- 必须直接服务“用户原始需求”，不要被画像摘要改写成抽象人格/认知模型主题
+- 如果原始需求要求“AI最新趋势”，query 必须包含 AI、latest/recent/2026/this week/model/agent/research 等能检索到最新材料的词
+- 可结合 Boss 当前焦点做二次筛选，但不能偏离任务名称
 只输出 JSON。`,
     },
   ])
 
   const jsonMatch = queriesResponse.match(/\[[\s\S]*\]/)
-  if (!jsonMatch) return '无法生成搜索查询'
+  if (!jsonMatch) throw new Error('无法生成搜索查询')
 
   let topics: Array<{ topic: string; query: string }>
   try {
     topics = JSON.parse(jsonMatch[0])
   } catch {
-    return '搜索查询解析失败'
+    throw new Error('搜索查询解析失败')
   }
 
   // 3. 执行搜索和总结
@@ -291,6 +365,7 @@ Boss长期愿景: ${boss.longTermVision || '未明确'}
   for (const topic of topics.slice(0, 3)) {
     // 尝试使用 web_search 工具（如果可用）
     let searchContent = ''
+    let usedLiveSearch = false
 
     // 尝试 MCP Brave Search
     try {
@@ -301,17 +376,53 @@ Boss长期愿景: ${boss.longTermVision || '未明确'}
         })) as Record<string, unknown> | null
         if (mcpResult && !mcpResult.isError && mcpResult.content) {
           searchContent = typeof mcpResult.content === 'string' ? mcpResult.content : JSON.stringify(mcpResult)
+          usedLiveSearch = hasSearchEvidence(searchContent)
         }
       }
     } catch {
       /* MCP failed */
     }
 
+    // Fallback to the app's built-in Brave proxy. This is usually configured even when the MCP server is not running.
+    try {
+      if (!searchContent && window.electronAPI?.braveSearch) {
+        const braveResult = await window.electronAPI.braveSearch(topic.query, 5, {
+          endpoint: 'web',
+          freshness: 'pw',
+          searchLang: 'zh',
+        })
+        if (braveResult.success && braveResult.data?.length) {
+          searchContent = braveResult.data
+            .map((item, index) =>
+              [
+                `${index + 1}. ${item.title}`,
+                item.description,
+                item.url,
+                item.age ? `时间: ${item.age}` : '',
+              ]
+                .filter(Boolean)
+                .join('\n'),
+            )
+            .join('\n\n')
+          usedLiveSearch = true
+        }
+      }
+    } catch {
+      /* Brave proxy failed */
+    }
+
     // Fallback: LLM 知识合成
     if (!searchContent) {
       searchContent = await chatCompletion(config, [
-        { role: 'system', content: '你是研究助理。提供简洁的趋势概述。' },
-        { role: 'user', content: `简要概述"${topic.topic}"领域的最新趋势（200字以内）。` },
+        { role: 'system', content: '你是研究助理。提供简洁的趋势概述；如果没有实时搜索证据，必须显式说明。' },
+        {
+          role: 'user',
+          content: `用户原始需求: ${taskGoal}
+主题: ${topic.topic}
+搜索词: ${topic.query}
+
+实时搜索不可用。请基于模型知识给出200字以内趋势概述，并在开头标注“未接入实时搜索”。`,
+        },
       ])
     }
 
@@ -319,42 +430,55 @@ Boss长期愿景: ${boss.longTermVision || '未明确'}
 
     // 总结为洞察
     const summary = await chatCompletion(config, [
-      { role: 'system', content: '你是知识蒸馏引擎。从原始信息中提炼高价值洞察。' },
+      { role: 'system', content: '你是知识蒸馏引擎。从原始信息中提炼高价值洞察，并保留可核验来源。' },
       {
         role: 'user',
-        content: `将以下内容总结为50-100字洞察:\n主题: ${topic.topic}\n内容: ${searchContent.slice(0, 800)}`,
+        content: `用户原始需求: ${taskGoal}
+主题: ${topic.topic}
+搜索词: ${topic.query}
+实时搜索: ${usedLiveSearch ? '是' : '否'}
+
+将以下内容总结为70-120字洞察。要求：
+- 必须直接回答用户原始需求，不要泛化为人格画像或抽象认知特质
+- 如果内容有 URL，保留1-2个可核验来源
+- 如果实时搜索为否，明确标注需要二次核验
+
+内容: ${searchContent.slice(0, 1400)}`,
       },
     ])
 
     if (summary) {
-      results.push(`【${topic.topic}】${summary}`)
+      const sourceLine = buildSourceLine(searchContent, usedLiveSearch)
+      const item = `【${topic.topic}】${summary}\n${sourceLine}`
+      results.push(item)
 
       // 写入 Innovation Lab
       try {
         const id = `cron_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-        ;(await query(
+        await dbRun(
           `INSERT INTO memory_items (id, room_id, type, content, source, importance, metadata_json, created_at, updated_at)
            VALUES (?, 'room_innovation', 'cron_harvest', ?, ?, 60, ?, datetime('now','localtime'), datetime('now','localtime'))`,
           [
             id,
-            `【${topic.topic}】${summary}`,
+            item,
             'cron:research',
-            JSON.stringify({ taskType: 'research', taskName: task.name }),
+            JSON.stringify({ taskType: 'research', taskName: task.name, taskGoal, query: topic.query, usedLiveSearch }),
           ],
-        )) as unknown[]
+        )
       } catch {
         /* non-critical */
       }
     }
   }
 
-  return results.length > 0 ? results.join('\n\n') : '无研究结果'
+  if (results.length === 0) throw new Error(`无研究结果：${taskGoal}`)
+  return [`任务对齐：${taskGoal}`, `执行时间：${runTime}`, ...results].join('\n\n')
 }
 
 /** Report 任务：生成近期活动摘要 */
 async function executeReport(task: CronTaskMessage): Promise<string> {
   const config = getTaskLLMConfig(task)
-  const systemPrompt = getAgentSystemPrompt(task.agentId || 'general')
+  const systemPrompt = await getAgentSystemPrompt(task.agentId || 'general')
 
   const recentProjects = (await query(
     'SELECT title, survival_rate, survival_grade FROM projects ORDER BY created_at DESC LIMIT 5',
@@ -486,7 +610,7 @@ async function executeLint(task: CronTaskMessage): Promise<string> {
 /** Custom 任务：用户自定义 */
 async function executeCustom(task: CronTaskMessage): Promise<string> {
   const config = getTaskLLMConfig(task)
-  const systemPrompt = getAgentSystemPrompt(task.agentId || 'general')
+  const systemPrompt = await getAgentSystemPrompt(task.agentId || 'general')
   const prompt = (task.taskConfig.prompt as string) || task.name
 
   return (
@@ -500,7 +624,7 @@ async function executeCustom(task: CronTaskMessage): Promise<string> {
 /** Agent Task 任务：完整 Agent 栈 */
 async function executeAgentTask(task: CronTaskMessage): Promise<string> {
   const config = getTaskLLMConfig(task)
-  const systemPrompt = getAgentSystemPrompt(task.agentId || 'general')
+  const systemPrompt = await getAgentSystemPrompt(task.agentId || 'general')
   const goal = (task.taskConfig.goal as string) || task.name
 
   // 构建包含知识库上下文的 prompt
@@ -522,6 +646,70 @@ ${memoryContext}
       { role: 'user', content: goal },
     ])) || '无结果'
   )
+}
+
+/** Team Workflow 任务：调用群策团队，产出完整可留存成果 */
+async function executeTeamWorkflowTask(task: CronTaskMessage): Promise<string> {
+  const config = task.taskConfig || {}
+  const rawGoal = getTaskGoal(task)
+  const steps = typeof config.steps === 'string' ? config.steps : ''
+  const goal =
+    typeof config.promptTemplate === 'string' && config.promptTemplate.trim()
+      ? config.promptTemplate
+          .split('{{goal}}').join(rawGoal)
+          .split('{{input}}').join(rawGoal)
+          .split('{{steps}}').join(steps)
+          .trim()
+      : rawGoal
+  const requestedWorkflowType = normalizeTeamWorkflowType(config.workflowType)
+  const configuredTeamId =
+    typeof config.teamId === 'string' && config.teamId.trim()
+      ? config.teamId.trim()
+      : typeof config.workflowId === 'string' && config.workflowId.startsWith('team_')
+        ? config.workflowId
+        : ''
+
+  let team = configuredTeamId ? await getTeam(configuredTeamId) : null
+  if (!team) {
+    const teams = await listTeams({ status: 'active' })
+    team =
+      teams.find((item) => item.config.workflowType === requestedWorkflowType) ||
+      teams.find((item) => item.config.workflowType === 'automation') ||
+      teams[0] ||
+      null
+  }
+
+  if (!team) {
+    throw new Error('没有找到可执行的群策团队。请先在「群策」里创建或启用一个团队。')
+  }
+
+  const executionTeam = requestedWorkflowType
+    ? { ...team, config: { ...team.config, workflowType: requestedWorkflowType } }
+    : team
+
+  const progress: string[] = []
+  const session = await runTeamSession(executionTeam, goal, (message) => {
+    if (message.kind === 'progress' || message.kind === 'error') {
+      progress.push(`${message.agentName}: ${message.content}`.slice(0, 180))
+    }
+  })
+
+  const artifact = session.messages.filter((message) => message.kind === 'artifact').slice(-1)[0]
+  const artifactText = artifact?.content || session.summary || '群策工作流已完成，但没有生成可读成果。'
+  const workflowLabel = String(config.workflowLabel || requestedWorkflowType || executionTeam.config.workflowType || '群策工作流')
+
+  return [
+    '群策工作流完成',
+    `团队：${executionTeam.name}`,
+    `工作流：${workflowLabel}`,
+    `会话：${session.title || session.id}`,
+    progress.length > 0 ? `过程：${progress.slice(-3).join(' / ')}` : '',
+    '完整成果已保存到「群策」历史，可继续收藏、归档或转入知识＋大佬。',
+    '',
+    artifactText.slice(0, 1800),
+  ]
+    .filter(Boolean)
+    .join('\n')
 }
 
 // ─── 上下文构建 ───

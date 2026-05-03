@@ -188,7 +188,7 @@ export default function MethodologyPage() {
               <strong>CAT 自适应测评</strong>　——　基于项目反应理论 (IRT/GRM)，使用 EAP 能力估计和信息量最大化选题
             </li>
             <li style={{ marginBottom: '0.6rem' }}>
-              <strong>AI 苏格拉底对话</strong>　——　DeepSeek V3.2 streaming + 苏格拉底反诘法四阶段结构化对话
+              <strong>AI 苏格拉底对话</strong>　——　DeepSeek V4 streaming + 苏格拉底反诘法四阶段结构化对话
             </li>
             <li>
               <strong>多路径交叉验证</strong>　——　量表 + SJT + 行为博弈 + CAT 四源数据融合

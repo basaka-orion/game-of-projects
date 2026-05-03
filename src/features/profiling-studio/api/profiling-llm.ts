@@ -1,7 +1,7 @@
 import { getSetting } from '../../../lib/db/store';
 import { getDefaultConfig, normalizeProviderBaseUrl, type LLMConfig } from '../../../lib/ai/provider';
 
-const ENV_PROVIDER = import.meta.env.VITE_PROFILING_LLM_PROVIDER || 'glm';
+const ENV_PROVIDER = import.meta.env.VITE_PROFILING_LLM_PROVIDER || 'deepseek';
 const ENV_API_KEY = import.meta.env.VITE_PROFILING_LLM_API_KEY || '';
 const ENV_BASE_URL = import.meta.env.VITE_PROFILING_LLM_BASE_URL || '';
 const ENV_MODEL = import.meta.env.VITE_PROFILING_LLM_MODEL || '';

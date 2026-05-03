@@ -179,6 +179,52 @@ export function getFolderDisplayPath(folderPath: string): string {
   return folderPath
 }
 
+export async function renameKnowledgeFolderPath(oldPath: string, nextPath: string): Promise<{ sources: number; pages: number }> {
+  const from = normalizeFolderPath(oldPath)
+  const to = normalizeFolderPath(nextPath)
+  if (!from || !to || from === to || from === ALL_FOLDERS_SCOPE) return { sources: 0, pages: 0 }
+
+  const sourceRows = await query<{ id: string; folder_path: string; metadata_json: string }>(
+    'SELECT id, folder_path, metadata_json FROM wiki_sources WHERE folder_path = ? OR folder_path LIKE ?',
+    [from, `${from}/%`],
+  )
+  const pageRows = await query<{ id: string; folder_path: string; metadata_json: string }>(
+    'SELECT id, folder_path, metadata_json FROM wiki_pages WHERE folder_path = ? OR folder_path LIKE ?',
+    [from, `${from}/%`],
+  )
+
+  for (const row of sourceRows) {
+    const folderPath = replaceFolderPrefix(row.folder_path, from, to)
+    const metadata = parseMetadata(row.metadata_json)
+    if (typeof metadata.folderPath === 'string') metadata.folderPath = folderPath
+    await run("UPDATE wiki_sources SET folder_path = ?, metadata_json = ?, updated_at = datetime('now','localtime') WHERE id = ?", [
+      folderPath,
+      JSON.stringify(metadata),
+      row.id,
+    ])
+  }
+
+  for (const row of pageRows) {
+    const folderPath = replaceFolderPrefix(row.folder_path, from, to)
+    const metadata = parseMetadata(row.metadata_json)
+    if (typeof metadata.folderPath === 'string') metadata.folderPath = folderPath
+    await run("UPDATE wiki_pages SET folder_path = ?, metadata_json = ?, updated_at = datetime('now','localtime') WHERE id = ?", [
+      folderPath,
+      JSON.stringify(metadata),
+      row.id,
+    ])
+  }
+
+  return { sources: sourceRows.length, pages: pageRows.length }
+}
+
+function replaceFolderPrefix(value: string, from: string, to: string): string {
+  const normalized = normalizeFolderPath(value)
+  if (normalized === from) return to
+  if (normalized.startsWith(`${from}/`)) return `${to}${normalized.slice(from.length)}`
+  return normalized
+}
+
 export function buildFolderScopeCondition(
   column: string,
   scopePath?: string | null,

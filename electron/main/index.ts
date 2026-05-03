@@ -14,19 +14,37 @@ import {
 } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
-import { exec } from 'node:child_process'
+import os from 'node:os'
+import { exec, execFile } from 'node:child_process'
 import { bundle as bundleRemotion } from '@remotion/bundler'
 import { renderMedia, selectComposition } from '@remotion/renderer'
 import { query, run, exportDatabase, importDatabase, getDatabase } from './database'
+import { validateCommand } from '../../src/lib/security/command-guard'
 
 // ─── AI Provider helpers (main process) ───
 
 const DEFAULT_LLM_CONFIGS: Record<string, { baseUrl: string; model: string }> = {
-  deepseek: { baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
+  deepseek: { baseUrl: 'https://api.deepseek.com', model: 'deepseek-v4-flash' },
   minimax: { baseUrl: 'https://api.minimax.chat/v1', model: 'minimax-M2.7' },
-  ollama: { baseUrl: 'http://localhost:11434/v1', model: 'qwen2.5:14b' },
+  ollama: { baseUrl: 'http://localhost:11434/v1', model: 'gemma3:4b' },
   glm: { baseUrl: 'https://api.z.ai/api/coding/paas/v4', model: 'glm-5.1' },
 }
+
+const SANDBOX_WINDOW_TABS = new Set([
+  'overview',
+  'neurons',
+  'warroom',
+  'profiling',
+  'synapses',
+  'boss',
+  'memory',
+  'knowledge',
+  'workflow',
+  'control',
+  'scheduler',
+  'teams',
+  'xiaobai',
+])
 
 function normalizeBaseUrl(provider: string, baseUrl: string): string {
   const trimmed = baseUrl.trim().replace(/\/+$/, '')
@@ -84,6 +102,65 @@ function buildHeaders(config: LLMConfigMain): Record<string, string> {
   }
 }
 
+function describeLLMConfig(config: LLMConfigMain): string {
+  return `${config.provider}/${config.model} @ ${config.baseUrl}`
+}
+
+function friendlyLLMError(status: number, errText: string, config: LLMConfigMain): string {
+  let apiMsg = ''
+  try {
+    const parsed = JSON.parse(errText) as { error?: { message?: string }; message?: string }
+    apiMsg = parsed.error?.message || parsed.message || ''
+  } catch {
+    apiMsg = errText.slice(0, 300)
+  }
+
+  if (status === 401) return `模型鉴权失败（${describeLLMConfig(config)}）：API Key 无效或已过期`
+  if (status === 402 || /balance|insufficient/i.test(apiMsg)) {
+    return `模型账户余额不足（${describeLLMConfig(config)}）：${apiMsg || '请检查余额'}`
+  }
+  if (status === 429) return `模型请求频率超限（${describeLLMConfig(config)}）：${apiMsg || '请稍后重试'}`
+  return `LLM API Error [${status}]（${describeLLMConfig(config)}）：${apiMsg || '无错误详情'}`
+}
+
+function getLLMTimeoutMs(config: LLMConfigMain, maxTokens: number): number {
+  if (config.provider === 'glm' || /^glm-5/i.test(config.model)) {
+    return Math.min(240000, Math.max(120000, maxTokens * 60))
+  }
+  return Math.min(120000, Math.max(60000, maxTokens * 25))
+}
+
+function shouldDisableThinking(config: LLMConfigMain, maxTokens: number): boolean {
+  return (config.provider === 'glm' || /^glm-5/i.test(config.model)) && maxTokens <= 2048
+}
+
+function buildOpenAIChatBody(
+  config: LLMConfigMain,
+  messages: Array<{ role: string; content: string }>,
+  temperature: number,
+  maxTokens: number,
+): Record<string, unknown> {
+  const body: Record<string, unknown> = { model: config.model, messages, temperature, max_tokens: maxTokens }
+  if (shouldDisableThinking(config, maxTokens)) {
+    body.thinking = { type: 'disabled' }
+  }
+  return body
+}
+
+async function fetchLLM(config: LLMConfigMain, url: string, init: RequestInit, maxTokens: number): Promise<Response> {
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: init.signal || AbortSignal.timeout(getLLMTimeoutMs(config, maxTokens)),
+    })
+  } catch (err) {
+    const raw = err instanceof Error ? err.message : String(err)
+    throw new Error(
+      `模型连接失败（${describeLLMConfig(config)}）。请检查模型地址、API Key、网络代理或本地模型服务。原始错误：${raw}`,
+    )
+  }
+}
+
 async function mainProcessChatCompletion(
   config: LLMConfigMain,
   messages: Array<{ role: string; content: string }>,
@@ -100,7 +177,7 @@ async function mainProcessChatCompletion(
       }
       return true
     })
-    const response = await fetch(`${config.baseUrl}/v1/messages`, {
+    const response = await fetchLLM(config, `${config.baseUrl}/v1/messages`, {
       method: 'POST',
       headers: buildHeaders(config),
       body: JSON.stringify({
@@ -110,8 +187,8 @@ async function mainProcessChatCompletion(
         temperature,
         max_tokens: maxTokens,
       }),
-    })
-    if (!response.ok) throw new Error(`LLM API Error [${response.status}]: ${await response.text()}`)
+    }, maxTokens)
+    if (!response.ok) throw new Error(friendlyLLMError(response.status, await response.text(), config))
     const data = await response.json()
     if (Array.isArray(data.content)) {
       return data.content
@@ -123,12 +200,12 @@ async function mainProcessChatCompletion(
   }
 
   // OpenAI-compatible format
-  const response = await fetch(`${config.baseUrl}/chat/completions`, {
+  const response = await fetchLLM(config, `${config.baseUrl}/chat/completions`, {
     method: 'POST',
     headers: buildHeaders(config),
-    body: JSON.stringify({ model: config.model, messages, temperature, max_tokens: maxTokens }),
-  })
-  if (!response.ok) throw new Error(`LLM API Error [${response.status}]: ${await response.text()}`)
+    body: JSON.stringify(buildOpenAIChatBody(config, messages, temperature, maxTokens)),
+  }, maxTokens)
+  if (!response.ok) throw new Error(friendlyLLMError(response.status, await response.text(), config))
   const data = await response.json()
   return data.choices?.[0]?.message?.content || ''
 }
@@ -138,18 +215,113 @@ function getBraveApiKey(): string {
   return apiKeyRow[0]?.value?.trim() || process.env.BRAVE_API_KEY?.trim() || ''
 }
 
+interface GeminiImagePartMain {
+  inlineData: {
+    data: string
+    mimeType: string
+  }
+}
+
+interface GeminiGeneratePayload {
+  imagePart: GeminiImagePartMain
+  prompt: string
+  count?: number
+}
+
+function getGeminiApiKey(): string {
+  const settingKeys = ['gemini_api_key', 'google_api_key', 'aistudio_api_key']
+  for (const key of settingKeys) {
+    const row = query('SELECT value FROM settings WHERE key = ?', [key]) as Array<{ value: string }>
+    const value = row[0]?.value?.trim()
+    if (value) return value
+  }
+  return (
+    process.env.GEMINI_API_KEY?.trim() ||
+    process.env.GOOGLE_API_KEY?.trim() ||
+    process.env.VITE_GEMINI_API_KEY?.trim() ||
+    ''
+  )
+}
+
+async function generateOneGeminiImage(apiKey: string, payload: GeminiGeneratePayload, attempt = 0): Promise<string> {
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${encodeURIComponent(apiKey)}`
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [
+        {
+          role: 'user',
+          parts: [payload.imagePart, { text: payload.prompt }],
+        },
+      ],
+      generationConfig: {
+        responseModalities: ['IMAGE'],
+      },
+    }),
+    signal: AbortSignal.timeout(120000),
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
+    const retriable = response.status >= 500 || response.status === 429 || /xhr|rpc|busy|timeout/i.test(text)
+    if (retriable && attempt < 2) {
+      await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)))
+      return generateOneGeminiImage(apiKey, payload, attempt + 1)
+    }
+    throw new Error(`Gemini image API ${response.status}: ${text.slice(0, 240)}`)
+  }
+
+  const data = (await response.json()) as {
+    candidates?: Array<{
+      finishReason?: string
+      content?: {
+        parts?: Array<{
+          inlineData?: { data?: string; mimeType?: string }
+          inline_data?: { data?: string; mime_type?: string }
+        }>
+      }
+    }>
+  }
+
+  const candidate = data.candidates?.[0]
+  const part = candidate?.content?.parts?.find((item) => item.inlineData?.data || item.inline_data?.data)
+  const inlineData = part?.inlineData
+  const inlineDataSnake = part?.inline_data
+  const imageData = inlineData?.data || inlineDataSnake?.data
+  if (!imageData) {
+    const reason = candidate?.finishReason ? ` finishReason=${candidate.finishReason}` : ''
+    throw new Error(`Gemini did not return image data.${reason}`)
+  }
+  const mimeType = inlineData?.mimeType || inlineDataSnake?.mime_type || 'image/png'
+  return `data:${mimeType};base64,${imageData}`
+}
+
 async function searchWithBrave(
   queryText: string,
   count = 5,
+  options: {
+    endpoint?: 'web' | 'news'
+    freshness?: 'pd' | 'pw' | 'pm' | 'py'
+    country?: string
+    searchLang?: string
+  } = {},
 ): Promise<{ success: boolean; data?: BraveSearchResult[]; error?: string }> {
   const apiKey = getBraveApiKey()
   const safeCount = Math.max(1, Math.min(Number(count) || 5, 10))
   const safeQuery = String(queryText || '').trim()
+  const endpoint = options.endpoint === 'news' ? 'news/search' : 'web/search'
 
   if (!safeQuery) return { success: false, error: 'empty query' }
   if (!apiKey) return { success: false, error: 'missing brave_api_key' }
 
-  const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(safeQuery)}&count=${safeCount}`
+  const url = new URL(`https://api.search.brave.com/res/v1/${endpoint}`)
+  url.searchParams.set('q', safeQuery)
+  url.searchParams.set('count', String(safeCount))
+  if (options.freshness) url.searchParams.set('freshness', options.freshness)
+  if (options.country) url.searchParams.set('country', options.country)
+  if (options.searchLang) url.searchParams.set('search_lang', options.searchLang)
+
   const response = await fetch(url, {
     headers: { 'X-Subscription-Token': apiKey, Accept: 'application/json' },
     signal: AbortSignal.timeout(10000),
@@ -157,8 +329,12 @@ async function searchWithBrave(
 
   if (!response.ok) return { success: false, error: `HTTP ${response.status}` }
 
-  const data = (await response.json()) as { web?: { results?: Array<BraveSearchResult> } }
-  const results = (data.web?.results || []).map((result) => ({
+  const data = (await response.json()) as {
+    results?: Array<BraveSearchResult>
+    web?: { results?: Array<BraveSearchResult> }
+  }
+  const rawResults = endpoint === 'news/search' ? data.results || [] : data.web?.results || []
+  const results = rawResults.map((result) => ({
     title: result.title,
     url: result.url,
     description: result.description || '',
@@ -198,6 +374,800 @@ function sanitizeFileName(value: string): string {
       .trim()
       .slice(0, 80) || 'profiling-video'
   )
+}
+
+type ExtractedFileKind = 'text' | 'document' | 'pdf' | 'image' | 'audio' | 'video' | 'binary'
+
+type ExtractedFileContent = {
+  success: boolean
+  kind: ExtractedFileKind
+  method: string
+  content: string
+  rawContent?: string
+  warnings: string[]
+  metadata: {
+    fileName: string
+    filePath: string
+    extension: string
+    size: number
+  }
+  error?: string
+}
+
+type MediaTranscriptionResult = ExtractedFileContent & {
+  transcriptPath?: string
+  missingProvider?: boolean
+}
+
+const TEXT_INTAKE_EXTENSIONS = new Set([
+  '.md', '.txt', '.markdown', '.json', '.csv', '.tsv',
+  '.ts', '.tsx', '.js', '.jsx', '.mjs',
+  '.py', '.go', '.rs', '.java', '.kt', '.swift', '.c', '.cpp', '.h',
+  '.html', '.css', '.scss', '.yaml', '.yml', '.toml', '.xml',
+  '.sh', '.bash', '.zsh', '.sql', '.graphql',
+  '.rb', '.php', '.lua', '.dart', '.r', '.scala', '.clj',
+])
+const DOCUMENT_INTAKE_EXTENSIONS = new Set(['.doc', '.docx', '.rtf', '.odt'])
+const PDF_INTAKE_EXTENSIONS = new Set(['.pdf'])
+const IMAGE_INTAKE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.heic', '.tif', '.tiff'])
+const AUDIO_INTAKE_EXTENSIONS = new Set(['.mp3', '.m4a', '.wav', '.aac', '.flac', '.ogg'])
+const VIDEO_INTAKE_EXTENSIONS = new Set(['.mp4', '.mov', '.m4v', '.webm', '.mkv'])
+const TRANSCRIPT_TEXT_EXTENSIONS = new Set(['.srt', '.vtt', '.ass', '.ssa', '.lrc'])
+const TRANSCRIPT_SIDECAR_EXTENSIONS = ['.srt', '.vtt', '.ass', '.ssa', '.lrc', '.txt', '.md']
+
+function getIntakeExtension(filePath: string): string {
+  return path.extname(filePath || '').toLowerCase()
+}
+
+function classifyIntakeFile(filePath: string): ExtractedFileKind {
+  const extension = getIntakeExtension(filePath)
+  if (TEXT_INTAKE_EXTENSIONS.has(extension)) return 'text'
+  if (DOCUMENT_INTAKE_EXTENSIONS.has(extension)) return 'document'
+  if (TRANSCRIPT_TEXT_EXTENSIONS.has(extension)) return 'text'
+  if (PDF_INTAKE_EXTENSIONS.has(extension)) return 'pdf'
+  if (IMAGE_INTAKE_EXTENSIONS.has(extension)) return 'image'
+  if (AUDIO_INTAKE_EXTENSIONS.has(extension)) return 'audio'
+  if (VIDEO_INTAKE_EXTENSIONS.has(extension)) return 'video'
+  return 'binary'
+}
+
+function getToolPathEnv(): string {
+  const existing = (process.env.PATH || '').split(':').filter(Boolean)
+  const additions = ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin']
+  return Array.from(new Set([...existing, ...additions])).join(':')
+}
+
+function runFileTool(command: string, args: string[], timeout = 20000): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      command,
+      args,
+      {
+        timeout,
+        maxBuffer: 24 * 1024 * 1024,
+        encoding: 'utf8',
+        env: { ...process.env, PATH: getToolPathEnv() },
+      },
+      (error, stdout, stderr) => {
+        if (error) {
+          const message = stderr || error.message || String(error)
+          reject(new Error(message))
+          return
+        }
+        resolve({ stdout: stdout || '', stderr: stderr || '' })
+      },
+    )
+  })
+}
+
+async function findExecutable(names: string[]): Promise<string | null> {
+  for (const name of names) {
+    try {
+      const { stdout } = await runFileTool('/usr/bin/which', [name], 3000)
+      const candidate = stdout.trim().split('\n')[0]
+      if (candidate) return candidate
+    } catch {
+      /* Try the next executable name. */
+    }
+  }
+  return null
+}
+
+async function readSpotlightText(filePath: string): Promise<string> {
+  const { stdout } = await runFileTool('mdls', ['-raw', '-name', 'kMDItemTextContent', filePath], 18000)
+  const text = stdout.trim()
+  if (!text || text === '(null)' || text === 'null') return ''
+  return text
+}
+
+async function readStringsFallback(filePath: string): Promise<string> {
+  const { stdout } = await runFileTool('strings', ['-a', filePath], 12000)
+  return stdout
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length >= 3 && /[\p{L}\p{N}]/u.test(line))
+    .slice(0, 1200)
+    .join('\n')
+}
+
+function cleanTranscriptText(value: string): string {
+  return value
+    .replace(/^\uFEFF/, '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && line !== 'WEBVTT')
+    .filter((line) => !/^\d+$/.test(line))
+    .filter((line) => !/^\d{1,2}:\d{2}:\d{2}[,.]\d{1,3}\s+-->\s+\d{1,2}:\d{2}:\d{2}[,.]\d{1,3}/.test(line))
+    .map((line) => line.replace(/<[^>]+>/g, '').replace(/\\N/g, ' ').trim())
+    .filter(Boolean)
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+}
+
+async function findSidecarTranscript(filePath: string): Promise<{ filePath: string; content: string } | null> {
+  const directory = path.dirname(filePath)
+  const parsed = path.parse(filePath)
+  const exactCandidates = TRANSCRIPT_SIDECAR_EXTENSIONS.map((extension) => path.join(directory, `${parsed.name}${extension}`))
+
+  for (const candidate of exactCandidates) {
+    try {
+      const content = cleanTranscriptText(await fs.promises.readFile(candidate, 'utf-8'))
+      if (content) return { filePath: candidate, content }
+    } catch {
+      /* Try fuzzy candidates below. */
+    }
+  }
+
+  try {
+    const entries = await fs.promises.readdir(directory)
+    const base = parsed.name.toLowerCase()
+    const fuzzy = entries.find((entry) => {
+      const ext = path.extname(entry).toLowerCase()
+      const name = path.basename(entry, ext).toLowerCase()
+      return TRANSCRIPT_SIDECAR_EXTENSIONS.includes(ext) && name.startsWith(base) && name !== base
+    })
+    if (!fuzzy) return null
+    const candidate = path.join(directory, fuzzy)
+    const content = cleanTranscriptText(await fs.promises.readFile(candidate, 'utf-8'))
+    return content ? { filePath: candidate, content } : null
+  } catch {
+    return null
+  }
+}
+
+async function readWhisperTranscript(outputDir: string, sourcePath: string): Promise<{ filePath: string; content: string }> {
+  const expected = path.join(outputDir, `${path.parse(sourcePath).name}.txt`)
+  try {
+    const content = cleanTranscriptText(await fs.promises.readFile(expected, 'utf-8'))
+    if (content) return { filePath: expected, content }
+  } catch {
+    /* Fall back to scanning the output directory. */
+  }
+
+  const entries = await fs.promises.readdir(outputDir)
+  const txtFiles = await Promise.all(
+    entries
+      .filter((entry) => path.extname(entry).toLowerCase() === '.txt')
+      .map(async (entry) => {
+        const filePath = path.join(outputDir, entry)
+        const stat = await fs.promises.stat(filePath)
+        return { filePath, mtimeMs: stat.mtimeMs }
+      }),
+  )
+  txtFiles.sort((left, right) => right.mtimeMs - left.mtimeMs)
+
+  for (const candidate of txtFiles) {
+    const content = cleanTranscriptText(await fs.promises.readFile(candidate.filePath, 'utf-8'))
+    if (content) return { filePath: candidate.filePath, content }
+  }
+
+  throw new Error('Whisper 已运行，但没有生成可用的 txt 字幕文本。')
+}
+
+async function transcribeWithLocalWhisper(
+  filePath: string,
+  kind: ExtractedFileKind,
+  metadata: ExtractedFileContent['metadata'],
+): Promise<MediaTranscriptionResult> {
+  const whisperCommand = await findExecutable(['whisper'])
+  const warnings: string[] = []
+
+  if (!whisperCommand) {
+    warnings.push('没有找到同名字幕，也没有检测到本地 whisper 命令。')
+    warnings.push('安装 OpenAI Whisper 后重启应用，再点“转写/补字幕”即可自动写回知识库。')
+    const content = buildMediaPlaceholder({ filePath, kind, size: metadata.size, warnings })
+    return {
+      success: false,
+      kind,
+      method: 'missing-whisper',
+      content,
+      rawContent: content,
+      warnings,
+      metadata,
+      missingProvider: true,
+      error: '未检测到本地 Whisper。建议安装命令：pipx install openai-whisper 或 pip install -U openai-whisper',
+    }
+  }
+
+  const outputDir = path.join(
+    os.tmpdir(),
+    'openbasaka-transcripts',
+    `${Date.now()}-${sanitizeFileName(path.parse(filePath).name || metadata.fileName)}`,
+  )
+  await fs.promises.mkdir(outputDir, { recursive: true })
+
+  const model = (process.env.OPENBASAKA_WHISPER_MODEL || 'base').trim()
+  const language = (process.env.OPENBASAKA_WHISPER_LANGUAGE || '').trim()
+  const args = [
+    filePath,
+    '--model',
+    model,
+    '--output_format',
+    'txt',
+    '--output_dir',
+    outputDir,
+  ]
+  if (language && language.toLowerCase() !== 'auto') {
+    args.push('--language', language)
+  }
+
+  const { stderr } = await runFileTool(whisperCommand, args, 30 * 60 * 1000)
+  if (stderr.trim()) {
+    warnings.push(`Whisper 输出提示：${stderr.trim().slice(0, 500)}`)
+  }
+
+  const transcript = await readWhisperTranscript(outputDir, filePath)
+  const content = buildExtractedMediaContent({
+    filePath,
+    title: metadata.fileName,
+    sectionTitle: '本地 Whisper 转写',
+    body: transcript.content,
+    sourcePath: transcript.filePath,
+  })
+
+  return {
+    success: true,
+    kind,
+    method: 'whisper-local',
+    content,
+    rawContent: transcript.content,
+    warnings,
+    metadata,
+    transcriptPath: transcript.filePath,
+  }
+}
+
+async function transcribeMediaFile(filePath: string): Promise<MediaTranscriptionResult> {
+  const stat = await fs.promises.stat(filePath)
+  const extension = getIntakeExtension(filePath)
+  const kind = classifyIntakeFile(filePath)
+  const metadata = {
+    fileName: path.basename(filePath),
+    filePath,
+    extension,
+    size: stat.size,
+  }
+
+  if (kind !== 'audio' && kind !== 'video') {
+    const warnings = ['这个文件不是音频或视频，不需要转写。']
+    return {
+      success: false,
+      kind,
+      method: 'not-media',
+      content: '',
+      rawContent: '',
+      warnings,
+      metadata,
+      error: warnings[0],
+    }
+  }
+
+  const sidecar = await findSidecarTranscript(filePath)
+  if (sidecar) {
+    const content = buildExtractedMediaContent({
+      filePath,
+      title: metadata.fileName,
+      sectionTitle: '同名字幕 / 文字稿',
+      body: sidecar.content,
+      sourcePath: sidecar.filePath,
+    })
+    return {
+      success: true,
+      kind,
+      method: 'sidecar-transcript',
+      content,
+      rawContent: sidecar.content,
+      warnings: [],
+      metadata,
+      transcriptPath: sidecar.filePath,
+    }
+  }
+
+  return transcribeWithLocalWhisper(filePath, kind, metadata)
+}
+
+async function runAppleVisionOcr(filePath: string): Promise<string> {
+  const script = `
+import Foundation
+import Vision
+import AppKit
+
+let path = CommandLine.arguments.dropFirst().first ?? ""
+let url = URL(fileURLWithPath: path)
+guard let image = NSImage(contentsOf: url) else {
+  exit(2)
+}
+var rect = CGRect(origin: .zero, size: image.size)
+guard let cgImage = image.cgImage(forProposedRect: &rect, context: nil, hints: nil) else {
+  exit(3)
+}
+
+let request = VNRecognizeTextRequest()
+request.recognitionLevel = .accurate
+request.usesLanguageCorrection = true
+request.recognitionLanguages = ["zh-Hans", "zh-Hant", "en-US", "ja-JP", "ko-KR"]
+
+let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+try handler.perform([request])
+let lines = (request.results ?? []).compactMap { observation in
+  observation.topCandidates(1).first?.string
+}
+print(lines.joined(separator: "\\n"))
+`
+  const dir = path.join(os.tmpdir(), 'openbasaka-intake')
+  await fs.promises.mkdir(dir, { recursive: true })
+  const scriptPath = path.join(dir, 'vision-ocr.swift')
+  await fs.promises.writeFile(scriptPath, script, 'utf-8')
+  const { stdout } = await runFileTool('xcrun', ['swift', scriptPath, filePath], 60000)
+  return stdout.trim()
+}
+
+type DesktopCapturePayload = {
+  includeOcr?: boolean
+  fileBaseName?: string
+  region?: { x: number; y: number; width: number; height: number }
+}
+
+async function captureDesktopScreen(payload: DesktopCapturePayload = {}) {
+  const outputDir = path.join(app.getPath('userData'), 'team-observations')
+  await fs.promises.mkdir(outputDir, { recursive: true })
+  const fileName = `${new Date().toISOString().replace(/[:.]/g, '-')}-${sanitizeFileName(payload.fileBaseName || 'screen')}.png`
+  const outputPath = path.join(outputDir, fileName)
+  const args = ['-x', '-t', 'png']
+  const region = payload.region
+  if (
+    region &&
+    Number.isFinite(region.x) &&
+    Number.isFinite(region.y) &&
+    Number.isFinite(region.width) &&
+    Number.isFinite(region.height) &&
+    region.width > 0 &&
+    region.height > 0
+  ) {
+    args.push('-R', `${Math.round(region.x)},${Math.round(region.y)},${Math.round(region.width)},${Math.round(region.height)}`)
+  }
+  args.push(outputPath)
+
+  try {
+    await runFileTool('/usr/sbin/screencapture', args, 20000)
+    const stat = await fs.promises.stat(outputPath)
+    const display = screen.getPrimaryDisplay()
+    let ocrText = ''
+    const warnings: string[] = []
+    if (payload.includeOcr !== false) {
+      try {
+        ocrText = await runAppleVisionOcr(outputPath)
+      } catch (err) {
+        warnings.push(`OCR 失败: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    }
+    return {
+      success: true,
+      path: outputPath,
+      mimeType: 'image/png',
+      size: stat.size,
+      display: {
+        id: display.id,
+        scaleFactor: display.scaleFactor,
+        bounds: display.bounds,
+        workArea: display.workArea,
+      },
+      region: region || null,
+      ocrText,
+      warnings,
+    }
+  } catch (err) {
+    return {
+      success: false,
+      error:
+        err instanceof Error
+          ? `${err.message}。如果 macOS 拒绝截图，请在系统设置里给本应用开启屏幕录制权限。`
+          : String(err),
+      path: outputPath,
+    }
+  }
+}
+
+type DesktopControlPayload = {
+  action?: 'activate_app' | 'open_path' | 'open_url' | 'keystroke' | 'shortcut' | 'press_key' | 'click' | 'menu_click'
+  appName?: string
+  path?: string
+  url?: string
+  text?: string
+  key?: string
+  modifiers?: Array<'command' | 'shift' | 'option' | 'control'>
+  x?: number
+  y?: number
+  menuPath?: string[]
+}
+
+const DESKTOP_CONTROL_KEYCODES: Record<string, number> = {
+  return: 36,
+  enter: 36,
+  escape: 53,
+  esc: 53,
+  tab: 48,
+  space: 49,
+  delete: 51,
+  backspace: 51,
+  left: 123,
+  right: 124,
+  down: 125,
+  up: 126,
+  home: 115,
+  end: 119,
+  pageup: 116,
+  pagedown: 121,
+}
+
+function appleScriptString(value: string): string {
+  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+}
+
+function appleScriptModifiers(modifiers?: DesktopControlPayload['modifiers']): string {
+  const allowed = new Set(['command', 'shift', 'option', 'control'])
+  const parts = (modifiers || []).filter((modifier) => allowed.has(modifier)).map((modifier) => `${modifier} down`)
+  return parts.length ? ` using {${parts.join(', ')}}` : ''
+}
+
+function validateDesktopText(value: string, field: string, max = 4000): string {
+  const trimmed = value.trim()
+  if (!trimmed) throw new Error(`${field} 不能为空`)
+  if (trimmed.length > max) throw new Error(`${field} 太长，已拒绝`)
+  return trimmed
+}
+
+async function runDesktopControl(payload: DesktopControlPayload = {}) {
+  const action = payload.action || 'activate_app'
+  try {
+    if (action === 'open_path') {
+      const target = validateDesktopText(payload.path || '', 'path', 2000)
+      await runFileTool('/usr/bin/open', [target], 10000)
+      return { success: true, action, target }
+    }
+    if (action === 'open_url') {
+      const target = validateDesktopText(payload.url || '', 'url', 2000)
+      if (!/^https?:\/\//i.test(target)) return { success: false, action, error: '只允许打开 http/https URL' }
+      await runFileTool('/usr/bin/open', [target], 10000)
+      return { success: true, action, target }
+    }
+
+    const appName = validateDesktopText(payload.appName || 'System Events', 'appName', 120)
+    let script = ''
+    if (action === 'activate_app') {
+      script = `tell application ${appleScriptString(appName)} to activate`
+    } else if (action === 'keystroke') {
+      const text = validateDesktopText(payload.text || '', 'text')
+      script = `tell application ${appleScriptString(appName)} to activate
+delay 0.2
+tell application "System Events" to keystroke ${appleScriptString(text)}`
+    } else if (action === 'shortcut') {
+      const key = validateDesktopText(payload.key || '', 'key', 40)
+      script = `tell application ${appleScriptString(appName)} to activate
+delay 0.2
+tell application "System Events" to keystroke ${appleScriptString(key)}${appleScriptModifiers(payload.modifiers)}`
+    } else if (action === 'press_key') {
+      const key = validateDesktopText(payload.key || '', 'key', 40).toLowerCase()
+      const keyCode = DESKTOP_CONTROL_KEYCODES[key]
+      if (!keyCode) return { success: false, action, error: `不支持的按键: ${key}` }
+      script = `tell application ${appleScriptString(appName)} to activate
+delay 0.2
+tell application "System Events" to key code ${keyCode}${appleScriptModifiers(payload.modifiers)}`
+    } else if (action === 'click') {
+      const x = Math.round(Number(payload.x))
+      const y = Math.round(Number(payload.y))
+      if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0) {
+        return { success: false, action, error: 'click 需要有效的 x/y 坐标' }
+      }
+      script = `tell application ${appleScriptString(appName)} to activate
+delay 0.2
+tell application "System Events" to click at {${x}, ${y}}`
+    } else if (action === 'menu_click') {
+      const menuPath = (payload.menuPath || []).map((item) => item.trim()).filter(Boolean).slice(0, 4)
+      if (menuPath.length < 2) return { success: false, action, error: 'menu_click 至少需要 [菜单, 菜单项]' }
+      const [menu, item, subItem, subSubItem] = menuPath
+      let target = `menu item ${appleScriptString(item)} of menu ${appleScriptString(menu)} of menu bar 1`
+      if (subItem) target = `menu item ${appleScriptString(subItem)} of menu 1 of ${target}`
+      if (subSubItem) target = `menu item ${appleScriptString(subSubItem)} of menu 1 of ${target}`
+      script = `tell application ${appleScriptString(appName)} to activate
+delay 0.2
+tell application "System Events" to tell process ${appleScriptString(appName)} to click ${target}`
+    } else {
+      return { success: false, action, error: `不支持的桌面控制动作: ${action}` }
+    }
+
+    const { stdout, stderr } = await runFileTool('/usr/bin/osascript', ['-e', script], 20000)
+    return { success: true, action, stdout, stderr }
+  } catch (err) {
+    return {
+      success: false,
+      action,
+      error:
+        err instanceof Error
+          ? `${err.message}。如果 macOS 拒绝控制，请在系统设置里给本应用开启辅助功能权限。`
+          : String(err),
+    }
+  }
+}
+
+type XcodeActionPayload = {
+  action?: 'list' | 'build' | 'test' | 'clean' | 'archive' | 'open' | 'simctl-list'
+  projectPath?: string
+  scheme?: string
+  destination?: string
+  configuration?: string
+  sdk?: string
+  simctlKind?: 'devices' | 'runtimes' | 'devicetypes'
+  timeout?: number
+}
+
+function resolveXcodeProjectArgs(projectPath?: string): string[] {
+  const rawPath = (projectPath || '').trim()
+  if (!rawPath) return []
+  const expandedPath = rawPath.startsWith('~') ? path.join(os.homedir(), rawPath.slice(1)) : rawPath
+  const stat = fs.existsSync(expandedPath) ? fs.statSync(expandedPath) : null
+  if (expandedPath.endsWith('.xcworkspace')) return ['-workspace', expandedPath]
+  if (expandedPath.endsWith('.xcodeproj')) return ['-project', expandedPath]
+  if (stat?.isDirectory()) {
+    const entries = fs.readdirSync(expandedPath)
+    const workspace = entries.find((entry) => entry.endsWith('.xcworkspace'))
+    if (workspace) return ['-workspace', path.join(expandedPath, workspace)]
+    const project = entries.find((entry) => entry.endsWith('.xcodeproj'))
+    if (project) return ['-project', path.join(expandedPath, project)]
+  }
+  return []
+}
+
+async function runXcodeAction(payload: XcodeActionPayload = {}) {
+  const action = payload.action || 'list'
+  const timeout = Math.min(Math.max(Number(payload.timeout || 120000), 10000), 600000)
+  try {
+    if (action === 'open') {
+      if (!payload.projectPath?.trim()) return { success: false, error: 'open 动作需要 projectPath' }
+      await runFileTool('/usr/bin/open', ['-a', 'Xcode', payload.projectPath], 10000)
+      return { success: true, action, stdout: '', stderr: '', args: ['open', '-a', 'Xcode', payload.projectPath] }
+    }
+
+    if (action === 'simctl-list') {
+      const kind = payload.simctlKind || 'devices'
+      const { stdout, stderr } = await runFileTool('/usr/bin/xcrun', ['simctl', 'list', kind], timeout)
+      return { success: true, action, stdout, stderr, args: ['xcrun', 'simctl', 'list', kind] }
+    }
+
+    const args = [...resolveXcodeProjectArgs(payload.projectPath)]
+    if (payload.scheme?.trim()) args.push('-scheme', payload.scheme.trim())
+    if (payload.configuration?.trim()) args.push('-configuration', payload.configuration.trim())
+    if (payload.destination?.trim()) args.push('-destination', payload.destination.trim())
+    if (payload.sdk?.trim()) args.push('-sdk', payload.sdk.trim())
+    args.push(action === 'list' ? '-list' : action)
+
+    const { stdout, stderr } = await runFileTool('/usr/bin/xcodebuild', args, timeout)
+    return { success: true, action, stdout, stderr, args: ['xcodebuild', ...args] }
+  } catch (err) {
+    return {
+      success: false,
+      action,
+      error: err instanceof Error ? err.message : String(err),
+    }
+  }
+}
+
+function buildExtractedMediaContent(params: {
+  filePath: string
+  title: string
+  sectionTitle: string
+  body: string
+  sourcePath?: string
+}): string {
+  return [
+    `# ${params.title}`,
+    '',
+    `路径：${params.filePath}`,
+    params.sourcePath ? `解析来源：${params.sourcePath}` : '',
+    '',
+    `## ${params.sectionTitle}`,
+    '',
+    params.body,
+  ]
+    .filter((line) => line !== '')
+    .join('\n')
+}
+
+function buildMediaPlaceholder(params: {
+  filePath: string
+  kind: ExtractedFileKind
+  size: number
+  warnings: string[]
+}): string {
+  const fileName = path.basename(params.filePath)
+  const kindLabel: Record<ExtractedFileKind, string> = {
+    text: '文本',
+    document: '文档',
+    pdf: 'PDF',
+    image: '图片',
+    audio: '音频',
+    video: '视频',
+    binary: '二进制文件',
+  }
+  return [
+    `# ${fileName}`,
+    '',
+    `类型：${kindLabel[params.kind]}`,
+    `路径：${params.filePath}`,
+    `大小：${params.size} bytes`,
+    '',
+    '## 当前解析状态',
+    params.warnings.map((warning) => `- ${warning}`).join('\n'),
+    '',
+    '## 下一步',
+    '- 这个来源已经可以进入知识库、被选入 Notebook 联动实验室、被打标签和归档。',
+    '- 需要更深解析时，请补充 OCR、字幕、音频转写或对应原始文字稿。',
+  ].join('\n')
+}
+
+async function extractFileContent(filePath: string): Promise<ExtractedFileContent> {
+  const stat = await fs.promises.stat(filePath)
+  const extension = getIntakeExtension(filePath)
+  const kind = classifyIntakeFile(filePath)
+  const metadata = {
+    fileName: path.basename(filePath),
+    filePath,
+    extension,
+    size: stat.size,
+  }
+  const warnings: string[] = []
+
+  if (kind === 'text') {
+    const raw = await fs.promises.readFile(filePath, 'utf-8')
+    const content = TRANSCRIPT_TEXT_EXTENSIONS.has(extension) ? cleanTranscriptText(raw) : raw
+    return { success: true, kind, method: 'utf8', content, rawContent: content, warnings, metadata }
+  }
+
+  if (kind === 'document') {
+    try {
+      const { stdout } = await runFileTool('textutil', ['-convert', 'txt', '-stdout', filePath], 25000)
+      const content = stdout.trim()
+      if (content) return { success: true, kind, method: 'textutil', content, rawContent: content, warnings, metadata }
+    } catch (err) {
+      warnings.push(`系统文档解析失败：${err instanceof Error ? err.message : String(err)}`)
+    }
+    warnings.push('文档已接收，但本机暂时没有抽取到稳定文本。')
+    const content = buildMediaPlaceholder({ filePath, kind, size: stat.size, warnings })
+    return { success: true, kind, method: 'placeholder', content, rawContent: content, warnings, metadata }
+  }
+
+  if (kind === 'pdf') {
+    try {
+      const spotlightText = await readSpotlightText(filePath)
+      if (spotlightText) {
+        return { success: true, kind, method: 'spotlight-mdls', content: spotlightText, rawContent: spotlightText, warnings, metadata }
+      }
+      warnings.push('Spotlight 暂时没有给出 PDF 正文。')
+    } catch (err) {
+      warnings.push(`Spotlight PDF 正文抽取失败：${err instanceof Error ? err.message : String(err)}`)
+    }
+    try {
+      const fallback = await readStringsFallback(filePath)
+      if (fallback) {
+        warnings.push('使用 strings 兜底抽取，可能包含少量噪声。')
+        return { success: true, kind, method: 'strings-fallback', content: fallback, rawContent: fallback, warnings, metadata }
+      }
+    } catch (err) {
+      warnings.push(`PDF 兜底抽取失败：${err instanceof Error ? err.message : String(err)}`)
+    }
+    warnings.push('PDF 已接收，但没有抽取到正文；建议补充 OCR 文本版或可复制文字版 PDF。')
+    const content = buildMediaPlaceholder({ filePath, kind, size: stat.size, warnings })
+    return { success: true, kind, method: 'placeholder', content, rawContent: content, warnings, metadata }
+  }
+
+  if (kind === 'image') {
+    try {
+      const spotlightText = await readSpotlightText(filePath)
+      if (spotlightText) {
+        const content = buildExtractedMediaContent({
+          filePath,
+          title: metadata.fileName,
+          sectionTitle: '图片 OCR 文本',
+          body: spotlightText,
+        })
+        return { success: true, kind, method: 'spotlight-image-text', content, rawContent: spotlightText, warnings, metadata }
+      }
+    } catch {
+      /* Spotlight OCR is opportunistic. */
+    }
+    try {
+      const ocrText = await runAppleVisionOcr(filePath)
+      if (ocrText) {
+        const content = buildExtractedMediaContent({
+          filePath,
+          title: metadata.fileName,
+          sectionTitle: '图片 OCR 文本',
+          body: ocrText,
+        })
+        return { success: true, kind, method: 'apple-vision-ocr', content, rawContent: ocrText, warnings, metadata }
+      }
+      warnings.push('本机 OCR 没有识别出稳定文字。')
+    } catch (err) {
+      warnings.push(`本机 OCR 暂不可用：${err instanceof Error ? err.message : String(err)}`)
+    }
+    warnings.push('图片已接收；如果它是截图、海报或图表，可以补充更清晰版本，或在旁边放同名 .txt 文字稿。')
+    const content = buildMediaPlaceholder({ filePath, kind, size: stat.size, warnings })
+    return { success: true, kind, method: 'image-placeholder', content, rawContent: content, warnings, metadata }
+  }
+
+  if (kind === 'audio') {
+    const transcript = await findSidecarTranscript(filePath)
+    if (transcript) {
+      const content = buildExtractedMediaContent({
+        filePath,
+        title: metadata.fileName,
+        sectionTitle: '音频转写稿',
+        body: transcript.content,
+        sourcePath: transcript.filePath,
+      })
+      return {
+        success: true,
+        kind,
+        method: 'sidecar-transcript',
+        content,
+        rawContent: transcript.content,
+        warnings,
+        metadata,
+      }
+    }
+    warnings.push('音频已接收；请把同名 .srt、.vtt、.txt 或 .md 转写稿放在同一文件夹，系统会自动合并。')
+    const content = buildMediaPlaceholder({ filePath, kind, size: stat.size, warnings })
+    return { success: true, kind, method: 'audio-placeholder', content, rawContent: content, warnings, metadata }
+  }
+
+  if (kind === 'video') {
+    const transcript = await findSidecarTranscript(filePath)
+    if (transcript) {
+      const content = buildExtractedMediaContent({
+        filePath,
+        title: metadata.fileName,
+        sectionTitle: '视频字幕/转写稿',
+        body: transcript.content,
+        sourcePath: transcript.filePath,
+      })
+      return {
+        success: true,
+        kind,
+        method: 'sidecar-transcript',
+        content,
+        rawContent: transcript.content,
+        warnings,
+        metadata,
+      }
+    }
+    warnings.push('视频已接收；请把同名 .srt、.vtt、.txt 或 .md 字幕/转写稿放在同一文件夹，系统会自动合并。')
+    const content = buildMediaPlaceholder({ filePath, kind, size: stat.size, warnings })
+    return { success: true, kind, method: 'video-placeholder', content, rawContent: content, warnings, metadata }
+  }
+
+  warnings.push('这个文件类型暂时只能作为来源对象保存，等待后续解析器处理。')
+  const content = buildMediaPlaceholder({ filePath, kind, size: stat.size, warnings })
+  return { success: true, kind, method: 'binary-placeholder', content, rawContent: content, warnings, metadata }
 }
 
 function getRemotionEntryPoint(): string {
@@ -322,9 +1292,16 @@ function createGhostWindow() {
 }
 
 // ─── 全屏沙盘窗口 ────────────────────────────────────
-function createSandboxWindow() {
+function createSandboxWindow(initialTab?: string) {
+  const safeInitialTab = initialTab && SANDBOX_WINDOW_TABS.has(initialTab) ? initialTab : undefined
+  const sandboxHash = safeInitialTab ? `/sandbox?tab=${encodeURIComponent(safeInitialTab)}` : '/sandbox'
   if (sandboxWindow) {
     sandboxWindow.focus()
+    if (safeInitialTab) {
+      sandboxWindow.webContents
+        .executeJavaScript(`window.location.hash = ${JSON.stringify(`#${sandboxHash}`)}`)
+        .catch(() => {})
+    }
     return
   }
 
@@ -345,9 +1322,9 @@ function createSandboxWindow() {
   })
 
   if (VITE_DEV_SERVER_URL) {
-    sandboxWindow.loadURL(`${VITE_DEV_SERVER_URL}#/sandbox`)
+    sandboxWindow.loadURL(`${VITE_DEV_SERVER_URL}#${sandboxHash}`)
   } else {
-    sandboxWindow.loadFile(INDEX_HTML, { hash: '/sandbox' })
+    sandboxWindow.loadFile(INDEX_HTML, { hash: sandboxHash })
   }
 
   sandboxWindow.on('closed', () => {
@@ -428,7 +1405,7 @@ function createTray() {
 
 // ─── IPC 通道 ─────────────────────────────────────────
 function registerIPC() {
-  ipcMain.handle('open-sandbox', () => createSandboxWindow())
+  ipcMain.handle('open-sandbox', (_event, tab?: string) => createSandboxWindow(tab))
   ipcMain.handle('minimize-to-tray', () => ghostWindow?.hide())
   ipcMain.handle('get-system-info', () => ({
     platform: process.platform,
@@ -446,7 +1423,16 @@ function registerIPC() {
   })
 
   // ── AI 代理调用（非流式）──
-  ipcMain.handle('send-ai', async (_event, prompt: string, systemPrompt?: string, configOverrideJson?: string) => {
+  ipcMain.handle(
+    'send-ai',
+    async (
+      _event,
+      prompt: string,
+      systemPrompt?: string,
+      configOverrideJson?: string,
+      temperature?: number,
+      maxTokens?: number,
+    ) => {
     try {
       let config: LLMConfigMain | null = null
       if (configOverrideJson) {
@@ -457,8 +1443,8 @@ function registerIPC() {
               provider: override.provider || 'deepseek',
               apiKey: override.apiKey || '',
               baseUrl:
-                override.baseUrl || DEFAULT_LLM_CONFIGS[override.provider]?.baseUrl || 'https://api.deepseek.com/v1',
-              model: override.model || 'deepseek-chat',
+                override.baseUrl || DEFAULT_LLM_CONFIGS[override.provider]?.baseUrl || 'https://api.deepseek.com',
+              model: override.model || DEFAULT_LLM_CONFIGS[override.provider || 'deepseek']?.model || 'deepseek-v4-flash',
             }
           }
         } catch {
@@ -472,12 +1458,13 @@ function registerIPC() {
       if (systemPrompt) messages.push({ role: 'system', content: systemPrompt })
       messages.push({ role: 'user', content: prompt })
 
-      const result = await mainProcessChatCompletion(config, messages)
+      const result = await mainProcessChatCompletion(config, messages, temperature ?? 0.7, maxTokens ?? 4096)
       return result
     } catch (err) {
-      return { error: String(err) }
+      return { error: err instanceof Error ? err.message : String(err) }
     }
-  })
+    },
+  )
 
   // ── AI 代理调用（流式 SSE 转发）──
   ipcMain.handle(
@@ -494,8 +1481,8 @@ function registerIPC() {
                 provider: override.provider || 'deepseek',
                 apiKey: override.apiKey || '',
                 baseUrl:
-                  override.baseUrl || DEFAULT_LLM_CONFIGS[override.provider]?.baseUrl || 'https://api.deepseek.com/v1',
-                model: override.model || 'deepseek-chat',
+                  override.baseUrl || DEFAULT_LLM_CONFIGS[override.provider]?.baseUrl || 'https://api.deepseek.com',
+                model: override.model || DEFAULT_LLM_CONFIGS[override.provider || 'deepseek']?.model || 'deepseek-v4-flash',
               }
             }
           } catch {
@@ -662,9 +1649,52 @@ function registerIPC() {
     }
   })
 
+  ipcMain.handle('extract-file-content', async (_event, filePath: string) => {
+    try {
+      return await extractFileContent(filePath)
+    } catch (err) {
+      return {
+        success: false,
+        kind: 'binary',
+        method: 'error',
+        content: '',
+        warnings: [],
+        metadata: {
+          fileName: path.basename(filePath || ''),
+          filePath,
+          extension: getIntakeExtension(filePath || ''),
+          size: 0,
+        },
+        error: err instanceof Error ? err.message : String(err),
+      } satisfies ExtractedFileContent
+    }
+  })
+
+  ipcMain.handle('transcribe-media-file', async (_event, filePath: string) => {
+    try {
+      return await transcribeMediaFile(filePath)
+    } catch (err) {
+      return {
+        success: false,
+        kind: classifyIntakeFile(filePath || ''),
+        method: 'transcription-error',
+        content: '',
+        warnings: [],
+        metadata: {
+          fileName: path.basename(filePath || ''),
+          filePath,
+          extension: getIntakeExtension(filePath || ''),
+          size: 0,
+        },
+        error: err instanceof Error ? err.message : String(err),
+      } satisfies MediaTranscriptionResult
+    }
+  })
+
   // ── 文件写入 ──
   ipcMain.handle('write-file', async (_event, filePath: string, content: string) => {
     try {
+      await fs.promises.mkdir(path.dirname(filePath), { recursive: true })
       await fs.promises.writeFile(filePath, content, 'utf-8')
       return { success: true }
     } catch (err) {
@@ -675,10 +1705,34 @@ function registerIPC() {
   // ── 命令执行 ──
   ipcMain.handle('execute-command', (_event, command: string, timeout = 30000) => {
     return new Promise((resolve) => {
-      exec(command, { timeout }, (error, stdout, stderr) => {
+      const validation = validateCommand(command)
+      if (!validation.allowed) {
+        resolve({
+          stdout: '',
+          stderr: '',
+          exitCode: 126,
+          success: false,
+          error: `命令被拒绝: ${validation.reason}`,
+        })
+        return
+      }
+      exec(validation.sanitized || command, { timeout }, (error, stdout, stderr) => {
         resolve({ stdout: stdout || '', stderr: stderr || '', exitCode: error?.code || 0, success: !error })
       })
     })
+  })
+
+  // ── 桌面观察 / Xcode 执行 ──
+  ipcMain.handle('capture-screen', async (_event, payload?: DesktopCapturePayload) => {
+    return captureDesktopScreen(payload || {})
+  })
+
+  ipcMain.handle('desktop-control', async (_event, payload?: DesktopControlPayload) => {
+    return runDesktopControl(payload || {})
+  })
+
+  ipcMain.handle('xcode-action', async (_event, payload?: XcodeActionPayload) => {
+    return runXcodeAction(payload || {})
   })
 
   ipcMain.handle(
@@ -773,18 +1827,41 @@ function registerIPC() {
   )
 
   // ── 选择文件夹 ──
-  ipcMain.handle('choose-folder', async (event) => {
+  ipcMain.handle('choose-folder', async (event, payload?: { defaultPath?: string; title?: string }) => {
     const senderWindow = BrowserWindow.fromWebContents(event.sender) ?? ghostWindow ?? sandboxWindow ?? undefined
+    const title = typeof payload?.title === 'string' && payload.title.trim() ? payload.title.trim() : '选择要导入的文件夹'
+    const defaultPath = typeof payload?.defaultPath === 'string' && payload.defaultPath.trim() ? payload.defaultPath.trim() : undefined
     const result = senderWindow
       ? dialog.showOpenDialogSync(senderWindow, {
-          title: '选择要导入的文件夹',
+          title,
+          defaultPath,
           properties: ['openDirectory'],
         })
       : dialog.showOpenDialogSync({
-          title: '选择要导入的文件夹',
+          title,
+          defaultPath,
           properties: ['openDirectory'],
         })
     return result?.[0] || ''
+  })
+
+  // ── 选择文件（知识库可导入任意本地文件） ──
+  ipcMain.handle('choose-files', async (event, payload?: { defaultPath?: string; title?: string }) => {
+    const senderWindow = BrowserWindow.fromWebContents(event.sender) ?? ghostWindow ?? sandboxWindow ?? undefined
+    const title = typeof payload?.title === 'string' && payload.title.trim() ? payload.title.trim() : '选择要导入的文件'
+    const defaultPath = typeof payload?.defaultPath === 'string' && payload.defaultPath.trim() ? payload.defaultPath.trim() : undefined
+    const result = senderWindow
+      ? dialog.showOpenDialogSync(senderWindow, {
+          title,
+          defaultPath,
+          properties: ['openFile', 'multiSelections'],
+        })
+      : dialog.showOpenDialogSync({
+          title,
+          defaultPath,
+          properties: ['openFile', 'multiSelections'],
+        })
+    return result || []
   })
 
   // ── 数据库导出 ──
@@ -845,9 +1922,9 @@ function registerIPC() {
     }
   })
 
-  ipcMain.handle('brave-search', async (_event, queryText: string, count = 5) => {
+  ipcMain.handle('brave-search', async (_event, queryText: string, count = 5, options = {}) => {
     try {
-      return await searchWithBrave(queryText, count)
+      return await searchWithBrave(queryText, count, options)
     } catch (err) {
       return { success: false, error: String(err) }
     }
@@ -1005,6 +2082,56 @@ updated: "${updatedAt}"
     }
   })
 
+  ipcMain.handle(
+    'telegram-openbasaka-sync',
+    async (
+      _event,
+      payload: {
+        agentId?: string
+        role: 'user' | 'assistant'
+        content: string
+        messageId?: string
+      },
+    ) => {
+      try {
+        return await broadcastOpenbasakaMessageToTelegram(payload)
+      } catch (err) {
+        return {
+          attempted: 0,
+          sent: 0,
+          skipped: 0,
+          errors: [err instanceof Error ? err.message : String(err)],
+        }
+      }
+    },
+  )
+
+  ipcMain.handle('telegram-user-sync-status', async () => {
+    return getTelegramUserSyncStatus()
+  })
+
+  ipcMain.handle(
+    'telegram-user-sync-request-code',
+    async (
+      _event,
+      payload: {
+        apiId: string | number
+        apiHash: string
+        phone: string
+        enabled?: boolean
+      },
+    ) => {
+      return requestTelegramUserLoginCode(payload)
+    },
+  )
+
+  ipcMain.handle(
+    'telegram-user-sync-confirm-code',
+    async (_event, payload: { code: string; password?: string }) => {
+      return confirmTelegramUserLoginCode(payload)
+    },
+  )
+
   // ── Cron 定时任务：渲染进程执行结果回传 ──
   ipcMain.handle(
     'cron:task-result',
@@ -1046,6 +2173,46 @@ updated: "${updatedAt}"
       }
     },
   )
+
+  ipcMain.handle('cron:run-now', async (_event, taskId: string) => {
+    try {
+      const { runScheduledTaskNow } = await import('./cron-engine')
+      return await runScheduledTaskNow(taskId)
+    } catch (err) {
+      return { success: false, error: String(err) }
+    }
+  })
+
+  // ── Gemini 图片生成代理：主进程读取环境变量/本地设置，避免把 Key 暴露给渲染进程 ──
+  ipcMain.handle('gemini-generate-images', async (_event, payload: GeminiGeneratePayload) => {
+    try {
+      const apiKey = getGeminiApiKey()
+      if (!apiKey) {
+        return {
+          images: [],
+          warnings: [],
+          error: 'Gemini API Key 未配置。请设置 GEMINI_API_KEY / GOOGLE_API_KEY，或在 settings 写入 gemini_api_key。',
+        }
+      }
+      if (!payload?.imagePart?.inlineData?.data || !payload.prompt) {
+        return { images: [], warnings: [], error: '缺少图片或生成提示词。' }
+      }
+      const count = Math.min(Math.max(Number(payload.count) || 4, 1), 4)
+      const settled = await Promise.allSettled(
+        Array.from({ length: count }, () => generateOneGeminiImage(apiKey, payload)),
+      )
+      const images = settled
+        .filter((item): item is PromiseFulfilledResult<string> => item.status === 'fulfilled')
+        .map((item) => item.value)
+      const warnings = settled
+        .filter((item): item is PromiseRejectedResult => item.status === 'rejected')
+        .map((item) => (item.reason instanceof Error ? item.reason.message : String(item.reason)))
+      if (images.length === 0 && warnings.length > 0) return { images, warnings, error: warnings[0] }
+      return { images, warnings }
+    } catch (err) {
+      return { images: [], warnings: [], error: err instanceof Error ? err.message : String(err) }
+    }
+  })
 
   // ── Embedding API 代理（主进程绕 CORS 调用 GLM/Ollama） ──
   ipcMain.handle(
@@ -1103,6 +2270,12 @@ import {
   stopAgentBot,
 } from './telegram/bot'
 import { initTelegramHandler } from './telegram/handler'
+import { broadcastOpenbasakaMessageToTelegram } from './telegram/openbasaka-sync'
+import {
+  confirmTelegramUserLoginCode,
+  getTelegramUserSyncStatus,
+  requestTelegramUserLoginCode,
+} from './telegram/user-sync'
 
 // 初始化 Telegram 消息处理器
 initTelegramHandler()

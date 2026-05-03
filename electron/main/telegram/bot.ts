@@ -34,7 +34,9 @@ const botInstances = new Map<string, BotInstance>()
 /** 全局回退 Bot 实例（读 settings.telegram_bot_token） */
 let globalInstance: BotInstance | null = null
 /** 消息处理器 */
-let messageHandler: ((chatId: number, text: string, username: string, agentId: string) => Promise<void>) | null = null
+let messageHandler:
+  | ((chatId: number, text: string, username: string, agentId: string, botToken: string) => Promise<void>)
+  | null = null
 
 // ─── 辅助 ───
 
@@ -110,6 +112,21 @@ export async function sendMessage(chatId: number, text: string, parseMode: 'Mark
   }
 }
 
+/** 发送 Telegram 聊天动作，让用户看到机器人正在处理 */
+export async function sendChatAction(chatId: number, action = 'typing', token?: string): Promise<void> {
+  const botToken = token || globalInstance?.token
+  if (!botToken) return
+
+  try {
+    await callApi(botToken, 'sendChatAction', {
+      chat_id: chatId,
+      action,
+    })
+  } catch (err) {
+    console.warn('[Telegram] sendChatAction failed:', err)
+  }
+}
+
 /** 用指定 Agent 的 Bot Token 发送消息 */
 export async function sendMessageAsAgent(agentId: string, chatId: number, text: string): Promise<void> {
   const instance = botInstances.get(agentId)
@@ -122,7 +139,9 @@ export async function sendMessageAsAgent(agentId: string, chatId: number, text: 
 }
 
 /** 注册消息处理器 */
-export function onMessage(handler: (chatId: number, text: string, username: string, agentId: string) => Promise<void>): void {
+export function onMessage(
+  handler: (chatId: number, text: string, username: string, agentId: string, botToken: string) => Promise<void>,
+): void {
   messageHandler = handler
 }
 
@@ -155,9 +174,10 @@ async function pollInstance(instance: BotInstance): Promise<void> {
             saveAllowedChatIds(allowed)
           }
 
-          // 路由到消息处理器，带上 agentId
+          // 路由到消息处理器，带上 agentId 与接收消息的 Bot Token。
+          // 回复必须使用同一个 token，否则用户在专家 Bot 私聊里会看到 BASAKA 全局 Bot 代答。
           if (messageHandler) {
-            messageHandler(chatId, text, username, instance.agentId).catch(err => {
+            messageHandler(chatId, text, username, instance.agentId, instance.token).catch(err => {
               console.error(`[Telegram:${instance.agentName}] handler error:`, err)
             })
           }
@@ -188,6 +208,23 @@ const BUILT_IN_EXPERTS = [
 
 /** 启动所有 Agent Bot + 全局 Bot + 内置专家 Bot */
 export function startMultiBotEngine(): void {
+  const startedTokens = new Map<string, string>(
+    Array.from(botInstances.values()).map((instance) => [instance.token, `${instance.agentName} (${instance.agentId})`]),
+  )
+
+  function rememberStartedToken(token: string, label: string): void {
+    startedTokens.set(token, label)
+  }
+
+  function explainDuplicateToken(token: string, label: string): boolean {
+    const existing = startedTokens.get(token)
+    if (!existing) return false
+    console.warn(
+      `[Telegram] ${label} skipped: it uses the same BotFather token as ${existing}. Telegram will show the same bot identity for identical tokens.`,
+    )
+    return true
+  }
+
   // 1. 全局 Bot（向后兼容 settings.telegram_bot_token）
   const globalToken = getGlobalBotToken()
   if (globalToken) {
@@ -204,6 +241,7 @@ export function startMultiBotEngine(): void {
       pollInstance(globalInstance)
       console.log('[Telegram] Global bot started')
     }
+    rememberStartedToken(globalToken, 'Global')
   }
 
   // 2. 各自定义 Agent Bot
@@ -216,7 +254,7 @@ export function startMultiBotEngine(): void {
       // 跳过已启动的
       if (botInstances.has(row.id)) continue
       // 跳过与全局相同的 token
-      if (globalToken && row.bot_token === globalToken) continue
+      if (explainDuplicateToken(row.bot_token, `Agent bot ${row.name} (${row.id})`)) continue
 
       const instance: BotInstance = {
         token: row.bot_token,
@@ -226,6 +264,7 @@ export function startMultiBotEngine(): void {
         lastUpdateId: 0,
       }
       botInstances.set(row.id, instance)
+      rememberStartedToken(row.bot_token, `Agent bot ${row.name} (${row.id})`)
       pollInstance(instance)
       console.log(`[Telegram] Agent bot started: ${row.name} (${row.id})`)
     }
@@ -245,7 +284,7 @@ export function startMultiBotEngine(): void {
       // 跳过 oba_ 内部 token
       if (token.startsWith('oba_')) continue
       // 跳过与全局相同的 token
-      if (globalToken && token === globalToken) continue
+      if (explainDuplicateToken(token, `Built-in expert bot ${expert.name} (${expert.role})`)) continue
 
       const instance: BotInstance = {
         token,
@@ -255,6 +294,7 @@ export function startMultiBotEngine(): void {
         lastUpdateId: 0,
       }
       botInstances.set(expert.role, instance)
+      rememberStartedToken(token, `Built-in expert bot ${expert.name} (${expert.role})`)
       pollInstance(instance)
       console.log(`[Telegram] Built-in expert bot started: ${expert.name} (${expert.role})`)
     }

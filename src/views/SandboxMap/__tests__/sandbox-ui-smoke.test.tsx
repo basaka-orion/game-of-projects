@@ -1,11 +1,22 @@
 import { renderToStaticMarkup } from 'react-dom/server'
+import { act } from 'react'
+import { createRoot } from 'react-dom/client'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentExecutionReceipt } from '../../../lib/agents/execution-receipt'
 import type { OperatingEventRow } from '../../../lib/db/repository'
+import { UI_STYLE_ITEMS } from '../../../lib/ui-museum/catalog'
 import { OPENBASAKA_SANDBOX_MENU_ITEMS } from '../../Openbasaka/sandbox-menu'
 import { SIDEBAR_ITEMS } from '../sidebar'
 import ControlPanelTab from '../tabs/ControlPanelTab'
 import OverviewTab from '../tabs/OverviewTab'
+import UIStyleMuseumMacApp, { getUiMuseumStyleRealizationForTest } from '../tabs/ui-museum/UIStyleMuseumMacApp'
+import BiliHelperMacApp from '../tabs/bili-helper/BiliHelperMacApp'
+
+vi.mock('@remotion/player', () => ({
+  Player: ({ inputProps }: { inputProps?: { state?: { headline?: string } } }) => (
+    <div className="remotion-player-mock">Remotion Guide: {inputProps?.state?.headline || 'waiting'}</div>
+  ),
+}))
 
 function receipt(): AgentExecutionReceipt {
   return {
@@ -69,6 +80,7 @@ describe('sandbox UI smoke contracts', () => {
       'boss',
       'memory',
       'knowledge',
+      'workflow',
       'control',
       'scheduler',
       'teams',
@@ -82,7 +94,8 @@ describe('sandbox UI smoke contracts', () => {
       '突触',
       'Boss',
       '记忆宫殿',
-      '知识库',
+      '知识＋大佬',
+      '工作流',
       '控制',
       '定时',
       '群策',
@@ -158,4 +171,208 @@ describe('sandbox UI smoke contracts', () => {
     expect(html).toContain('从备份恢复')
     expect(html).toContain('恢复会覆盖当前本地库')
   })
+
+  it('keeps every UI museum style backed by a concrete realization profile', () => {
+    const genericFallbacks = UI_STYLE_ITEMS
+      .map((item) => [item.id, getUiMuseumStyleRealizationForTest(item).label] as const)
+      .filter(([, label]) => label === 'PRODUCT SURFACE')
+
+    expect(genericFallbacks).toEqual([])
+  })
+
+  it('renders every UI museum card as a same-DNA experiential preview before opening the spec', async () => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: vi.fn(() => null),
+        setItem: vi.fn(),
+        removeItem: vi.fn(),
+        clear: vi.fn(),
+      },
+    })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(<UIStyleMuseumMacApp />)
+    })
+
+    expect(container.querySelectorAll('.ui-museum__card .ui-museum-card-experience')).toHaveLength(UI_STYLE_ITEMS.length)
+
+    const cardByTitle = (title: string) =>
+      Array.from(container.querySelectorAll('.ui-museum__card')).find((card) => card.textContent?.includes(title))
+
+    expect(cardByTitle('Dither Punk')?.textContent).toContain('Dither Console')
+    expect(cardByTitle('Dither Punk')?.textContent).toContain('BOOT')
+    expect(cardByTitle('Dither Punk')?.textContent).toContain('空白位图等待写入')
+    expect(cardByTitle('Pixel Art')?.textContent).toContain('Pixel Quest')
+    expect(cardByTitle('Pixel Art')?.textContent).toContain('START')
+    expect(cardByTitle('Chromium Liquid')?.textContent).toContain('Chrome Studio')
+    expect(cardByTitle('Chromium Liquid')?.textContent).toContain('Mirror Web')
+    expect(cardByTitle('Anthropic Serif')?.textContent).toContain('Thinking Room')
+    expect(cardByTitle('Blueprint CAD')?.textContent).toContain('Interface Plan')
+    expect(cardByTitle('Kinetic Type')?.textContent).toContain('Type Engine')
+
+    await act(async () => {
+      root.unmount()
+    })
+    container.remove()
+  })
+
+  it('opens a UI museum style into real platform previews instead of text-only specs', async () => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: vi.fn(() => null),
+        setItem: vi.fn(),
+        removeItem: vi.fn(),
+        clear: vi.fn(),
+      },
+    })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(<UIStyleMuseumMacApp />)
+    })
+
+    const chromeCard = Array.from(container.querySelectorAll('.ui-museum__card')).find((card) =>
+      card.textContent?.includes('Chromium Liquid'),
+    )
+    expect(chromeCard?.textContent).toContain('打开真实互动规范')
+
+    const openButton = Array.from(chromeCard?.querySelectorAll('button') || []).find((button) =>
+      button.textContent?.includes('打开真实互动规范'),
+    )
+    expect(openButton).toBeTruthy()
+
+    await act(async () => {
+      openButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(container.textContent).toContain('真实平台互动预览')
+    expect(container.textContent).toContain('Web')
+    expect(container.textContent).toContain('iOS')
+    expect(container.textContent).toContain('macOS')
+    expect(container.textContent).toContain('Android')
+    expect(container.textContent).toContain('小程序')
+    expect(container.textContent).toContain('CHROMIUM LIQUID')
+    expect(container.textContent).toContain('Chrome Studio')
+    expect(container.textContent).toContain('Mirror nav')
+    expect(container.textContent).toContain('镜面待点亮')
+    expect(container.textContent).toContain('工作流：把视觉 token 写入执行模板')
+    expect(container.textContent).toContain('OpenBasaka：保存后进入风格自进化记忆')
+
+    const macButton = Array.from(container.querySelectorAll('.ui-museum__platform-tabs button')).find((button) =>
+      button.textContent?.includes('macOS'),
+    )
+    await act(async () => {
+      macButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(container.textContent).toContain('Toolbar')
+    expect(container.textContent).toContain('Sidebar')
+    expect(container.textContent).toContain('Inspector')
+    expect(container.textContent).toContain('OpenBasaka Evolution')
+
+    await act(async () => {
+      root.unmount()
+    })
+    container.remove()
+  })
+
+  it('keeps 1-bit Dither Punk preview and platform spec on the same style DNA', async () => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: vi.fn(() => null),
+        setItem: vi.fn(),
+        removeItem: vi.fn(),
+        clear: vi.fn(),
+      },
+    })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(<UIStyleMuseumMacApp />)
+    })
+
+    const ditherCard = Array.from(container.querySelectorAll('.ui-museum__card')).find((card) =>
+      card.textContent?.includes('Dither Punk'),
+    )
+    expect(ditherCard?.textContent).toContain('打开真实互动规范')
+
+    const openButton = Array.from(ditherCard?.querySelectorAll('button') || []).find((button) =>
+      button.textContent?.includes('打开真实互动规范'),
+    )
+    expect(openButton).toBeTruthy()
+
+    await act(async () => {
+      openButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(container.textContent).toContain('1-BIT DITHER')
+    expect(container.textContent).toContain('Dither Console')
+    expect(container.textContent).toContain('Atkinson matrix')
+    expect(container.textContent).toContain('空白位图等待写入')
+    expect(container.textContent).toContain('Web 版必须让浏览器框、导航、输入、卡片、空态和按钮都使用 1-bit 黑白、硬边和点阵')
+    expect(container.textContent).toContain('工作流：把视觉 token 写入执行模板')
+    expect(container.textContent).toContain('OpenBasaka：保存后进入风格自进化记忆')
+
+    await act(async () => {
+      root.unmount()
+    })
+    container.remove()
+  })
+
+  it('renders SourceOS guided studio with UI museum DNA and post-parse surfaces', async () => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: vi.fn(() => null),
+        setItem: vi.fn(),
+        removeItem: vi.fn(),
+        clear: vi.fn(),
+      },
+    })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(<BiliHelperMacApp />)
+    })
+
+    expect(container.textContent).toContain('SOURCEOS GUIDED STUDIO')
+    expect(container.textContent).toContain('Remotion Guide')
+    expect(container.textContent).toContain('Agentic OS')
+    expect(container.textContent).toContain('Anthropic Serif')
+
+    const loadSampleButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('载入样例'))
+    expect(loadSampleButton).toBeTruthy()
+
+    await act(async () => {
+      loadSampleButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(container.textContent).toContain('如何把一个 B 站视频变成自己的学习包')
+    expect(container.textContent).toContain('ARTIFACT DASHBOARD')
+    expect(container.textContent).toContain('SOURCE NOTEBOOK')
+    expect(container.textContent).toContain('LEARNING PACK')
+    expect(container.textContent).toContain('覆盖矩阵')
+
+    await act(async () => {
+      root.unmount()
+    })
+    container.remove()
+  })
+
 })

@@ -1,0 +1,397 @@
+.scheduler-tab {
+  height: 100%;
+  overflow-y: auto;
+  padding: var(--hd-space-lg);
+  color: var(--hd-text-secondary);
+}
+
+.scheduler-tab__header {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--hd-space-md);
+  align-items: flex-start;
+  margin-bottom: var(--hd-space-md);
+}
+
+.scheduler-tab__eyebrow {
+  color: var(--hd-accent-cyan);
+  font-family: var(--hd-font-mono);
+  font-size: 0.66rem;
+  letter-spacing: var(--hd-tracking-wide);
+  text-transform: uppercase;
+}
+
+.scheduler-tab__title {
+  margin: 4px 0 6px;
+  color: var(--hd-text-primary);
+  font-family: var(--hd-font-display);
+  font-size: 1.12rem;
+}
+
+.scheduler-tab__subtitle {
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.scheduler-tab__header-actions {
+  display: flex;
+  gap: var(--hd-space-sm);
+  flex-shrink: 0;
+}
+
+.scheduler-tab__overview {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: var(--hd-space-md);
+}
+
+.scheduler-tab__metric {
+  min-height: 94px;
+  border: 1px solid rgba(0, 212, 170, 0.18);
+  background: rgba(0, 212, 170, 0.035);
+  padding: 12px;
+  display: grid;
+  align-content: start;
+  gap: 5px;
+}
+
+.scheduler-tab__metric--notice {
+  border-color: rgba(245, 211, 122, 0.28);
+  background: rgba(245, 211, 122, 0.055);
+}
+
+.scheduler-tab__metric span {
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.72rem;
+}
+
+.scheduler-tab__metric strong {
+  color: var(--hd-text-primary);
+  font-family: var(--hd-font-display);
+  font-size: 1.16rem;
+}
+
+.scheduler-tab__metric small {
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.scheduler-tab__notice {
+  border: 1px solid rgba(0, 212, 170, 0.22);
+  background: rgba(0, 212, 170, 0.05);
+  color: var(--hd-accent-cyan);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.78rem;
+  line-height: 1.55;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+}
+
+.scheduler-tab__empty {
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.82rem;
+  text-align: center;
+  padding: 34px;
+}
+
+.scheduler-tab__task-list,
+.scheduler-tab__log-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hd-space-sm);
+}
+
+.scheduler-tab__task-card {
+  border: 1px solid rgba(0, 212, 170, 0.2);
+  background: rgba(255, 255, 255, 0.022);
+  padding: var(--hd-space-md);
+}
+
+.scheduler-tab__task-card--off {
+  opacity: 0.68;
+}
+
+.scheduler-tab__task-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--hd-space-md);
+  align-items: flex-start;
+}
+
+.scheduler-tab__task-main {
+  min-width: 0;
+}
+
+.scheduler-tab__task-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+.scheduler-tab__task-title {
+  color: var(--hd-text-primary);
+  font-family: var(--hd-font-display);
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
+.scheduler-tab__task-type,
+.scheduler-tab__task-switch {
+  border: 1px solid rgba(0, 212, 170, 0.24);
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-mono);
+  font-size: 0.6rem;
+  padding: 2px 6px;
+}
+
+.scheduler-tab__task-switch--on {
+  border-color: rgba(96, 220, 150, 0.34);
+  color: var(--hd-success);
+}
+
+.scheduler-tab__task-purpose {
+  margin-top: 6px;
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.74rem;
+  line-height: 1.55;
+  max-width: 920px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.scheduler-tab__task-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.scheduler-tab__task-actions .sandbox-map__memory-del-btn {
+  font-size: 0.7rem;
+}
+
+.scheduler-tab__task-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.scheduler-tab__task-grid div {
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(0, 0, 0, 0.13);
+  padding: 8px;
+  min-width: 0;
+}
+
+.scheduler-tab__task-grid span {
+  display: block;
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-mono);
+  font-size: 0.58rem;
+  margin-bottom: 4px;
+}
+
+.scheduler-tab__task-grid strong {
+  display: block;
+  color: var(--hd-text-secondary);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.72rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.scheduler-tab__log-row {
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr) auto auto minmax(0, 220px);
+  gap: 8px;
+  align-items: center;
+  border: 1px solid rgba(0, 212, 170, 0.14);
+  background: rgba(0, 0, 0, 0.12);
+  padding: 8px 10px;
+}
+
+.scheduler-tab__log-status {
+  font-family: var(--hd-font-mono);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.scheduler-tab__log-name {
+  color: var(--hd-text-secondary);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.78rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scheduler-tab__log-meta,
+.scheduler-tab__log-error {
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-mono);
+  font-size: 0.66rem;
+}
+
+.scheduler-tab__log-error {
+  color: var(--hd-error);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scheduler-tab__form-guide {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: var(--hd-space-md);
+}
+
+.scheduler-tab__form-step {
+  border: 1px solid rgba(0, 212, 170, 0.16);
+  background: rgba(0, 212, 170, 0.035);
+  padding: 10px;
+  display: grid;
+  gap: 5px;
+}
+
+.scheduler-tab__form-step--active {
+  border-color: rgba(245, 211, 122, 0.32);
+  background: rgba(245, 211, 122, 0.055);
+}
+
+.scheduler-tab__form-step span {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(0, 212, 170, 0.28);
+  color: var(--hd-accent-cyan);
+  font-family: var(--hd-font-mono);
+  font-size: 0.66rem;
+}
+
+.scheduler-tab__form-step strong {
+  color: var(--hd-text-primary);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.78rem;
+}
+
+.scheduler-tab__form-step small {
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.scheduler-tab__type-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--hd-space-xs);
+}
+
+.scheduler-tab__field-label {
+  color: var(--hd-text-secondary);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.scheduler-tab__field-help {
+  margin-top: 3px;
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.scheduler-tab__workflow-picker {
+  border: 1px solid rgba(0, 212, 170, 0.16);
+  background: rgba(0, 212, 170, 0.035);
+  padding: 12px;
+  margin-bottom: var(--hd-space-sm);
+}
+
+.scheduler-tab__workflow-picker-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--hd-space-sm);
+  margin-bottom: 10px;
+}
+
+.scheduler-tab__workflow-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.scheduler-tab__workflow-option {
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.13);
+  color: var(--hd-text-secondary);
+  padding: 10px;
+  cursor: pointer;
+  display: grid;
+  gap: 5px;
+}
+
+.scheduler-tab__workflow-option--active {
+  border-color: rgba(245, 211, 122, 0.45);
+  background: rgba(245, 211, 122, 0.08);
+}
+
+.scheduler-tab__workflow-option strong {
+  color: var(--hd-text-primary);
+  font-family: var(--hd-font-display);
+  font-size: 0.78rem;
+}
+
+.scheduler-tab__workflow-option span,
+.scheduler-tab__workflow-option small,
+.scheduler-tab__workflow-empty {
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+@media (max-width: 1100px) {
+  .scheduler-tab__overview,
+  .scheduler-tab__task-grid,
+  .scheduler-tab__workflow-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .scheduler-tab__log-row {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .scheduler-tab__header,
+  .scheduler-tab__task-head {
+    flex-direction: column;
+  }
+
+  .scheduler-tab__overview,
+  .scheduler-tab__form-guide,
+  .scheduler-tab__task-grid,
+  .scheduler-tab__workflow-options {
+    grid-template-columns: 1fr;
+  }
+}

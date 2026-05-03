@@ -1,0 +1,560 @@
+.workflow-tab {
+  height: 100%;
+  overflow-y: auto;
+  padding: var(--hd-space-lg);
+  color: var(--hd-text-secondary);
+}
+
+.workflow-tab__header,
+.workflow-tab__panel-head,
+.workflow-tab__target-picker {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--hd-space-md);
+  align-items: flex-start;
+}
+
+.workflow-tab__header {
+  margin-bottom: var(--hd-space-md);
+}
+
+.workflow-tab__header-actions,
+.workflow-tab__actions,
+.workflow-tab__target-buttons,
+.workflow-tab__field-tools,
+.workflow-tab__preset-row,
+.workflow-tab__modal-options,
+.workflow-tab__modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--hd-space-sm);
+}
+
+.workflow-tab__eyebrow {
+  color: var(--hd-accent-cyan);
+  font-family: var(--hd-font-mono);
+  font-size: 0.66rem;
+  letter-spacing: var(--hd-tracking-wide);
+  text-transform: uppercase;
+}
+
+.workflow-tab__header h3 {
+  margin: 4px 0 6px;
+  color: var(--hd-text-primary);
+  font-family: var(--hd-font-display);
+  font-size: 1.12rem;
+}
+
+.workflow-tab__header p,
+.workflow-tab__panel-sub,
+.workflow-tab__field small,
+.workflow-tab__publish-card p,
+.workflow-tab__item small,
+.workflow-tab__item em,
+.workflow-tab__empty,
+.workflow-tab__modal p {
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.workflow-tab__header p {
+  max-width: 780px;
+  margin: 0;
+}
+
+.workflow-tab__loop {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: var(--hd-space-md);
+}
+
+.workflow-tab__loop div,
+.workflow-tab__notice,
+.workflow-tab__panel,
+.workflow-tab__list {
+  border: 1px solid rgba(0, 212, 170, 0.18);
+  background: rgba(255, 255, 255, 0.022);
+}
+
+.workflow-tab__loop div {
+  min-height: 82px;
+  padding: 12px;
+  display: grid;
+  align-content: start;
+  gap: 5px;
+}
+
+.workflow-tab__loop span {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(245, 211, 122, 0.36);
+  color: var(--hd-accent-gold);
+  font-family: var(--hd-font-mono);
+  font-size: 0.66rem;
+}
+
+.workflow-tab__loop strong,
+.workflow-tab__panel-title,
+.workflow-tab__publish-card strong {
+  color: var(--hd-text-primary);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.workflow-tab__loop small {
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.workflow-tab__notice {
+  margin-bottom: var(--hd-space-md);
+  padding: 9px 11px;
+  color: var(--hd-accent-cyan);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.76rem;
+}
+
+.workflow-tab__studio {
+  display: grid;
+  grid-template-columns: minmax(250px, 320px) minmax(0, 1fr);
+  gap: var(--hd-space-md);
+  align-items: start;
+}
+
+.workflow-tab__list,
+.workflow-tab__panel {
+  padding: var(--hd-space-md);
+}
+
+.workflow-tab__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: sticky;
+  top: 0;
+}
+
+.workflow-tab__item {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.12);
+  text-align: left;
+  padding: 10px;
+  display: grid;
+  gap: 5px;
+  cursor: pointer;
+}
+
+.workflow-tab__item--active {
+  border-color: rgba(245, 211, 122, 0.42);
+  background: rgba(245, 211, 122, 0.065);
+}
+
+.workflow-tab__item span,
+.workflow-tab__status-pill {
+  width: fit-content;
+  border: 1px solid rgba(0, 212, 170, 0.22);
+  color: var(--hd-accent-cyan);
+  font-family: var(--hd-font-mono);
+  font-size: 0.58rem;
+  padding: 2px 6px;
+}
+
+.workflow-tab__item strong {
+  color: var(--hd-text-primary);
+  font-family: var(--hd-font-display);
+  font-size: 0.82rem;
+}
+
+.workflow-tab__item em {
+  font-style: normal;
+  color: var(--hd-accent-gold);
+}
+
+.workflow-tab__editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hd-space-md);
+}
+
+.workflow-tab__form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--hd-space-sm);
+  margin-top: var(--hd-space-md);
+}
+
+.workflow-tab__form-grid label,
+.workflow-tab__field,
+.workflow-tab__modal-options label {
+  display: grid;
+  gap: 5px;
+}
+
+.workflow-tab__field {
+  margin-top: var(--hd-space-sm);
+}
+
+.workflow-tab__form-grid span,
+.workflow-tab__field span,
+.workflow-tab__modal-options label {
+  color: var(--hd-text-secondary);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.workflow-tab__field-tools {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.workflow-tab__mono {
+  font-family: var(--hd-font-mono);
+  font-size: 0.72rem;
+}
+
+.workflow-tab__target-picker {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.12);
+  padding: 10px;
+  margin-top: var(--hd-space-sm);
+}
+
+.workflow-tab__target-btn {
+  border: 1px solid rgba(0, 212, 170, 0.18);
+  background: rgba(0, 212, 170, 0.035);
+  color: var(--hd-text-secondary);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.72rem;
+  padding: 6px 9px;
+  cursor: pointer;
+}
+
+.workflow-tab__target-btn--active {
+  border-color: rgba(245, 211, 122, 0.45);
+  color: var(--hd-accent-gold);
+  background: rgba(245, 211, 122, 0.08);
+}
+
+.workflow-tab__actions {
+  margin-top: var(--hd-space-md);
+}
+
+.workflow-tab__output {
+  min-height: 160px;
+  max-height: 360px;
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.16);
+  color: var(--hd-text-secondary);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.76rem;
+  line-height: 1.62;
+  white-space: pre-wrap;
+  padding: 12px;
+}
+
+.workflow-tab__output--compact {
+  min-height: 120px;
+  max-height: 260px;
+}
+
+.workflow-tab__run-dock {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
+  gap: var(--hd-space-md);
+  align-items: stretch;
+  margin: var(--hd-space-sm) 0;
+  border: 1px solid rgba(0, 212, 170, 0.24);
+  background: linear-gradient(135deg, rgba(0, 212, 170, 0.075), rgba(245, 211, 122, 0.035));
+  padding: 12px;
+}
+
+.workflow-tab__run-dock strong {
+  display: block;
+  margin: 4px 0;
+  color: var(--hd-text-primary);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.86rem;
+}
+
+.workflow-tab__run-dock small,
+.workflow-tab__brief-archive small {
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.workflow-tab__run-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.workflow-tab__run-step {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.14);
+  padding: 8px;
+  display: grid;
+  gap: 4px;
+}
+
+.workflow-tab__run-step--active {
+  border-color: rgba(0, 212, 170, 0.35);
+  background: rgba(0, 212, 170, 0.055);
+}
+
+.workflow-tab__run-step span,
+.workflow-tab__brief-archive strong {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(245, 211, 122, 0.35);
+  color: var(--hd-accent-gold);
+  font-family: var(--hd-font-mono);
+  font-size: 0.66rem;
+}
+
+.workflow-tab__run-step strong,
+.workflow-tab__brief-name {
+  color: var(--hd-text-primary);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.workflow-tab__run-step small {
+  color: var(--hd-accent-cyan);
+  font-family: var(--hd-font-mono);
+  font-size: 0.7rem;
+}
+
+.workflow-tab__progress-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: var(--hd-space-sm) 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(0, 212, 170, 0.18);
+  background: rgba(0, 212, 170, 0.035);
+}
+
+.workflow-tab__progress-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+.workflow-tab__progress-dot {
+  width: 6px;
+  height: 6px;
+  margin-top: 7px;
+  border-radius: 50%;
+  background: var(--hd-accent-cyan);
+  box-shadow: 0 0 10px rgba(0, 212, 170, 0.65);
+  flex-shrink: 0;
+}
+
+.workflow-tab__brief-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+  margin: var(--hd-space-sm) 0;
+}
+
+.workflow-tab__brief-card {
+  min-height: 144px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-left: 3px solid rgba(0, 212, 170, 0.75);
+  background: rgba(255, 255, 255, 0.025);
+  padding: 10px;
+}
+
+.workflow-tab__brief-card--error {
+  border-color: rgba(239, 68, 68, 0.36);
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.workflow-tab__brief-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.workflow-tab__brief-avatar {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(0, 212, 170, 0.35);
+  color: var(--hd-accent-cyan);
+  font-family: var(--hd-font-mono);
+  font-size: 0.72rem;
+}
+
+.workflow-tab__brief-kind {
+  margin-top: 2px;
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-mono);
+  font-size: 0.62rem;
+}
+
+.workflow-tab__brief-content {
+  max-height: 190px;
+  overflow-y: auto;
+  color: var(--hd-text-secondary);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.76rem;
+  line-height: 1.62;
+  white-space: pre-wrap;
+}
+
+.workflow-tab__brief-archive {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.5fr);
+  gap: 10px;
+  align-items: center;
+  margin: var(--hd-space-sm) 0;
+  border: 1px solid rgba(0, 212, 170, 0.18);
+  background: rgba(0, 212, 170, 0.035);
+  padding: 10px 12px;
+}
+
+.workflow-tab__brief-archive span {
+  color: var(--hd-text-primary);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.workflow-tab__publish-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: var(--hd-space-md);
+}
+
+.workflow-tab__publish-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.13);
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.workflow-tab__publish-card p {
+  margin: 0;
+  min-height: 50px;
+}
+
+.workflow-tab__empty {
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  padding: 24px;
+  text-align: center;
+}
+
+.workflow-tab__modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 12, 10, 0.76);
+  backdrop-filter: blur(10px);
+}
+
+.workflow-tab__modal {
+  width: min(760px, 100%);
+  max-height: min(86vh, 860px);
+  overflow-y: auto;
+  border: 1px solid rgba(0, 212, 170, 0.24);
+  background: rgba(4, 24, 21, 0.96);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+  padding: var(--hd-space-md);
+}
+
+.workflow-tab__modal-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--hd-space-md);
+  align-items: flex-start;
+  margin-bottom: var(--hd-space-md);
+}
+
+.workflow-tab__modal h4 {
+  margin: 4px 0 6px;
+  color: var(--hd-text-primary);
+  font-family: var(--hd-font-display);
+  font-size: 1rem;
+}
+
+.workflow-tab__modal p {
+  margin: 0;
+}
+
+.workflow-tab__preset-row {
+  align-items: center;
+}
+
+.workflow-tab__modal-options {
+  margin-top: var(--hd-space-sm);
+  justify-content: space-between;
+}
+
+.workflow-tab__modal-options label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.12);
+  padding: 9px 10px;
+}
+
+.workflow-tab__modal-actions {
+  justify-content: flex-end;
+  margin-top: var(--hd-space-md);
+}
+
+@media (max-width: 1200px) {
+  .workflow-tab__publish-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .workflow-tab__loop,
+  .workflow-tab__studio,
+  .workflow-tab__form-grid,
+  .workflow-tab__run-dock,
+  .workflow-tab__run-steps,
+  .workflow-tab__publish-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-tab__header,
+  .workflow-tab__panel-head,
+  .workflow-tab__target-picker {
+    flex-direction: column;
+  }
+
+  .workflow-tab__list {
+    position: static;
+  }
+}

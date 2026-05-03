@@ -110,6 +110,16 @@ export default function TelegramSection({
           <div style={{ fontSize: '0.7rem', color: 'var(--hd-text-muted)' }}>
             命令: /ask 关键词 → 知识库 | /search → 网络搜索 | /status → 系统状态 | 其他 → AI 对话
           </div>
+          <div className="cp__telegram-guide">
+            <strong>超级小白怎么在 Telegram 找到这些？</strong>
+            <ol>
+              <li>找 Bot Token：在 Telegram 搜索 <a href="https://t.me/BotFather" target="_blank" rel="noreferrer">@BotFather</a>，发送 /newbot，按提示取名；最后那串 123456:ABC... 就是 Token，粘到上面的输入框。</li>
+              <li>找机器人入口：BotFather 创建完成后会给你一个 @xxx_bot 用户名；点进去发送 /start，再回到本软件点“连接”。</li>
+              <li>找 Chat ID：先给机器人发任意一句话，再在 Telegram 搜索 <a href="https://t.me/userinfobot" target="_blank" rel="noreferrer">@userinfobot</a> 看自己的 ID；如果是群，把机器人拉进群后发 /status，本软件会自动记住这个群。</li>
+              <li>找 Agent 专属 Bot：每个专家也要重复 /newbot 拿一个新 Token，填到下面对应角色；不填也可以先用全局 Bot。</li>
+            </ol>
+            <span>最小可用流程：@BotFather 创建机器人 → 复制 Token → 粘贴到全局 BOT → 点击连接 → 去 Telegram 给机器人发 /status。</span>
+          </div>
         </div>
 
         {/* 自定义 Agent Bot 管理 */}

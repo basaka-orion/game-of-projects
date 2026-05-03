@@ -3,8 +3,9 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { classifyQimengText, type QimengClassification } from './qimeng-taxonomy-recovered.ts'
 import { maybeRecoverQimengNote, type NotesFallbackRecord } from './qimeng-notes-fallback.ts'
+import { KNOWLEDGE_MASTERS_ROOT } from '../src/lib/knowledge/default-paths.ts'
 
-export const DEFAULT_CORPUS_PATH = '/Users/apple/Documents/Openbasaka_Brain/Wiki'
+export const DEFAULT_CORPUS_PATH = KNOWLEDGE_MASTERS_ROOT
 export const SUPPORTED_EXTENSIONS = new Set(['.md', '.markdown', '.txt'])
 export const DEFAULT_PILOT_PER_WING = 18
 

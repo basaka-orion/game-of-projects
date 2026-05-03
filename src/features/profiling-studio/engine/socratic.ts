@@ -2,7 +2,7 @@
  * AI 苏格拉底对话引擎 V2.0
  *
  * 双模式：
- *   1. 真实 AI — 调用 DeepSeek V3.2 streaming API
+ *   1. 真实 AI — 调用 DeepSeek V4 streaming API
  *   2. Mock 降级 — API 不可用时使用模板驱动对话
  *
  * V2.0: 基于 TopologyProfile（拓扑画像）驱动对话，
@@ -679,4 +679,3 @@ export async function streamRoundtableSageResponse(
     onError,
   }, { temperature: 0.85, maxTokens: 600 });
 }
-

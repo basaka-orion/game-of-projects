@@ -318,6 +318,38 @@
   margin-left: auto;
 }
 
+.cp__telegram-guide {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid rgba(0, 212, 170, 0.22);
+  background: rgba(0, 212, 170, 0.045);
+  color: var(--hd-text-secondary);
+  font-size: 0.72rem;
+  line-height: 1.65;
+}
+
+.cp__telegram-guide strong {
+  color: var(--hd-accent-gold);
+  font-family: var(--hd-font-mono);
+  letter-spacing: var(--hd-tracking-wide);
+}
+
+.cp__telegram-guide ol {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.cp__telegram-guide a {
+  color: var(--hd-accent-cyan);
+  text-decoration: none;
+}
+
+.cp__telegram-guide span {
+  color: var(--hd-text-muted);
+}
+
 /* ─── Skills 管理 ─── */
 .cp__skills {
   display: flex;
@@ -665,6 +697,11 @@
   gap: var(--hd-space-sm);
 }
 
+.cp__provider-grid--compact {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--hd-space-xs);
+}
+
 .cp__provider-card {
   padding: var(--hd-space-md);
   border: 1px solid var(--hd-border);
@@ -920,6 +957,43 @@
   color: var(--hd-accent-cyan);
 }
 
+.cp__agent-tier-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--hd-space-md);
+}
+
+.cp__agent-tier-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hd-space-sm);
+  min-width: 0;
+  padding: var(--hd-space-md);
+  border: 1px solid var(--hd-border);
+  background: var(--hd-bg-surface);
+}
+
+.cp__agent-tier-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: var(--hd-space-xs);
+  border-bottom: 1px solid var(--hd-border);
+}
+
+.cp__agent-tier-head span:first-child {
+  font-family: var(--hd-font-display);
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--hd-accent-cyan);
+}
+
+.cp__agent-tier-head span:last-child {
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--hd-text-muted);
+}
+
 /* 覆盖按钮 */
 .cp__override-btn {
   font-family: var(--hd-font-mono);
@@ -1013,6 +1087,69 @@
   border-color: var(--hd-danger);
   color: var(--hd-danger);
   background: rgba(255, 87, 87, 0.06);
+}
+
+.cp__model-roles {
+  display: grid;
+  gap: var(--hd-space-md);
+}
+
+.cp__model-roles-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--hd-space-md);
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.cp__model-roles-title {
+  color: var(--hd-text-primary);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.cp__model-roles-copy {
+  margin-top: 4px;
+  color: var(--hd-text-muted);
+  font-size: 0.72rem;
+  line-height: 1.6;
+}
+
+.cp__model-role-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.cp__model-role-card {
+  border: 1px solid var(--hd-border);
+  background: rgba(255, 255, 255, 0.025);
+  padding: 12px;
+  display: grid;
+  gap: 7px;
+}
+
+.cp__model-role-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  color: var(--hd-text-primary);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.cp__model-role-model {
+  font-family: var(--hd-font-mono);
+  color: var(--hd-accent-cyan);
+  font-size: 0.78rem;
+}
+
+.cp__model-role-copy,
+.cp__model-role-fallback {
+  color: var(--hd-text-muted);
+  font-size: 0.68rem;
+  line-height: 1.55;
 }
 
 @keyframes verify-fade {

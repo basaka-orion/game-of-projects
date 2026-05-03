@@ -82,6 +82,166 @@
   overflow: hidden;
 }
 
+.teams-tab--chat-focus .teams-tab__header {
+  display: none;
+}
+
+.teams-tab--chat-focus .teams-tab__body {
+  display: block;
+}
+
+.teams-tab--chat-focus .teams-tab__detail {
+  height: 100%;
+  padding: 10px 14px 18px;
+}
+
+.teams-tab__focus-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: -2px 0 10px;
+  padding: 6px 0 8px;
+  background: var(--hd-bg-primary);
+  border-bottom: 1px solid rgba(0, 212, 170, 0.16);
+}
+
+.teams-tab__focus-back {
+  border: 1px solid rgba(0, 212, 170, 0.45);
+  background: rgba(0, 212, 170, 0.06);
+  color: var(--hd-accent-cyan);
+  cursor: pointer;
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.78rem;
+  padding: 5px 10px;
+}
+
+.teams-tab__focus-back:hover {
+  background: var(--hd-accent-cyan);
+  color: var(--hd-bg-deep);
+}
+
+.teams-tab__focus-title {
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.74rem;
+}
+
+.teams-tab__session-dock {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 0.78fr) minmax(160px, 0.24fr);
+  gap: 10px;
+  align-items: stretch;
+  margin-bottom: 12px;
+}
+
+.teams-tab__session-main,
+.teams-tab__session-steps,
+.teams-tab__session-artifact {
+  border: 1px solid rgba(0, 212, 170, 0.18);
+  background: rgba(0, 212, 170, 0.035);
+  padding: 10px 12px;
+}
+
+.teams-tab__session-kicker {
+  color: var(--hd-accent-cyan);
+  font-family: var(--hd-font-mono);
+  font-size: 0.62rem;
+  letter-spacing: var(--hd-tracking-wide);
+  text-transform: uppercase;
+  margin-bottom: 5px;
+}
+
+.teams-tab__session-topic {
+  color: var(--hd-text-primary);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.92rem;
+  font-weight: 800;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.teams-tab__session-sub {
+  margin-top: 5px;
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.72rem;
+}
+
+.teams-tab__session-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.teams-tab__session-step {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.12);
+  padding: 8px;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.teams-tab__session-step span {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(0, 212, 170, 0.22);
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-mono);
+  font-size: 0.62rem;
+}
+
+.teams-tab__session-step strong {
+  color: var(--hd-text-secondary);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.teams-tab__session-step small {
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-mono);
+  font-size: 0.64rem;
+}
+
+.teams-tab__session-step--active {
+  border-color: rgba(245, 211, 122, 0.34);
+  background: rgba(245, 211, 122, 0.055);
+}
+
+.teams-tab__session-step--active span {
+  border-color: rgba(245, 211, 122, 0.45);
+  color: var(--hd-accent-gold);
+}
+
+.teams-tab__session-artifact {
+  display: grid;
+  align-content: center;
+  gap: 6px;
+}
+
+.teams-tab__session-artifact span {
+  color: var(--hd-accent-gold);
+  font-family: var(--hd-font-mono);
+  font-size: 0.62rem;
+  letter-spacing: var(--hd-tracking-wide);
+}
+
+.teams-tab__session-artifact strong {
+  color: var(--hd-text-secondary);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
 /* ─── 左侧团队列表 ─── */
 .teams-tab__list {
   width: 260px;
@@ -244,6 +404,22 @@
   color: var(--hd-text-muted);
 }
 
+.teams-tab__capability-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.teams-tab__capability-chip {
+  border: 1px solid rgba(0, 212, 170, 0.25);
+  color: var(--hd-text-secondary);
+  background: rgba(0, 212, 170, 0.045);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.68rem;
+  padding: 3px 7px;
+}
+
 /* ─── 成员列表 ─── */
 .teams-tab__members {
   margin-bottom: var(--hd-space-md);
@@ -275,6 +451,11 @@
   font-size: 0.75rem;
 }
 
+.teams-tab__member--auto {
+  border-color: rgba(236, 72, 153, 0.35);
+  background: rgba(236, 72, 153, 0.055);
+}
+
 .teams-tab__member-icon {
   font-size: 1rem;
 }
@@ -296,8 +477,44 @@
   margin-bottom: var(--hd-space-md);
 }
 
+.teams-tab__workflow-banner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--hd-space-md);
+  border: 1px solid rgba(0, 212, 170, 0.22);
+  background: rgba(0, 212, 170, 0.04);
+  padding: 9px 11px;
+  margin-bottom: var(--hd-space-sm);
+}
+
+.teams-tab__workflow-title {
+  color: var(--hd-text-primary);
+  font-family: var(--hd-font-display);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.teams-tab__workflow-hint {
+  margin-top: 3px;
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.teams-tab__workflow-mode {
+  flex-shrink: 0;
+  border: 1px solid rgba(0, 212, 170, 0.32);
+  color: var(--hd-accent-cyan);
+  font-family: var(--hd-font-mono);
+  font-size: 0.62rem;
+  padding: 4px 8px;
+}
+
 .teams-tab__chat-input-row {
   display: flex;
+  align-items: flex-end;
   gap: 8px;
   margin-bottom: var(--hd-space-md);
 }
@@ -310,6 +527,11 @@
   font-family: var(--hd-font-cn), var(--hd-font-body);
   font-size: 0.82rem;
   padding: 8px 12px;
+  min-height: 56px;
+  max-height: 220px;
+  line-height: 1.55;
+  resize: vertical;
+  overflow-y: auto;
 }
 
 .teams-tab__chat-input:focus {
@@ -346,45 +568,6 @@
   cursor: not-allowed;
 }
 
-/* ─── 群聊消息 ─── */
-.teams-tab__chat-messages {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-.teams-tab__chat-msg {
-  display: flex;
-  gap: 8px;
-  padding: 8px;
-  border: 1px solid var(--hd-border);
-  background: var(--hd-bg-surface);
-  animation: fade-in 0.3s ease;
-  transition: border-color 0.2s ease;
-}
-
-/* ─── 彩色 Agent 气泡 ─── */
-.teams-tab__chat-msg--colored {
-  border-left: 3px solid var(--agent-color, #00d4aa);
-}
-
-.teams-tab__chat-msg-avatar--colored {
-  border-color: var(--agent-color, #00d4aa) !important;
-  color: var(--agent-color, #00d4aa) !important;
-}
-
-.teams-tab__chat-msg-name--colored {
-  text-transform: none;
-  letter-spacing: normal;
-}
-
-.teams-tab__chat-msg--system {
-  border-color: #ef4444;
-  background: rgba(239, 68, 68, 0.06);
-}
-
 .teams-tab__chat-msg-avatar {
   font-size: 1.1rem;
   flex-shrink: 0;
@@ -398,44 +581,864 @@
   font-size: 0.75rem;
 }
 
-.teams-tab__chat-msg-body {
-  flex: 1;
-  min-width: 0;
+/* ─── 群策过程 ─── */
+.teams-tab__progress-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: var(--hd-space-md);
+  padding: 8px 10px;
+  border: 1px solid rgba(0, 212, 170, 0.18);
+  background: rgba(0, 212, 170, 0.035);
 }
 
-.teams-tab__chat-msg-name {
+.teams-tab__progress-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+.teams-tab__progress-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--hd-accent-cyan);
+  box-shadow: 0 0 10px rgba(0, 212, 170, 0.65);
+  flex-shrink: 0;
+}
+
+/* ─── 角色短评 ─── */
+.teams-tab__brief-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+  margin-bottom: var(--hd-space-md);
+}
+
+.teams-tab__brief-card {
+  border: 1px solid var(--hd-border);
+  border-left: 3px solid var(--agent-color, #00d4aa);
+  background: rgba(255, 255, 255, 0.025);
+  padding: 10px;
+  min-height: 150px;
+  animation: fade-in 0.3s ease;
+}
+
+.teams-tab__brief-card--error {
+  background: rgba(239, 68, 68, 0.06);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.teams-tab__brief-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.teams-tab__brief-name {
   font-family: var(--hd-font-mono);
-  font-size: 0.65rem;
-  color: var(--hd-accent-cyan);
-  margin-bottom: 4px;
-  text-transform: uppercase;
-  letter-spacing: var(--hd-tracking-wide);
+  font-size: 0.72rem;
+  font-weight: 700;
 }
 
-.teams-tab__chat-msg-content {
+.teams-tab__brief-kind {
+  margin-top: 2px;
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-mono);
+  font-size: 0.62rem;
+}
+
+.teams-tab__brief-content {
+  max-height: 190px;
+  overflow-y: auto;
   font-family: var(--hd-font-cn), var(--hd-font-body);
   font-size: 0.78rem;
-  line-height: 1.6;
+  line-height: 1.65;
   color: var(--hd-text-secondary);
   white-space: pre-wrap;
 }
 
-/* ─── 综合结论 ─── */
-.teams-tab__chat-summary {
-  margin-top: var(--hd-space-md);
-  padding-top: var(--hd-space-md);
-  border-top: 1px solid var(--hd-accent-cyan);
+.teams-tab__brief-archive {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.4fr);
+  gap: 10px;
+  align-items: center;
+  margin-bottom: var(--hd-space-md);
+  border: 1px solid rgba(0, 212, 170, 0.18);
+  background: rgba(0, 212, 170, 0.035);
+  padding: 10px 12px;
 }
 
-.teams-tab__chat-summary-text {
-  font-family: var(--hd-font-cn), var(--hd-font-body);
-  font-size: 0.8rem;
-  line-height: 1.6;
+.teams-tab__brief-archive span {
   color: var(--hd-text-primary);
-  padding: var(--hd-space-sm);
-  background: rgba(0, 212, 170, 0.04);
-  border: 1px solid rgba(0, 212, 170, 0.2);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.teams-tab__brief-archive strong {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(245, 211, 122, 0.35);
+  color: var(--hd-accent-gold);
+  font-family: var(--hd-font-mono);
+  font-size: 0.78rem;
+}
+
+.teams-tab__brief-archive small {
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+/* ─── 群策产物 ─── */
+.teams-tab__artifact {
+  margin-top: var(--hd-space-md);
+  border: 1px solid rgba(0, 212, 170, 0.35);
+  background: linear-gradient(180deg, rgba(0, 212, 170, 0.075), rgba(0, 0, 0, 0.06));
+  padding: var(--hd-space-md);
+}
+
+.teams-tab__artifact-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--hd-space-md);
+  margin-bottom: var(--hd-space-sm);
+}
+
+.teams-tab__artifact-meta {
+  margin-top: 4px;
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.72rem;
+}
+
+.teams-tab__artifact-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.teams-tab__artifact-btn {
+  border: 1px solid rgba(0, 212, 170, 0.35);
+  background: rgba(0, 0, 0, 0.15);
+  color: var(--hd-text-secondary);
+  cursor: pointer;
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.72rem;
+  padding: 6px 10px;
+}
+
+.teams-tab__artifact-btn:hover:not(:disabled),
+.teams-tab__artifact-btn--active {
+  color: var(--hd-accent-cyan);
+  border-color: var(--hd-accent-cyan);
+}
+
+.teams-tab__artifact-btn--primary {
+  background: var(--hd-accent-cyan);
+  border-color: var(--hd-accent-cyan);
+  color: var(--hd-bg-deep);
+  font-weight: 700;
+}
+
+.teams-tab__artifact-btn--done,
+.teams-tab__artifact-btn:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+.teams-tab__artifact-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 12px;
+}
+
+.teams-tab__tag-chip {
+  border: 1px solid rgba(0, 212, 170, 0.28);
+  background: rgba(0, 212, 170, 0.08);
+  color: var(--hd-accent-cyan);
+  cursor: pointer;
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.72rem;
+  padding: 5px 8px;
+}
+
+.teams-tab__tag-input {
+  min-width: 120px;
+  border: 1px solid var(--hd-border);
+  background: var(--hd-bg-deep);
+  color: var(--hd-text-primary);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.72rem;
+  padding: 5px 8px;
+}
+
+.teams-tab__tag-input:focus {
+  outline: none;
+  border-color: var(--hd-accent-cyan);
+}
+
+.teams-tab__artifact-text {
+  max-height: 560px;
+  overflow-y: auto;
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.84rem;
+  line-height: 1.75;
+  color: var(--hd-text-primary);
+  padding: var(--hd-space-md);
+  background: rgba(0, 0, 0, 0.16);
+  border: 1px solid rgba(0, 212, 170, 0.16);
   white-space: pre-wrap;
+}
+
+/* ─── 执行链路 ─── */
+.teams-tab__execution-chain {
+  margin-top: var(--hd-space-md);
+  border: 1px solid rgba(0, 212, 170, 0.24);
+  background: rgba(0, 212, 170, 0.035);
+  padding: var(--hd-space-md);
+}
+
+.teams-tab__execution-chain-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--hd-space-md);
+  margin-bottom: var(--hd-space-sm);
+}
+
+.teams-tab__execution-chain-sub {
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.teams-tab__execution-chain-stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.teams-tab__execution-chain-stats span {
+  border: 1px solid rgba(0, 212, 170, 0.26);
+  color: var(--hd-text-secondary);
+  font-family: var(--hd-font-mono);
+  font-size: 0.58rem;
+  padding: 3px 6px;
+}
+
+.teams-tab__execution-chain-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.teams-tab__execution-node {
+  --chain-depth: 0;
+  position: relative;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 9px;
+  margin-left: calc(var(--chain-depth) * 18px);
+  padding: 8px 9px;
+  border: 1px solid rgba(0, 212, 170, 0.16);
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.teams-tab__execution-node--completed {
+  border-color: rgba(16, 185, 129, 0.36);
+}
+
+.teams-tab__execution-node--failed,
+.teams-tab__execution-node--rejected {
+  border-color: rgba(239, 68, 68, 0.36);
+}
+
+.teams-tab__execution-node--high {
+  box-shadow: inset 3px 0 0 rgba(239, 68, 68, 0.55);
+}
+
+.teams-tab__execution-node--medium {
+  box-shadow: inset 3px 0 0 rgba(245, 158, 11, 0.52);
+}
+
+.teams-tab__execution-node-line {
+  position: absolute;
+  left: -11px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(0, 212, 170, 0.16);
+}
+
+.teams-tab__execution-node-index {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(0, 212, 170, 0.32);
+  color: var(--hd-accent-cyan);
+  font-family: var(--hd-font-mono);
+  font-size: 0.62rem;
+}
+
+.teams-tab__execution-node-body {
+  min-width: 0;
+}
+
+.teams-tab__execution-node-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--hd-text-primary);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.teams-tab__execution-node-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 4px;
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-mono);
+  font-size: 0.58rem;
+}
+
+.teams-tab__execution-node-desc {
+  margin-top: 5px;
+  color: var(--hd-text-secondary);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.7rem;
+  line-height: 1.5;
+}
+
+/* ─── 执行动作队列 ─── */
+.teams-tab__action-queue {
+  margin-top: var(--hd-space-md);
+  border: 1px solid rgba(0, 212, 170, 0.28);
+  background: rgba(0, 0, 0, 0.12);
+  padding: var(--hd-space-md);
+}
+
+.teams-tab__action-queue-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--hd-space-md);
+  margin-bottom: var(--hd-space-sm);
+}
+
+.teams-tab__action-queue-sub {
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.teams-tab__action-queue-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.teams-tab__action-queue-tools .teams-tab__artifact-btn {
+  font-size: 0.66rem;
+  padding: 5px 8px;
+}
+
+.teams-tab__action-count {
+  flex-shrink: 0;
+  border: 1px solid rgba(0, 212, 170, 0.34);
+  color: var(--hd-accent-cyan);
+  font-family: var(--hd-font-mono);
+  font-size: 0.64rem;
+  padding: 4px 8px;
+  height: fit-content;
+}
+
+.teams-tab__autopilot-pill {
+  flex-shrink: 0;
+  border: 1px solid rgba(0, 212, 170, 0.42);
+  color: var(--hd-accent-cyan);
+  background: rgba(0, 212, 170, 0.08);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.66rem;
+  padding: 5px 8px;
+  height: fit-content;
+}
+
+.teams-tab__action-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.teams-tab__action-card {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 10px;
+  border: 1px solid rgba(0, 212, 170, 0.18);
+  background: rgba(0, 0, 0, 0.14);
+  padding: 10px;
+}
+
+.teams-tab__action-card--high {
+  border-color: rgba(239, 68, 68, 0.38);
+}
+
+.teams-tab__action-card--medium {
+  border-color: rgba(245, 158, 11, 0.34);
+}
+
+.teams-tab__action-card--completed {
+  background: rgba(16, 185, 129, 0.06);
+}
+
+.teams-tab__action-card--failed,
+.teams-tab__action-card--rejected {
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.teams-tab__action-index {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(0, 212, 170, 0.28);
+  color: var(--hd-accent-cyan);
+  font-family: var(--hd-font-mono);
+  font-size: 0.72rem;
+}
+
+.teams-tab__action-main {
+  min-width: 0;
+}
+
+.teams-tab__action-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.teams-tab__action-title {
+  color: var(--hd-text-primary);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.teams-tab__action-pill {
+  border: 1px solid rgba(0, 212, 170, 0.24);
+  color: var(--hd-text-secondary);
+  font-family: var(--hd-font-mono);
+  font-size: 0.58rem;
+  padding: 2px 6px;
+}
+
+.teams-tab__action-desc {
+  margin-top: 5px;
+  color: var(--hd-text-secondary);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.74rem;
+  line-height: 1.55;
+}
+
+.teams-tab__action-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-mono);
+  font-size: 0.6rem;
+}
+
+.teams-tab__action-params {
+  display: block;
+  margin-top: 7px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--hd-text-muted);
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(0, 212, 170, 0.12);
+  font-family: var(--hd-font-mono);
+  font-size: 0.62rem;
+  padding: 6px;
+}
+
+.teams-tab__action-result {
+  margin-top: 7px;
+  max-height: 140px;
+  overflow-y: auto;
+  color: var(--hd-text-secondary);
+  background: rgba(16, 185, 129, 0.07);
+  border: 1px solid rgba(16, 185, 129, 0.18);
+  font-family: var(--hd-font-mono);
+  font-size: 0.62rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  padding: 7px;
+}
+
+.teams-tab__action-result-badge {
+  display: inline-block;
+  margin-bottom: 6px;
+  border: 1px solid rgba(0, 212, 170, 0.32);
+  color: var(--hd-accent-cyan);
+  background: rgba(0, 212, 170, 0.08);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.62rem;
+  padding: 2px 6px;
+}
+
+.teams-tab__action-result--error {
+  color: #fecaca;
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
+.teams-tab__action-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.teams-tab__action-awaiting {
+  border: 1px solid rgba(245, 158, 11, 0.34);
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.08);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.68rem;
+  line-height: 1.35;
+  padding: 7px 9px;
+  text-align: center;
+}
+
+.teams-tab__action-autopilot {
+  border: 1px solid rgba(0, 212, 170, 0.3);
+  color: var(--hd-accent-cyan);
+  background: rgba(0, 212, 170, 0.07);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.68rem;
+  line-height: 1.35;
+  padding: 7px 9px;
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  .teams-tab__session-dock {
+    grid-template-columns: 1fr;
+  }
+
+  .teams-tab__session-steps {
+    grid-template-columns: 1fr;
+  }
+
+  .teams-tab__action-card {
+    grid-template-columns: 28px minmax(0, 1fr);
+  }
+
+  .teams-tab__action-controls {
+    grid-column: 1 / -1;
+    flex-direction: row;
+  }
+}
+
+/* ─── 协作历史 ─── */
+.teams-tab__history-section {
+  margin-top: var(--hd-space-lg);
+  padding-top: var(--hd-space-md);
+  border-top: 1px solid var(--hd-border);
+}
+
+.teams-tab__history-shell {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.36fr) minmax(0, 0.64fr);
+  gap: var(--hd-space-md);
+  min-height: 360px;
+}
+
+.teams-tab__history-list,
+.teams-tab__history-detail {
+  border: 1px solid rgba(0, 212, 170, 0.16);
+  background: rgba(0, 0, 0, 0.12);
+  min-height: 320px;
+}
+
+.teams-tab__history-list {
+  overflow-y: auto;
+  max-height: 620px;
+}
+
+.teams-tab__history-empty {
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.78rem;
+  padding: var(--hd-space-md);
+}
+
+.teams-tab__history-item {
+  width: 100%;
+  display: block;
+  text-align: left;
+  border: none;
+  border-bottom: 1px solid rgba(0, 212, 170, 0.12);
+  background: transparent;
+  color: var(--hd-text-secondary);
+  cursor: pointer;
+  padding: 10px;
+}
+
+.teams-tab__history-item:hover,
+.teams-tab__history-item--active {
+  background: rgba(0, 212, 170, 0.055);
+}
+
+.teams-tab__history-item--active {
+  border-left: 3px solid var(--hd-accent-cyan);
+}
+
+.teams-tab__history-item-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.teams-tab__history-item-title {
+  color: var(--hd-text-primary);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.teams-tab__history-flags {
+  flex-shrink: 0;
+  color: var(--hd-accent-cyan);
+  font-family: var(--hd-font-mono);
+  font-size: 0.58rem;
+}
+
+.teams-tab__history-item-topic {
+  margin-top: 5px;
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.68rem;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.teams-tab__history-item-meta,
+.teams-tab__history-mini-tags {
+  margin-top: 7px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-mono);
+  font-size: 0.58rem;
+}
+
+.teams-tab__history-mini-tags {
+  color: var(--hd-accent-cyan);
+  opacity: 0.82;
+}
+
+.teams-tab__history-detail {
+  padding: var(--hd-space-md);
+  overflow: hidden;
+}
+
+.teams-tab__history-detail-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--hd-space-md);
+  margin-bottom: var(--hd-space-sm);
+}
+
+.teams-tab__history-title {
+  color: var(--hd-text-primary);
+  font-family: var(--hd-font-display);
+  font-size: 0.96rem;
+  font-weight: 700;
+}
+
+.teams-tab__history-meta,
+.teams-tab__history-label {
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-mono);
+  font-size: 0.62rem;
+  margin-top: 4px;
+}
+
+.teams-tab__history-label {
+  color: var(--hd-accent-cyan);
+  margin: 0 0 6px;
+  text-transform: uppercase;
+  letter-spacing: var(--hd-tracking-wide);
+}
+
+.teams-tab__history-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.teams-tab__history-delete {
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #ef4444;
+}
+
+.teams-tab__history-topic {
+  border: 1px solid rgba(0, 212, 170, 0.12);
+  background: rgba(0, 0, 0, 0.12);
+  color: var(--hd-text-secondary);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.78rem;
+  line-height: 1.6;
+  padding: 9px 10px;
+  margin-bottom: var(--hd-space-sm);
+}
+
+.teams-tab__history-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 0.45fr) minmax(0, 0.55fr);
+  gap: var(--hd-space-sm);
+}
+
+.teams-tab__history-process,
+.teams-tab__history-summary {
+  max-height: 420px;
+  overflow-y: auto;
+  border: 1px solid rgba(0, 212, 170, 0.12);
+  background: rgba(0, 0, 0, 0.14);
+  padding: 10px;
+}
+
+.teams-tab__history-message {
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(0, 212, 170, 0.12);
+}
+
+.teams-tab__history-message:first-child {
+  padding-top: 0;
+}
+
+.teams-tab__history-message:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.teams-tab__history-message-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--hd-accent-cyan);
+  font-family: var(--hd-font-mono);
+  font-size: 0.62rem;
+  margin-bottom: 5px;
+}
+
+.teams-tab__history-message-content,
+.teams-tab__history-summary {
+  color: var(--hd-text-secondary);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.75rem;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.teams-tab__history-summary {
+  color: var(--hd-text-primary);
+}
+
+.teams-tab__history-inline-edit {
+  align-self: flex-start;
+  margin-top: 8px;
+  border: 1px solid rgba(0, 212, 170, 0.28);
+  color: var(--hd-accent-cyan);
+  background: rgba(0, 212, 170, 0.06);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.68rem;
+  padding: 3px 8px;
+}
+
+.teams-tab__history-role-grid {
+  margin: var(--hd-space-md) 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.teams-tab__history-role-heading {
+  grid-column: 1 / -1;
+}
+
+.teams-tab__history-role-card {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 9px;
+  border: 1px solid rgba(0, 212, 170, 0.24);
+  background: rgba(0, 212, 170, 0.045);
+  padding: 10px;
+}
+
+.teams-tab__history-role-index {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(0, 212, 170, 0.34);
+  color: var(--hd-accent-cyan);
+  font-family: var(--hd-font-mono);
+  font-size: 0.66rem;
+}
+
+.teams-tab__history-role-name {
+  color: var(--hd-text-primary);
+  font-family: var(--hd-font-display);
+  font-size: 0.78rem;
+  font-weight: 700;
+  margin-bottom: 5px;
+}
+
+.teams-tab__history-role-content {
+  color: var(--hd-text-secondary);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.72rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.teams-tab__history-summary-edit {
+  min-height: 420px;
+  resize: vertical;
 }
 
 /* ─── 模态框 ─── */
@@ -453,7 +1456,7 @@
 }
 
 .teams-tab__modal {
-  width: 500px;
+  width: min(720px, calc(100vw - 36px));
   max-height: 80vh;
   background: var(--hd-bg-primary);
   border: 1px solid var(--hd-accent-cyan);
@@ -582,6 +1585,107 @@
   border-color: var(--hd-accent-cyan);
   color: var(--hd-accent-cyan);
   background: rgba(0, 212, 170, 0.06);
+}
+
+.teams-tab__workflow-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+  gap: 6px;
+}
+
+.teams-tab__workflow-pick {
+  min-height: 58px;
+  border: 1px solid var(--hd-border);
+  background: transparent;
+  color: var(--hd-text-secondary);
+  cursor: pointer;
+  text-align: left;
+  padding: 8px 9px;
+}
+
+.teams-tab__workflow-pick:hover,
+.teams-tab__workflow-pick--active {
+  border-color: var(--hd-accent-cyan);
+  background: rgba(0, 212, 170, 0.06);
+}
+
+.teams-tab__workflow-pick-title {
+  display: block;
+  color: var(--hd-text-primary);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.teams-tab__workflow-pick-hint {
+  display: block;
+  margin-top: 4px;
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.66rem;
+  line-height: 1.35;
+}
+
+.teams-tab__capability-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.teams-tab__capability-pick {
+  border: 1px solid var(--hd-border);
+  background: transparent;
+  color: var(--hd-text-muted);
+  cursor: pointer;
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.7rem;
+  padding: 5px 9px;
+}
+
+.teams-tab__capability-pick:hover,
+.teams-tab__capability-pick--active {
+  border-color: var(--hd-accent-cyan);
+  color: var(--hd-accent-cyan);
+  background: rgba(0, 212, 170, 0.06);
+}
+
+.teams-tab__execution-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 6px;
+}
+
+.teams-tab__execution-pick {
+  min-height: 68px;
+  border: 1px solid var(--hd-border);
+  background: transparent;
+  color: var(--hd-text-secondary);
+  cursor: pointer;
+  text-align: left;
+  padding: 8px 9px;
+}
+
+.teams-tab__execution-pick:hover,
+.teams-tab__execution-pick--active {
+  border-color: var(--hd-accent-cyan);
+  background: rgba(0, 212, 170, 0.06);
+}
+
+.teams-tab__execution-pick-title {
+  display: block;
+  color: var(--hd-text-primary);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.teams-tab__execution-pick-hint {
+  display: block;
+  margin-top: 4px;
+  color: var(--hd-text-muted);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.64rem;
+  line-height: 1.38;
 }
 
 /* ─── 成员选择器 ─── */
@@ -722,6 +1826,34 @@
   color: #8b5cf6;
 }
 
+.teams-tab__prd-role-briefs {
+  margin-top: var(--hd-space-sm);
+  border: 1px solid rgba(0, 212, 170, 0.22);
+  background: rgba(0, 212, 170, 0.045);
+  padding: 10px;
+}
+
+.teams-tab__prd-role-title {
+  color: var(--hd-accent-cyan);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.74rem;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.teams-tab__prd-role-line {
+  color: var(--hd-text-secondary);
+  font-family: var(--hd-font-cn), var(--hd-font-body);
+  font-size: 0.72rem;
+  line-height: 1.55;
+  padding: 5px 0;
+  border-top: 1px solid rgba(0, 212, 170, 0.1);
+}
+
+.teams-tab__prd-role-line:first-of-type {
+  border-top: 0;
+}
+
 .teams-tab__prd-spinner {
   width: 16px;
   height: 16px;
@@ -732,7 +1864,9 @@
 }
 
 @keyframes prd-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ─── PRD 结果 ─── */

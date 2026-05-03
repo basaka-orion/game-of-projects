@@ -29,7 +29,7 @@ describe('AI Provider', () => {
       const config = getDefaultConfig('deepseek')
       expect(config.provider).toBe('deepseek')
       expect(config.baseUrl).toContain('deepseek.com')
-      expect(config.model).toBe('deepseek-chat')
+      expect(config.model).toBe('deepseek-v4-flash')
     })
 
     it('应该返回 GLM 默认配置', () => {

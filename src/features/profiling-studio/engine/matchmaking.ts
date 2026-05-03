@@ -357,7 +357,7 @@ export async function streamForgeGenesis(
               }
             },
           },
-          { model: 'deepseek/deepseek-v3.2', maxTokens: chDef.maxTokens },
+          { model: 'deepseek-v4-flash', maxTokens: chDef.maxTokens },
         );
       });
 
@@ -472,7 +472,7 @@ export async function streamForgeBlueprint(
           onError(err.message);
         },
       },
-      { model: 'deepseek/deepseek-v3.2' },
+      { model: 'deepseek-v4-flash' },
     );
   } catch (err) {
     onError(err instanceof Error ? err.message : 'AI 服务暂不可用');

@@ -19,6 +19,8 @@ import {
   migrateFromLocalStorage,
 } from './repository'
 
+export type ProjectPriorityLevel = 'low' | 'normal' | 'high' | 'urgent'
+
 const PROJECTS_KEY = 'gop_projects'
 const SETTINGS_KEY = 'gop_settings'
 const BOSS_KEY = 'gop_boss_profile'
@@ -52,6 +54,9 @@ export interface StoredProject {
   recommendation: string
   warLogs: WarRoomLog[]
   rawContent: string
+  isPinned: boolean
+  isStarred: boolean
+  priorityLevel: ProjectPriorityLevel
   createdAt: string
   updatedAt: string
 }
@@ -60,14 +65,15 @@ export interface StoredProject {
 
 function loadProjects(): StoredProject[] {
   try {
-    return JSON.parse(localStorage.getItem(PROJECTS_KEY) || '[]')
+    const projects = JSON.parse(localStorage.getItem(PROJECTS_KEY) || '[]') as Partial<StoredProject>[]
+    return projects.map(normalizeStoredProject).sort(compareProjectsForAttention)
   } catch {
     return []
   }
 }
 
 function saveProjects(projects: StoredProject[]) {
-  localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects))
+  localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects.sort(compareProjectsForAttention)))
 }
 
 // ─── 项目 CRUD（统一接口） ─────────────────────────────────
@@ -96,6 +102,9 @@ export async function saveProject(
     recommendation,
     warLogs,
     rawContent,
+    isPinned: false,
+    isStarred: false,
+    priorityLevel: 'normal',
     createdAt: now,
     updatedAt: now,
   }
@@ -113,6 +122,9 @@ export async function saveProject(
       recommendation: project.recommendation,
       warLogs: project.warLogs,
       rawContent: project.rawContent,
+      isPinned: project.isPinned,
+      isStarred: project.isStarred,
+      priorityLevel: project.priorityLevel,
     })
   } else {
     const projects = loadProjects()
@@ -139,6 +151,9 @@ export async function getAllProjects(): Promise<StoredProject[]> {
       recommendation: row.recommendation,
       warLogs: JSON.parse(row.war_logs_json || '[]'),
       rawContent: row.raw_content,
+      isPinned: !!row.is_pinned,
+      isStarred: !!row.is_starred,
+      priorityLevel: normalizeProjectPriority(row.priority_level),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }))
@@ -163,6 +178,9 @@ export async function getProject(id: string): Promise<StoredProject | undefined>
       recommendation: row.recommendation,
       warLogs: JSON.parse(row.war_logs_json || '[]'),
       rawContent: row.raw_content,
+      isPinned: !!row.is_pinned,
+      isStarred: !!row.is_starred,
+      priorityLevel: normalizeProjectPriority(row.priority_level),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }
@@ -183,7 +201,12 @@ export async function deleteProject(id: string) {
 /** 更新项目可编辑字段 */
 export async function updateProject(
   id: string,
-  updates: Partial<Pick<StoredProject, 'title' | 'oneLiner' | 'tags' | 'summary' | 'recommendation'>>
+  updates: Partial<
+    Pick<
+      StoredProject,
+      'title' | 'oneLiner' | 'tags' | 'summary' | 'recommendation' | 'isPinned' | 'isStarred' | 'priorityLevel'
+    >
+  >,
 ): Promise<void> {
   if (useSQLite) {
     await dbUpdateProject(id, updates)
@@ -195,6 +218,42 @@ export async function updateProject(
       saveProjects(projects)
     }
   }
+}
+
+function normalizeProjectPriority(value?: string): ProjectPriorityLevel {
+  if (value === 'low' || value === 'high' || value === 'urgent') return value
+  return 'normal'
+}
+
+function normalizeStoredProject(project: Partial<StoredProject>): StoredProject {
+  return {
+    id: project.id || generateId(),
+    title: project.title || '未命名项目',
+    oneLiner: project.oneLiner || '',
+    tags: Array.isArray(project.tags) ? project.tags : [],
+    radar: project.radar || ({} as RadarScores),
+    survivalRate: project.survivalRate || 0,
+    survivalGrade: project.survivalGrade || 'F',
+    summary: project.summary || '',
+    recommendation: project.recommendation || '',
+    warLogs: Array.isArray(project.warLogs) ? project.warLogs : [],
+    rawContent: project.rawContent || '',
+    isPinned: !!project.isPinned,
+    isStarred: !!project.isStarred,
+    priorityLevel: normalizeProjectPriority(project.priorityLevel),
+    createdAt: project.createdAt || new Date().toISOString(),
+    updatedAt: project.updatedAt || project.createdAt || new Date().toISOString(),
+  }
+}
+
+function compareProjectsForAttention(a: StoredProject, b: StoredProject): number {
+  const rank: Record<ProjectPriorityLevel, number> = { urgent: 4, high: 3, normal: 2, low: 1 }
+  return (
+    Number(b.isPinned) - Number(a.isPinned) ||
+    rank[b.priorityLevel] - rank[a.priorityLevel] ||
+    Number(b.isStarred) - Number(a.isStarred) ||
+    b.updatedAt.localeCompare(a.updatedAt)
+  )
 }
 
 // ─── 设置（同步兼容 + 异步优先） ───────────────────────────

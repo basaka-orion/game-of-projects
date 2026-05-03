@@ -39,6 +39,9 @@ export function getSchema(): string {
       recommendation TEXT DEFAULT '',
       war_logs_json TEXT DEFAULT '[]',
       raw_content TEXT DEFAULT '',
+      is_pinned INTEGER DEFAULT 0,
+      is_starred INTEGER DEFAULT 0,
+      priority_level TEXT DEFAULT 'normal' CHECK(priority_level IN ('low','normal','high','urgent')),
       created_at TEXT DEFAULT (datetime('now','localtime')),
       updated_at TEXT DEFAULT (datetime('now','localtime'))
     );
@@ -110,6 +113,7 @@ export function getSchema(): string {
 
     CREATE INDEX IF NOT EXISTS idx_projects_created ON projects(created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_projects_survival ON projects(survival_rate DESC);
+    CREATE INDEX IF NOT EXISTS idx_projects_attention ON projects(is_pinned DESC, is_starred DESC, priority_level, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_conversations_updated ON conversations(updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_project_versions_project ON project_versions(project_id, version DESC);
     CREATE INDEX IF NOT EXISTS idx_boss_decisions_project ON boss_decisions(project_id);
@@ -308,6 +312,26 @@ export function getSchema(): string {
       created_at TEXT DEFAULT (datetime('now','localtime'))
     );
 
+    CREATE TABLE IF NOT EXISTS workflow_studio_items (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      goal TEXT DEFAULT '',
+      workflow_type TEXT DEFAULT 'custom',
+      team_id TEXT DEFAULT '',
+      prompt_template TEXT DEFAULT '',
+      steps_json TEXT DEFAULT '[]',
+      target_consumers_json TEXT DEFAULT '[]',
+      status TEXT DEFAULT 'draft',
+      last_test_status TEXT DEFAULT 'idle',
+      last_test_input TEXT DEFAULT '',
+      last_test_output TEXT DEFAULT '',
+      last_optimization_feedback TEXT DEFAULT '',
+      last_optimization_output TEXT DEFAULT '',
+      published_targets_json TEXT DEFAULT '[]',
+      created_at TEXT DEFAULT (datetime('now','localtime')),
+      updated_at TEXT DEFAULT (datetime('now','localtime'))
+    );
+
     -- 技能进化追踪
     CREATE TABLE IF NOT EXISTS skill_evolution (
       skill_id TEXT PRIMARY KEY,
@@ -376,15 +400,43 @@ export function getSchema(): string {
     CREATE TABLE IF NOT EXISTS team_sessions (
       id TEXT PRIMARY KEY,
       team_id TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+      title TEXT DEFAULT '',
       topic TEXT DEFAULT '',
       messages_json TEXT DEFAULT '[]',
       summary TEXT DEFAULT '',
+      tags_json TEXT DEFAULT '[]',
+      is_pinned INTEGER DEFAULT 0,
+      is_starred INTEGER DEFAULT 0,
       status TEXT DEFAULT 'active' CHECK(status IN ('active', 'completed', 'failed')),
       created_at TEXT DEFAULT (datetime('now','localtime')),
       updated_at TEXT DEFAULT (datetime('now','localtime'))
     );
 
     CREATE INDEX IF NOT EXISTS idx_team_sessions_team ON team_sessions(team_id);
+    CREATE INDEX IF NOT EXISTS idx_team_sessions_attention ON team_sessions(team_id, is_pinned DESC, is_starred DESC, updated_at DESC);
+
+    -- 群策执行动作队列
+    CREATE TABLE IF NOT EXISTS team_actions (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL REFERENCES team_sessions(id) ON DELETE CASCADE,
+      team_id TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+      owner_agent_id TEXT DEFAULT '',
+      owner_agent_name TEXT DEFAULT '',
+      capability TEXT DEFAULT 'review',
+      tool_id TEXT DEFAULT 'manual_review',
+      title TEXT DEFAULT '',
+      description TEXT DEFAULT '',
+      params_json TEXT DEFAULT '{}',
+      risk TEXT DEFAULT 'medium' CHECK(risk IN ('low', 'medium', 'high')),
+      requires_approval INTEGER DEFAULT 1,
+      status TEXT DEFAULT 'proposed' CHECK(status IN ('proposed', 'approved', 'running', 'completed', 'failed', 'rejected')),
+      result_json TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now','localtime')),
+      updated_at TEXT DEFAULT (datetime('now','localtime'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_team_actions_session ON team_actions(session_id, status, created_at);
+    CREATE INDEX IF NOT EXISTS idx_team_actions_team ON team_actions(team_id, status, updated_at DESC);
 
     -- ═══ 小白诊断助手 ═══
 
@@ -653,15 +705,21 @@ export function getSchema(): string {
       content TEXT NOT NULL DEFAULT '',
       source_surface TEXT NOT NULL DEFAULT 'openbasaka',
       agent_role TEXT DEFAULT '',
+      target_kind TEXT NOT NULL DEFAULT 'qimeng' CHECK(target_kind IN ('qimeng','knowledge','master')),
+      target_label TEXT DEFAULT '归入启蒙',
+      target_section TEXT DEFAULT 'personal',
       title TEXT DEFAULT '',
       suggested_wing TEXT NOT NULL DEFAULT 'dialogue',
       suggested_hall TEXT NOT NULL DEFAULT 'memory',
       suggested_room TEXT NOT NULL DEFAULT '对话-关键碰撞',
       suggested_tags TEXT DEFAULT '[]',
       suggested_facets TEXT DEFAULT '[]',
+      suggested_targets_json TEXT DEFAULT '[]',
       rationale TEXT DEFAULT '',
       status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','archived','dismissed')),
       archived_drawer_id TEXT DEFAULT '',
+      archived_source_id TEXT DEFAULT '',
+      archived_page_id TEXT DEFAULT '',
       metadata_json TEXT DEFAULT '{}',
       created_at TEXT DEFAULT (datetime('now','localtime')),
       updated_at TEXT DEFAULT (datetime('now','localtime'))
@@ -673,6 +731,70 @@ export function getSchema(): string {
       ON archive_candidates(status, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_archive_candidates_surface
       ON archive_candidates(source_surface, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_archive_candidates_target
+      ON archive_candidates(target_kind, status, updated_at DESC);
+
+    -- 知识＋大佬：从外部高手、项目实践、Hermes/MemPalace 等案例中沉淀可复用方法
+    CREATE TABLE IF NOT EXISTS master_skill_patterns (
+      id TEXT PRIMARY KEY,
+      pattern_name TEXT NOT NULL DEFAULT '',
+      master_name TEXT DEFAULT '',
+      source_title TEXT DEFAULT '',
+      source_url TEXT DEFAULT '',
+      what_it_solves TEXT DEFAULT '',
+      steps_json TEXT DEFAULT '[]',
+      when_to_use_json TEXT DEFAULT '[]',
+      when_not_to_use_json TEXT DEFAULT '[]',
+      related_projects_json TEXT DEFAULT '[]',
+      related_agents_json TEXT DEFAULT '[]',
+      evidence_source_ids_json TEXT DEFAULT '[]',
+      metadata_json TEXT DEFAULT '{}',
+      created_at TEXT DEFAULT (datetime('now','localtime')),
+      updated_at TEXT DEFAULT (datetime('now','localtime'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_master_skill_patterns_master
+      ON master_skill_patterns(master_name, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_master_skill_patterns_updated
+      ON master_skill_patterns(updated_at DESC);
+
+    -- 有机智能系统进化账本：记录每次学习如何影响神经元、突触、技能和下一步行动
+    CREATE TABLE IF NOT EXISTS evolution_events (
+      id TEXT PRIMARY KEY,
+      source_kind TEXT NOT NULL DEFAULT '',
+      source_id TEXT DEFAULT '',
+      event_type TEXT NOT NULL DEFAULT 'learning',
+      learned_what TEXT NOT NULL DEFAULT '',
+      evidence_json TEXT DEFAULT '[]',
+      affected_neuron_ids_json TEXT DEFAULT '[]',
+      suggested_synapses_json TEXT DEFAULT '[]',
+      suggested_skill_pattern_ids_json TEXT DEFAULT '[]',
+      confidence REAL DEFAULT 0.7,
+      next_action TEXT DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','accepted','dismissed','applied')),
+      metadata_json TEXT DEFAULT '{}',
+      created_at TEXT DEFAULT (datetime('now','localtime')),
+      updated_at TEXT DEFAULT (datetime('now','localtime'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_evolution_events_status
+      ON evolution_events(status, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_evolution_events_source
+      ON evolution_events(source_kind, source_id);
+
+    -- 模型角色：把“大脑主模型”和“本地小任务模型”拆成可配置岗位
+    CREATE TABLE IF NOT EXISTS model_roles (
+      role_id TEXT PRIMARY KEY,
+      label TEXT NOT NULL DEFAULT '',
+      provider TEXT NOT NULL DEFAULT '',
+      base_url TEXT DEFAULT '',
+      model TEXT DEFAULT '',
+      api_key_ref TEXT DEFAULT '',
+      fallback_role_id TEXT DEFAULT '',
+      task_hint TEXT DEFAULT '',
+      metadata_json TEXT DEFAULT '{}',
+      updated_at TEXT DEFAULT (datetime('now','localtime'))
+    );
 
     -- 外脑 OS 主循环事件账本：跨启蒙、画像、知识、推演、Agent 的统一追踪层
     CREATE TABLE IF NOT EXISTS operating_events (
@@ -811,10 +933,96 @@ export function getMigrations(): string[] {
     'ALTER TABLE wiki_pages ADD COLUMN folder_path TEXT DEFAULT ""',
     'ALTER TABLE mempalace_drawers ADD COLUMN folder_path TEXT DEFAULT ""',
     'ALTER TABLE wiki_chunks ADD COLUMN folder_path TEXT DEFAULT ""',
+    'ALTER TABLE projects ADD COLUMN is_pinned INTEGER DEFAULT 0',
+    'ALTER TABLE projects ADD COLUMN is_starred INTEGER DEFAULT 0',
+    'ALTER TABLE projects ADD COLUMN priority_level TEXT DEFAULT "normal"',
+    'ALTER TABLE team_sessions ADD COLUMN title TEXT DEFAULT ""',
+    'ALTER TABLE team_sessions ADD COLUMN tags_json TEXT DEFAULT "[]"',
+    'ALTER TABLE team_sessions ADD COLUMN is_pinned INTEGER DEFAULT 0',
+    'ALTER TABLE team_sessions ADD COLUMN is_starred INTEGER DEFAULT 0',
+    'ALTER TABLE archive_candidates ADD COLUMN target_kind TEXT NOT NULL DEFAULT "qimeng"',
+    'ALTER TABLE archive_candidates ADD COLUMN target_label TEXT DEFAULT "归入启蒙"',
+    'ALTER TABLE archive_candidates ADD COLUMN target_section TEXT DEFAULT "personal"',
+    'ALTER TABLE archive_candidates ADD COLUMN suggested_targets_json TEXT DEFAULT "[]"',
+    'ALTER TABLE archive_candidates ADD COLUMN archived_source_id TEXT DEFAULT ""',
+    'ALTER TABLE archive_candidates ADD COLUMN archived_page_id TEXT DEFAULT ""',
     'CREATE INDEX IF NOT EXISTS idx_wiki_sources_folder ON wiki_sources(folder_path)',
     'CREATE INDEX IF NOT EXISTS idx_wiki_pages_folder ON wiki_pages(folder_path)',
     'CREATE INDEX IF NOT EXISTS idx_drawers_folder ON mempalace_drawers(folder_path)',
     'CREATE INDEX IF NOT EXISTS idx_chunks_folder ON wiki_chunks(folder_path)',
+    'CREATE INDEX IF NOT EXISTS idx_projects_attention ON projects(is_pinned DESC, is_starred DESC, priority_level, updated_at DESC)',
+    'CREATE INDEX IF NOT EXISTS idx_team_sessions_attention ON team_sessions(team_id, is_pinned DESC, is_starred DESC, updated_at DESC)',
+    `CREATE TABLE IF NOT EXISTS team_actions (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL REFERENCES team_sessions(id) ON DELETE CASCADE,
+      team_id TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+      owner_agent_id TEXT DEFAULT '',
+      owner_agent_name TEXT DEFAULT '',
+      capability TEXT DEFAULT 'review',
+      tool_id TEXT DEFAULT 'manual_review',
+      title TEXT DEFAULT '',
+      description TEXT DEFAULT '',
+      params_json TEXT DEFAULT '{}',
+      risk TEXT DEFAULT 'medium' CHECK(risk IN ('low', 'medium', 'high')),
+      requires_approval INTEGER DEFAULT 1,
+      status TEXT DEFAULT 'proposed' CHECK(status IN ('proposed', 'approved', 'running', 'completed', 'failed', 'rejected')),
+      result_json TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now','localtime')),
+      updated_at TEXT DEFAULT (datetime('now','localtime'))
+    )`,
+    'CREATE INDEX IF NOT EXISTS idx_team_actions_session ON team_actions(session_id, status, created_at)',
+    'CREATE INDEX IF NOT EXISTS idx_team_actions_team ON team_actions(team_id, status, updated_at DESC)',
+    'CREATE INDEX IF NOT EXISTS idx_archive_candidates_target ON archive_candidates(target_kind, status, updated_at DESC)',
+    `CREATE TABLE IF NOT EXISTS master_skill_patterns (
+      id TEXT PRIMARY KEY,
+      pattern_name TEXT NOT NULL DEFAULT '',
+      master_name TEXT DEFAULT '',
+      source_title TEXT DEFAULT '',
+      source_url TEXT DEFAULT '',
+      what_it_solves TEXT DEFAULT '',
+      steps_json TEXT DEFAULT '[]',
+      when_to_use_json TEXT DEFAULT '[]',
+      when_not_to_use_json TEXT DEFAULT '[]',
+      related_projects_json TEXT DEFAULT '[]',
+      related_agents_json TEXT DEFAULT '[]',
+      evidence_source_ids_json TEXT DEFAULT '[]',
+      metadata_json TEXT DEFAULT '{}',
+      created_at TEXT DEFAULT (datetime('now','localtime')),
+      updated_at TEXT DEFAULT (datetime('now','localtime'))
+    )`,
+    'CREATE INDEX IF NOT EXISTS idx_master_skill_patterns_master ON master_skill_patterns(master_name, updated_at DESC)',
+    'CREATE INDEX IF NOT EXISTS idx_master_skill_patterns_updated ON master_skill_patterns(updated_at DESC)',
+    `CREATE TABLE IF NOT EXISTS evolution_events (
+      id TEXT PRIMARY KEY,
+      source_kind TEXT NOT NULL DEFAULT '',
+      source_id TEXT DEFAULT '',
+      event_type TEXT NOT NULL DEFAULT 'learning',
+      learned_what TEXT NOT NULL DEFAULT '',
+      evidence_json TEXT DEFAULT '[]',
+      affected_neuron_ids_json TEXT DEFAULT '[]',
+      suggested_synapses_json TEXT DEFAULT '[]',
+      suggested_skill_pattern_ids_json TEXT DEFAULT '[]',
+      confidence REAL DEFAULT 0.7,
+      next_action TEXT DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','accepted','dismissed','applied')),
+      metadata_json TEXT DEFAULT '{}',
+      created_at TEXT DEFAULT (datetime('now','localtime')),
+      updated_at TEXT DEFAULT (datetime('now','localtime'))
+    )`,
+    'CREATE INDEX IF NOT EXISTS idx_evolution_events_status ON evolution_events(status, updated_at DESC)',
+    'CREATE INDEX IF NOT EXISTS idx_evolution_events_source ON evolution_events(source_kind, source_id)',
+    `CREATE TABLE IF NOT EXISTS model_roles (
+      role_id TEXT PRIMARY KEY,
+      label TEXT NOT NULL DEFAULT '',
+      provider TEXT NOT NULL DEFAULT '',
+      base_url TEXT DEFAULT '',
+      model TEXT DEFAULT '',
+      api_key_ref TEXT DEFAULT '',
+      fallback_role_id TEXT DEFAULT '',
+      task_hint TEXT DEFAULT '',
+      metadata_json TEXT DEFAULT '{}',
+      updated_at TEXT DEFAULT (datetime('now','localtime'))
+    )`,
   ]
 }
 

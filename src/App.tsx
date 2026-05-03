@@ -18,7 +18,7 @@ const Settings = lazy(() => import('./views/Settings/Settings'))
 type Route = 'openbasaka' | 'ghost' | 'sandbox' | 'profiling' | 'settings'
 
 function getRoute(): Route {
-  const hash = window.location.hash.replace('#/', '')
+  const hash = window.location.hash.replace('#/', '').split('?')[0]
   if (hash === 'sandbox') return 'sandbox'
   if (hash === 'profiling') return 'profiling'
   if (hash === 'ghost') return 'ghost'
@@ -84,6 +84,8 @@ export default function App() {
           import('./lib/boss/anchor'),
         ])
         await initStore()
+        const { registerCronExecutor } = await import('./lib/automation/cron-executor')
+        registerCronExecutor()
         const onboarded = await getSettingAsync('onboarded', 'false')
         if (!alive) return
 

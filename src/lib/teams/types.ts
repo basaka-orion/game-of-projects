@@ -9,6 +9,43 @@
 
 export type TeamType = 'permanent' | 'agency' | 'brainstorm'
 export type TeamStatus = 'active' | 'archived' | 'disbanded'
+export type TeamWorkflowType =
+  | 'prd'
+  | 'research'
+  | 'build'
+  | 'xcode-mac-app'
+  | 'visual-review'
+  | 'automation'
+  | 'custom'
+
+export type AgentCapabilityId =
+  | 'vision'
+  | 'desktop-control'
+  | 'xcode'
+  | 'filesystem'
+  | 'terminal'
+  | 'browser'
+  | 'web-search'
+  | 'codegen'
+  | 'prd'
+  | 'review'
+  | 'telegram'
+
+export type TeamExecutionMode = 'advisory' | 'supervised' | 'autonomous'
+export type TeamActionStatus = 'proposed' | 'approved' | 'running' | 'completed' | 'failed' | 'rejected'
+export type TeamActionRisk = 'low' | 'medium' | 'high'
+export type TeamActionToolId =
+  | 'terminal'
+  | 'file_read'
+  | 'file_write'
+  | 'web_search'
+  | 'web_extract'
+  | 'vision_analyze'
+  | 'desktop_screenshot'
+  | 'desktop_control'
+  | 'xcode_action'
+  | 'execute_code'
+  | 'manual_review'
 
 export interface Team {
   id: string
@@ -35,6 +72,9 @@ export interface TeamConfig {
   tasks?: TeamTask[]
   communicationPattern: 'round-robin' | 'broadcast' | 'sequential'
   temperature?: number
+  workflowType?: TeamWorkflowType
+  capabilities?: AgentCapabilityId[]
+  executionMode?: TeamExecutionMode
 }
 
 export interface TeamTask {
@@ -48,9 +88,13 @@ export interface TeamTask {
 export interface TeamSession {
   id: string
   teamId: string
+  title: string
   topic: string
   messages: TeamMessage[]
   summary: string
+  tags: string[]
+  isPinned: boolean
+  isStarred: boolean
   status: 'active' | 'completed' | 'failed'
   createdAt: string
   updatedAt: string
@@ -64,4 +108,38 @@ export interface TeamMessage {
   content: string
   timestamp: number
   round?: number
+  kind?: 'progress' | 'brief' | 'error' | 'artifact'
+  artifactType?:
+    | 'prd'
+    | 'discussion'
+    | 'research-report'
+    | 'implementation-plan'
+    | 'workflow-plan'
+    | 'visual-review'
+    | 'automation-runbook'
+  tags?: string[]
+}
+
+export interface TeamAction {
+  id: string
+  sessionId: string
+  teamId: string
+  ownerAgentId: string
+  ownerAgentName: string
+  capability: AgentCapabilityId
+  toolId: TeamActionToolId
+  title: string
+  description: string
+  params: Record<string, unknown>
+  risk: TeamActionRisk
+  requiresApproval: boolean
+  status: TeamActionStatus
+  result?: {
+    success: boolean
+    output: string
+    error?: string
+    raw?: unknown
+  }
+  createdAt: string
+  updatedAt: string
 }

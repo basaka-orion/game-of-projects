@@ -97,11 +97,12 @@ const mocked = vi.hoisted(() => {
     }
 
     if (sql.includes("SET status = 'archived'")) {
-      const [drawerId, metadata, id] = params
+      const [drawerId, sourceId, metadata, id] = params
       const row = findCandidateById(String(id))
       if (!row) return
       row.status = 'archived'
       row.archived_drawer_id = drawerId
+      row.archived_source_id = sourceId
       row.metadata_json = metadata
       row.updated_at = '2026-04-22T13:00:00.000Z'
     }

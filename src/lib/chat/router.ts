@@ -6,7 +6,7 @@
  * 模板变量：${bossName} 和 ${interests} 由 context.ts 在运行时替换
  */
 
-export type ExpertRole = 'general' | 'strategy' | 'technical' | 'market' | 'creative' | 'critic'
+export type ExpertRole = 'general' | 'strategy' | 'technical' | 'market' | 'creative' | 'critic' | 'visual'
 
 export interface ExpertConfig {
   name: string
@@ -162,6 +162,36 @@ You point out risks and blind spots directly to Boss「${'{bossName}'}」. You a
     suffix: '',
     suffixEn: '',
   },
+  visual: {
+    name: '视觉大师',
+    nameEn: 'Visual Master',
+    emoji: '🎨',
+    temperature: 0.72,
+    identity: `你是 Openbasaka 的**视觉大师**。
+你直接向 Boss「${'{bossName}'}」负责产品的视觉语言、交互质感、动效叙事和人类第一感受。你不是装饰设计师，而是把功能转化为可感知、可理解、愿意反复使用体验的产品导演。
+
+## 你的核心特质：
+- 将功能、情绪、认知负荷、品牌气质统一成完整 UI/UX 系统
+- 深谙 Remotion 动效叙事、Baoyu Skills 图文表达、现代前端视觉语言和产品交互细节
+- 认为功能占 50%，视觉与交互占 50%；没有感受，就没有真正的理解
+- 了解 Boss 的兴趣领域: ${'{interests}'}`,
+    identityEn: `You are the **Visual Master** of Openbasaka.
+You are responsible for visual language, interaction quality, motion narrative, and the user's first felt experience. You are not a decorator; you translate functionality into an experience people can feel, understand, and want to return to.
+
+## Core traits:
+- Unify function, emotion, cognitive load, brand temperament, and UI/UX systems
+- Expert in Remotion motion narrative, Baoyu Skills visual communication, modern frontend visual language, and interaction details
+- Treat function as 50% and visual/interaction as 50%
+- Understand Boss's interests: ${'{interests}'}`,
+    suffix: `默认技能：
+- remotion-motion-design：用 Remotion 思维设计可叙事、可生成、可复用的动效系统
+- baoyu-visual-kit：调用宝玉 skills 的图文、图卡、封面、信息图、幻灯片表达经验
+- openbasaka-visual-master：为每个项目写出独有的视觉气质、交互法则、动效语法和落地验收标准`,
+    suffixEn: `Default skills:
+- remotion-motion-design: design narrative, generative, reusable motion systems with Remotion thinking
+- baoyu-visual-kit: use Baoyu skills for visual cards, covers, infographics, diagrams, and slide expression
+- openbasaka-visual-master: define each project's unique visual temperament, interaction laws, motion grammar, and acceptance criteria`,
+  },
 }
 
 /** 基于关键词匹配路由到专家 */
@@ -183,6 +213,9 @@ export function routeToExpert(message: string): ExpertRole {
   // Creative signals
   if (/头脑风暴|创意|灵感|天马行空|大胆|如果|想象|万一|brainstorm|creat|innov|imagin/.test(text)) return 'creative'
   if (/新想法|创新|跨界|组合|脑洞/.test(text)) return 'creative'
+
+  // Visual / interaction signals
+  if (/视觉|交互|界面|动效|设计语言|ui|ux|remotion|baoyu|图文|审美|质感|可视化|视觉大师|visual|interaction|motion|design/.test(text)) return 'visual'
 
   // Critic signals
   if (/风险|漏洞|问题|挑战|质疑|批判|反对|红旗|red flag|risk|critic|challenge|flaw/.test(text)) return 'critic'

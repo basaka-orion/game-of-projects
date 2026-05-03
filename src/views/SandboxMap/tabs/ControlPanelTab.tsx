@@ -3,7 +3,8 @@ import StatusBadge from '../../../components/StatusBadge'
 import CollapsibleSection from '../../../components/CollapsibleSection'
 import WarningBanner from '../../../components/WarningBanner'
 import { getSetting, setSetting } from '../../../lib/db/store'
-import { getDefaultConfig, LLMConfig, verifyLLMConfig, resolveAgentConfig } from '../../../lib/ai/provider'
+import { getDefaultConfig, LLMConfig, verifyLLMConfig } from '../../../lib/ai/provider'
+import { getModelRoleConfig, initializeLocalFastModelRoles, MODEL_ROLE_DEFINITIONS } from '../../../lib/ai/model-roles'
 import { getAllExperts, ExpertRole } from '../../../lib/chat/router'
 import {
   listAllAgents,
@@ -24,7 +25,12 @@ import { loadMCPServers, saveMCPServers, getMCPStats, MCPServer, MCPServerStatus
 import './ControlPanelTab.css'
 
 const PROVIDERS = [
-  { id: 'deepseek', name: 'DeepSeek', models: ['deepseek-chat', 'deepseek-reasoner'], defaultModel: 'deepseek-chat' },
+  {
+    id: 'deepseek',
+    name: 'DeepSeek',
+    models: ['deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-chat', 'deepseek-reasoner'],
+    defaultModel: 'deepseek-v4-flash',
+  },
   {
     id: 'minimax',
     name: 'MiniMax',
@@ -32,7 +38,12 @@ const PROVIDERS = [
     defaultModel: 'minimax-M2.7',
   },
   { id: 'glm', name: 'GLM (智谱)', models: ['glm-5.1', 'glm-4-plus', 'glm-4-flash'], defaultModel: 'glm-5.1' },
-  { id: 'ollama', name: 'Ollama (本地)', models: [], defaultModel: 'qwen2.5:14b' },
+  {
+    id: 'ollama',
+    name: 'Ollama (本地)',
+    models: ['gemma3:4b', 'gemma3:1b', 'qwen2.5:14b', 'llama3.2:3b'],
+    defaultModel: 'gemma3:4b',
+  },
   { id: 'custom', name: '自定义', models: [], defaultModel: '' },
 ]
 
@@ -40,6 +51,58 @@ interface Alert {
   id: string
   type: 'warning' | 'error' | 'success' | 'info'
   message: string
+}
+
+type AgentModelTier = 'fast' | 'heavy'
+
+function readAgentModelConfig(role: string, tier: AgentModelTier): LLMConfig | null {
+  const prefix = `agent_${role}_${tier}`
+  const provider = getSetting(`${prefix}_provider`, '')
+  if (!provider) return null
+  const defaults = getDefaultConfig(provider)
+  return {
+    provider: provider as LLMConfig['provider'],
+    apiKey: getSetting(`${prefix}_api_key`, ''),
+    baseUrl: getSetting(`${prefix}_base_url`, defaults.baseUrl),
+    model: getSetting(`${prefix}_model`, defaults.model),
+  }
+}
+
+function readLegacyAgentModelConfig(role: string): LLMConfig | null {
+  const provider = getSetting(`agent_${role}_provider`, '')
+  if (!provider) return null
+  const defaults = getDefaultConfig(provider)
+  return {
+    provider: provider as LLMConfig['provider'],
+    apiKey: getSetting(`agent_${role}_api_key`, ''),
+    baseUrl: getSetting(`agent_${role}_base_url`, defaults.baseUrl),
+    model: getSetting(`agent_${role}_model`, defaults.model),
+  }
+}
+
+function hasAgentModelOverride(role: string): boolean {
+  return !!(
+    getSetting(`agent_${role}_fast_provider`, '') ||
+    getSetting(`agent_${role}_heavy_provider`, '') ||
+    getSetting(`agent_${role}_provider`, '')
+  )
+}
+
+function saveAgentModelConfig(role: string, tier: AgentModelTier, config: LLMConfig): void {
+  const prefix = `agent_${role}_${tier}`
+  const defaults = getDefaultConfig(config.provider)
+  setSetting(`${prefix}_provider`, config.provider)
+  setSetting(`${prefix}_api_key`, config.apiKey)
+  setSetting(`${prefix}_base_url`, config.baseUrl || defaults.baseUrl)
+  setSetting(`${prefix}_model`, config.model || defaults.model)
+}
+
+function clearAgentModelConfig(role: string, tier: AgentModelTier): void {
+  const prefix = `agent_${role}_${tier}`
+  setSetting(`${prefix}_provider`, '')
+  setSetting(`${prefix}_api_key`, '')
+  setSetting(`${prefix}_base_url`, '')
+  setSetting(`${prefix}_model`, '')
 }
 
 export default function ControlPanelTab() {
@@ -72,6 +135,21 @@ export default function ControlPanelTab() {
   const [botStatusList, setBotStatusList] = useState<Array<{ agentId: string; name: string; running: boolean }>>([])
   const [verifyingBot, setVerifyingBot] = useState<string | null>(null)
   const [botVerifyResults, setBotVerifyResults] = useState<Record<string, { ok: boolean; msg: string }>>({})
+  const [tgUserApiId, setTgUserApiId] = useState(() => getSetting('telegram_user_api_id', ''))
+  const [tgUserApiHash, setTgUserApiHash] = useState(() => getSetting('telegram_user_api_hash', ''))
+  const [tgUserPhone, setTgUserPhone] = useState(() => getSetting('telegram_user_phone', ''))
+  const [tgUserCode, setTgUserCode] = useState('')
+  const [tgUserPassword, setTgUserPassword] = useState('')
+  const [tgUserSyncEnabled, setTgUserSyncEnabled] = useState(() => getSetting('telegram_user_sync_enabled', 'false') === 'true')
+  const [tgUserSyncBusy, setTgUserSyncBusy] = useState(false)
+  const [tgUserSyncStatus, setTgUserSyncStatus] = useState<{
+    enabled: boolean
+    configured: boolean
+    authorized: boolean
+    phone: string
+    needsCode: boolean
+    error?: string
+  } | null>(null)
 
   const refreshTgStatus = useCallback(async () => {
     try {
@@ -83,6 +161,11 @@ export default function ControlPanelTab() {
       if (electronAPI?.telegramBotList) {
         const bots = (await electronAPI.telegramBotList()) as Array<{ agentId: string; name: string; running: boolean }>
         setBotStatusList(bots)
+      }
+      if (electronAPI?.telegramUserSyncStatus) {
+        const userStatus = await electronAPI.telegramUserSyncStatus()
+        setTgUserSyncStatus(userStatus)
+        setTgUserSyncEnabled(userStatus.enabled)
       }
     } catch {
       /* ignore */
@@ -139,14 +222,24 @@ export default function ControlPanelTab() {
 
   const [selectedAgent, setSelectedAgent] = useState<string>('__global__')
   const [agentHasOverride, setAgentHasOverride] = useState<Record<string, boolean>>({})
-  const [agentProvider, setAgentProvider] = useState('')
-  const [agentApiKey, setAgentApiKey] = useState('')
-  const [agentBaseUrl, setAgentBaseUrl] = useState('')
-  const [agentModel, setAgentModel] = useState('')
+  const [agentFastProvider, setAgentFastProvider] = useState('')
+  const [agentFastApiKey, setAgentFastApiKey] = useState('')
+  const [agentFastBaseUrl, setAgentFastBaseUrl] = useState('')
+  const [agentFastModel, setAgentFastModel] = useState('')
+  const [agentHeavyProvider, setAgentHeavyProvider] = useState('')
+  const [agentHeavyApiKey, setAgentHeavyApiKey] = useState('')
+  const [agentHeavyBaseUrl, setAgentHeavyBaseUrl] = useState('')
+  const [agentHeavyModel, setAgentHeavyModel] = useState('')
   const [verifyState, setVerifyState] = useState<'idle' | 'testing' | 'success' | 'error'>('idle')
   const [verifyMsg, setVerifyMsg] = useState('')
+  const [verifyingTier, setVerifyingTier] = useState<'global' | AgentModelTier | null>(null)
+  const [, setModelRoleRefreshKey] = useState(0)
 
   const currentProviderInfo = PROVIDERS.find((p) => p.id === provider)
+  const modelRoleConfigs = MODEL_ROLE_DEFINITIONS.map((definition) => ({
+    definition,
+    config: getModelRoleConfig(definition.id),
+  }))
 
   // ─── AI 引擎检测 ───
   const checkEngine = useCallback(async () => {
@@ -242,13 +335,11 @@ export default function ControlPanelTab() {
     // 检测所有角色是否有独立配置（内置 + 自定义）
     const overrides: Record<string, boolean> = {}
     for (const { role } of allExperts) {
-      const agentP = getSetting(`agent_${role}_provider`, '')
-      overrides[role] = !!agentP
+      overrides[role] = hasAgentModelOverride(role)
     }
     // 检测自定义 Agent 是否有独立 LLM 配置
     for (const agent of customAgents) {
-      const agentP = getSetting(`agent_${agent.id}_provider`, '')
-      overrides[agent.id] = !!agentP
+      overrides[agent.id] = hasAgentModelOverride(agent.id)
     }
     setAgentHasOverride(overrides)
   }, [customAgents])
@@ -262,42 +353,75 @@ export default function ControlPanelTab() {
       return
     }
     const role = selectedAgent
-    const hasOverride = !!getSetting(`agent_${role}_provider`, '')
+    const hasOverride = hasAgentModelOverride(role)
     if (hasOverride) {
-      const defaults = getDefaultConfig(getSetting(`agent_${role}_provider`, 'deepseek'))
-      setAgentProvider(getSetting(`agent_${role}_provider`, 'deepseek'))
-      setAgentApiKey(getSetting(`agent_${role}_api_key`, ''))
-      setAgentBaseUrl(getSetting(`agent_${role}_base_url`, defaults.baseUrl))
-      setAgentModel(getSetting(`agent_${role}_model`, defaults.model))
+      const fastConfig = readAgentModelConfig(role, 'fast') || getModelRoleConfig('local_fast')
+      const heavyConfig = readAgentModelConfig(role, 'heavy') || readLegacyAgentModelConfig(role) || getLLMConfig()
+      setAgentFastProvider(fastConfig.provider)
+      setAgentFastApiKey(fastConfig.apiKey)
+      setAgentFastBaseUrl(fastConfig.baseUrl)
+      setAgentFastModel(fastConfig.model)
+      setAgentHeavyProvider(heavyConfig.provider)
+      setAgentHeavyApiKey(heavyConfig.apiKey)
+      setAgentHeavyBaseUrl(heavyConfig.baseUrl)
+      setAgentHeavyModel(heavyConfig.model)
     } else {
-      setAgentProvider('')
-      setAgentApiKey('')
-      setAgentBaseUrl('')
-      setAgentModel('')
+      setAgentFastProvider('')
+      setAgentFastApiKey('')
+      setAgentFastBaseUrl('')
+      setAgentFastModel('')
+      setAgentHeavyProvider('')
+      setAgentHeavyApiKey('')
+      setAgentHeavyBaseUrl('')
+      setAgentHeavyModel('')
     }
   }, [selectedAgent])
 
   // 角色配置验证
-  const handleAgentVerify = useCallback(async () => {
+  const handleAgentVerify = useCallback(async (tier: 'global' | AgentModelTier = 'global') => {
     setVerifyState('testing')
+    setVerifyingTier(tier)
     setVerifyMsg('正在验证连接...')
     let config: LLMConfig
-    if (selectedAgent === '__global__') {
+    if (selectedAgent === '__global__' || tier === 'global') {
       config = getLLMConfig()
-    } else {
-      const p = agentProvider || provider
+    } else if (tier === 'fast') {
+      const p = agentFastProvider || 'ollama'
       const defaults = getDefaultConfig(p)
       config = {
         provider: p as LLMConfig['provider'],
-        apiKey: agentApiKey || apiKey,
-        baseUrl: agentBaseUrl || defaults.baseUrl,
-        model: agentModel || defaults.model,
+        apiKey: agentFastApiKey,
+        baseUrl: agentFastBaseUrl || defaults.baseUrl,
+        model: agentFastModel || defaults.model,
+      }
+    } else {
+      const p = agentHeavyProvider || provider
+      const defaults = getDefaultConfig(p)
+      config = {
+        provider: p as LLMConfig['provider'],
+        apiKey: agentHeavyApiKey || apiKey,
+        baseUrl: agentHeavyBaseUrl || defaults.baseUrl,
+        model: agentHeavyModel || defaults.model,
       }
     }
     const result = await verifyLLMConfig(config)
     setVerifyState(result.ok ? 'success' : 'error')
     setVerifyMsg(result.message)
-  }, [selectedAgent, agentProvider, agentApiKey, agentBaseUrl, agentModel, provider, apiKey, baseUrl, model])
+  }, [
+    selectedAgent,
+    agentFastProvider,
+    agentFastApiKey,
+    agentFastBaseUrl,
+    agentFastModel,
+    agentHeavyProvider,
+    agentHeavyApiKey,
+    agentHeavyBaseUrl,
+    agentHeavyModel,
+    provider,
+    apiKey,
+    baseUrl,
+    model,
+  ])
 
   // 保存角色独立配置
   const handleSaveAgentConfig = useCallback(() => {
@@ -312,21 +436,40 @@ export default function ControlPanelTab() {
       return
     }
     const role = selectedAgent
-    if (agentProvider) {
-      const defaults = getDefaultConfig(agentProvider)
-      setSetting(`agent_${role}_provider`, agentProvider)
-      setSetting(`agent_${role}_api_key`, agentApiKey)
-      setSetting(`agent_${role}_base_url`, agentBaseUrl || defaults.baseUrl)
-      setSetting(`agent_${role}_model`, agentModel || defaults.model)
-      setAgentHasOverride((prev) => ({ ...prev, [role]: true }))
-      flashSaved(`${allAgentEntries.find((e) => e.id === role)?.name || role} 配置已保存`)
+    if (!agentFastProvider || !agentHeavyProvider) return
+
+    const fastDefaults = getDefaultConfig(agentFastProvider)
+    const heavyDefaults = getDefaultConfig(agentHeavyProvider)
+    const fastConfig: LLMConfig = {
+      provider: agentFastProvider as LLMConfig['provider'],
+      apiKey: agentFastApiKey,
+      baseUrl: agentFastBaseUrl || fastDefaults.baseUrl,
+      model: agentFastModel || fastDefaults.model,
     }
+    const heavyConfig: LLMConfig = {
+      provider: agentHeavyProvider as LLMConfig['provider'],
+      apiKey: agentHeavyApiKey,
+      baseUrl: agentHeavyBaseUrl || heavyDefaults.baseUrl,
+      model: agentHeavyModel || heavyDefaults.model,
+    }
+    saveAgentModelConfig(role, 'fast', fastConfig)
+    saveAgentModelConfig(role, 'heavy', heavyConfig)
+    setSetting(`agent_${role}_provider`, heavyConfig.provider)
+    setSetting(`agent_${role}_api_key`, heavyConfig.apiKey)
+    setSetting(`agent_${role}_base_url`, heavyConfig.baseUrl)
+    setSetting(`agent_${role}_model`, heavyConfig.model)
+    setAgentHasOverride((prev) => ({ ...prev, [role]: true }))
+    flashSaved(`${allAgentEntries.find((e) => e.id === role)?.name || role} 快慢模型已保存`)
   }, [
     selectedAgent,
-    agentProvider,
-    agentApiKey,
-    agentBaseUrl,
-    agentModel,
+    agentFastProvider,
+    agentFastApiKey,
+    agentFastBaseUrl,
+    agentFastModel,
+    agentHeavyProvider,
+    agentHeavyApiKey,
+    agentHeavyBaseUrl,
+    agentHeavyModel,
     provider,
     apiKey,
     baseUrl,
@@ -338,18 +481,25 @@ export default function ControlPanelTab() {
   const handleClearAgentConfig = useCallback(() => {
     if (selectedAgent === '__global__') return
     const role = selectedAgent
+    clearAgentModelConfig(role, 'fast')
+    clearAgentModelConfig(role, 'heavy')
     setSetting(`agent_${role}_provider`, '')
     setSetting(`agent_${role}_api_key`, '')
     setSetting(`agent_${role}_base_url`, '')
     setSetting(`agent_${role}_model`, '')
     setAgentHasOverride((prev) => ({ ...prev, [role]: false }))
-    setAgentProvider('')
-    setAgentApiKey('')
-    setAgentBaseUrl('')
-    setAgentModel('')
+    setAgentFastProvider('')
+    setAgentFastApiKey('')
+    setAgentFastBaseUrl('')
+    setAgentFastModel('')
+    setAgentHeavyProvider('')
+    setAgentHeavyApiKey('')
+    setAgentHeavyBaseUrl('')
+    setAgentHeavyModel('')
     setVerifyState('idle')
     setVerifyMsg('')
-    flashSaved(`${allAgentEntries.find((e) => e.id === role)?.name || role} 已恢复全局默认`)
+    setVerifyingTier(null)
+    flashSaved(`${allAgentEntries.find((e) => e.id === role)?.name || role} 已恢复全局快慢模型默认`)
   }, [selectedAgent, allAgentEntries])
 
   const flashSaved = (msg: string) => {
@@ -721,6 +871,45 @@ export default function ControlPanelTab() {
         </div>
       </CollapsibleSection>
 
+      {/* ═══ 模型岗位配置 ═══ */}
+      <CollapsibleSection title="模型岗位" defaultOpen={true} count={MODEL_ROLE_DEFINITIONS.length}>
+        <div className="cp__model-roles">
+          <div className="cp__model-roles-head">
+            <div>
+              <div className="cp__model-roles-title">主脑 + 本地小模型分工</div>
+              <div className="cp__model-roles-copy">
+                小任务默认交给 Ollama 本地模型 gemma3:4b；复杂推理继续走主模型，保证速度和韧性。
+              </div>
+            </div>
+            <button
+              className="cp__g-btn cp__g-btn--success"
+              onClick={() => {
+                initializeLocalFastModelRoles()
+                setModelRoleRefreshKey((value) => value + 1)
+                flashSaved('已把归档、打标、进化复盘接到本地小模型岗位')
+              }}
+            >
+              初始化本地小任务岗位
+            </button>
+          </div>
+          <div className="cp__model-role-grid">
+            {modelRoleConfigs.map(({ definition, config }) => (
+              <div key={definition.id} className="cp__model-role-card">
+                <div className="cp__model-role-top">
+                  <span>{definition.label}</span>
+                  <StatusBadge status={config.provider === 'ollama' ? 'active' : 'inactive'} label={config.provider} />
+                </div>
+                <div className="cp__model-role-model">{config.model}</div>
+                <div className="cp__model-role-copy">{definition.taskHint}</div>
+                {definition.fallbackRoleId && (
+                  <div className="cp__model-role-fallback">fallback: {definition.fallbackRoleId}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </CollapsibleSection>
+
       {/* ═══ 角色 × 模型配置 ═══ */}
       <CollapsibleSection title="角色 × 模型配置" defaultOpen={true} count={allAgentEntries.length + 1}>
         <div className="cp__agent-config">
@@ -822,8 +1011,12 @@ export default function ControlPanelTab() {
                   )}
                 </div>
                 <div className="cp__form-actions">
-                  <button className="cp__verify-btn" onClick={handleAgentVerify} disabled={verifyState === 'testing'}>
-                    {verifyState === 'testing' ? '⚙️ 验证中...' : '🔍 验证连接'}
+                  <button
+                    className="cp__verify-btn"
+                    onClick={() => handleAgentVerify('global')}
+                    disabled={verifyState === 'testing'}
+                  >
+                    {verifyState === 'testing' && verifyingTier === 'global' ? '⚙️ 验证中...' : '🔍 验证连接'}
                   </button>
                   <button className="cp__save-btn" onClick={handleSaveAgentConfig}>
                     💾 保存
@@ -854,115 +1047,210 @@ export default function ControlPanelTab() {
               {!agentHasOverride[selectedAgent] && (
                 <div className="cp__agent-global-info">
                   <p>
-                    当前使用全局配置：<strong>{currentProviderInfo?.name || provider}</strong> /{' '}
-                    <strong>{model || '未设置'}</strong>
+                    当前复杂任务使用全局配置：<strong>{currentProviderInfo?.name || provider}</strong> /{' '}
+                    <strong>{model || '未设置'}</strong>；轻量任务继承模型岗位里的本地小任务配置。
                   </p>
                   <button
                     className="cp__override-btn"
                     onClick={() => {
-                      setAgentProvider(provider)
-                      setAgentApiKey(apiKey)
-                      setAgentBaseUrl(baseUrl)
-                      setAgentModel(model)
+                      const fastConfig = getModelRoleConfig('local_fast')
+                      setAgentFastProvider(fastConfig.provider)
+                      setAgentFastApiKey(fastConfig.apiKey)
+                      setAgentFastBaseUrl(fastConfig.baseUrl)
+                      setAgentFastModel(fastConfig.model)
+                      setAgentHeavyProvider(provider)
+                      setAgentHeavyApiKey(apiKey)
+                      setAgentHeavyBaseUrl(baseUrl)
+                      setAgentHeavyModel(model)
                       setAgentHasOverride((prev) => ({ ...prev, [selectedAgent]: true }))
                     }}
                   >
-                    ✱ 为此角色设置独立配置
+                    ✱ 为此角色设置快慢模型
                   </button>
                 </div>
               )}
 
               {agentHasOverride[selectedAgent] && (
                 <>
-                  <div className="cp__provider-grid">
-                    {PROVIDERS.map((p) => {
-                      const isActive = agentProvider === p.id
-                      return (
-                        <div
-                          key={p.id}
-                          className={`cp__provider-card ${isActive ? 'cp__provider-card--active' : ''}`}
-                          onClick={() => {
-                            setAgentProvider(p.id)
-                            const defaults = getDefaultConfig(p.id)
-                            setAgentBaseUrl(defaults.baseUrl)
-                            setAgentModel(defaults.model)
-                          }}
-                        >
-                          <span className="cp__provider-name">{p.name}</span>
-                          {isActive && <StatusBadge status="active" label="✓" />}
-                        </div>
-                      )
-                    })}
-                  </div>
-                  <div className="cp__model-form">
-                    <div className="cp__field">
-                      <label className="cp__label">API Key</label>
-                      <input
-                        className="cp__input"
-                        type="password"
-                        value={agentApiKey}
-                        onChange={(e) => setAgentApiKey(e.target.value)}
-                        placeholder={agentProvider === 'ollama' ? '本地无需 Key' : 'sk-...'}
-                      />
-                    </div>
-                    <div className="cp__field">
-                      <label className="cp__label">Base URL</label>
-                      <input
-                        className="cp__input"
-                        value={agentBaseUrl}
-                        onChange={(e) => setAgentBaseUrl(e.target.value)}
-                        placeholder={getDefaultConfig(agentProvider || 'deepseek').baseUrl}
-                      />
-                    </div>
-                    <div className="cp__field">
-                      <label className="cp__label">Model</label>
-                      {(() => {
-                        const agentProviderInfo = PROVIDERS.find((p) => p.id === agentProvider)
-                        return agentProviderInfo && agentProviderInfo.models.length > 0 ? (
-                          <select
-                            className="cp__select"
-                            value={agentModel}
-                            onChange={(e) => setAgentModel(e.target.value)}
-                          >
-                            {agentProviderInfo.models.map((m) => (
-                              <option key={m} value={m}>
-                                {m}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
+                  <div className="cp__agent-tier-grid">
+                    <div className="cp__agent-tier-card">
+                      <div className="cp__agent-tier-head">
+                        <span>轻量模型</span>
+                        <span>短回应 / 回忆 / 状态 / 低风险草稿</span>
+                      </div>
+                      <div className="cp__provider-grid cp__provider-grid--compact">
+                        {PROVIDERS.map((p) => {
+                          const isActive = agentFastProvider === p.id
+                          return (
+                            <div
+                              key={p.id}
+                              className={`cp__provider-card ${isActive ? 'cp__provider-card--active' : ''}`}
+                              onClick={() => {
+                                setAgentFastProvider(p.id)
+                                const defaults = getDefaultConfig(p.id)
+                                setAgentFastBaseUrl(defaults.baseUrl)
+                                setAgentFastModel(defaults.model)
+                              }}
+                            >
+                              <span className="cp__provider-name">{p.name}</span>
+                              {isActive && <StatusBadge status="active" label="✓" />}
+                            </div>
+                          )
+                        })}
+                      </div>
+                      <div className="cp__model-form">
+                        <div className="cp__field">
+                          <label className="cp__label">API Key</label>
                           <input
                             className="cp__input"
-                            value={agentModel}
-                            onChange={(e) => setAgentModel(e.target.value)}
-                            placeholder={PROVIDERS.find((p) => p.id === agentProvider)?.defaultModel || 'model-name'}
+                            type="password"
+                            value={agentFastApiKey}
+                            onChange={(e) => setAgentFastApiKey(e.target.value)}
+                            placeholder={agentFastProvider === 'ollama' ? '本地无需 Key' : 'sk-...'}
                           />
-                        )
-                      })()}
-                    </div>
-                    <div className="cp__form-actions">
-                      <button
-                        className="cp__verify-btn"
-                        onClick={handleAgentVerify}
-                        disabled={verifyState === 'testing'}
-                      >
-                        {verifyState === 'testing' ? '⚙️ 验证中...' : '🔍 验证连接'}
-                      </button>
-                      <button className="cp__save-btn" onClick={handleSaveAgentConfig}>
-                        💾 保存
-                      </button>
-                      <button className="cp__clear-btn" onClick={handleClearAgentConfig}>
-                        🗑 清除独立配置
-                      </button>
-                    </div>
-                    {verifyMsg && (
-                      <div
-                        className={`cp__verify-result ${verifyState === 'success' ? 'cp__verify-result--ok' : verifyState === 'error' ? 'cp__verify-result--fail' : ''}`}
-                      >
-                        {verifyMsg}
+                        </div>
+                        <div className="cp__field">
+                          <label className="cp__label">Base URL</label>
+                          <input
+                            className="cp__input"
+                            value={agentFastBaseUrl}
+                            onChange={(e) => setAgentFastBaseUrl(e.target.value)}
+                            placeholder={getDefaultConfig(agentFastProvider || 'ollama').baseUrl}
+                          />
+                        </div>
+                        <div className="cp__field">
+                          <label className="cp__label">Model</label>
+                          {(() => {
+                            const agentProviderInfo = PROVIDERS.find((p) => p.id === agentFastProvider)
+                            return agentProviderInfo && agentProviderInfo.models.length > 0 ? (
+                              <select
+                                className="cp__select"
+                                value={agentFastModel}
+                                onChange={(e) => setAgentFastModel(e.target.value)}
+                              >
+                                {agentProviderInfo.models.map((m) => (
+                                  <option key={m} value={m}>
+                                    {m}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <input
+                                className="cp__input"
+                                value={agentFastModel}
+                                onChange={(e) => setAgentFastModel(e.target.value)}
+                                placeholder={PROVIDERS.find((p) => p.id === agentFastProvider)?.defaultModel || 'model-name'}
+                              />
+                            )
+                          })()}
+                        </div>
+                        <button
+                          className="cp__verify-btn"
+                          onClick={() => handleAgentVerify('fast')}
+                          disabled={verifyState === 'testing'}
+                        >
+                          {verifyState === 'testing' && verifyingTier === 'fast' ? '⚙️ 验证中...' : '🔍 验证轻量模型'}
+                        </button>
                       </div>
-                    )}
+                    </div>
+
+                    <div className="cp__agent-tier-card">
+                      <div className="cp__agent-tier-head">
+                        <span>复杂模型</span>
+                        <span>产品 / 项目 / APP / PRD / 架构 / 深度分析</span>
+                      </div>
+                      <div className="cp__provider-grid cp__provider-grid--compact">
+                        {PROVIDERS.map((p) => {
+                          const isActive = agentHeavyProvider === p.id
+                          return (
+                            <div
+                              key={p.id}
+                              className={`cp__provider-card ${isActive ? 'cp__provider-card--active' : ''}`}
+                              onClick={() => {
+                                setAgentHeavyProvider(p.id)
+                                const defaults = getDefaultConfig(p.id)
+                                setAgentHeavyBaseUrl(defaults.baseUrl)
+                                setAgentHeavyModel(defaults.model)
+                              }}
+                            >
+                              <span className="cp__provider-name">{p.name}</span>
+                              {isActive && <StatusBadge status="active" label="✓" />}
+                            </div>
+                          )
+                        })}
+                      </div>
+                      <div className="cp__model-form">
+                        <div className="cp__field">
+                          <label className="cp__label">API Key</label>
+                          <input
+                            className="cp__input"
+                            type="password"
+                            value={agentHeavyApiKey}
+                            onChange={(e) => setAgentHeavyApiKey(e.target.value)}
+                            placeholder={agentHeavyProvider === 'ollama' ? '本地无需 Key' : 'sk-...'}
+                          />
+                        </div>
+                        <div className="cp__field">
+                          <label className="cp__label">Base URL</label>
+                          <input
+                            className="cp__input"
+                            value={agentHeavyBaseUrl}
+                            onChange={(e) => setAgentHeavyBaseUrl(e.target.value)}
+                            placeholder={getDefaultConfig(agentHeavyProvider || 'deepseek').baseUrl}
+                          />
+                        </div>
+                        <div className="cp__field">
+                          <label className="cp__label">Model</label>
+                          {(() => {
+                            const agentProviderInfo = PROVIDERS.find((p) => p.id === agentHeavyProvider)
+                            return agentProviderInfo && agentProviderInfo.models.length > 0 ? (
+                              <select
+                                className="cp__select"
+                                value={agentHeavyModel}
+                                onChange={(e) => setAgentHeavyModel(e.target.value)}
+                              >
+                                {agentProviderInfo.models.map((m) => (
+                                  <option key={m} value={m}>
+                                    {m}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <input
+                                className="cp__input"
+                                value={agentHeavyModel}
+                                onChange={(e) => setAgentHeavyModel(e.target.value)}
+                                placeholder={PROVIDERS.find((p) => p.id === agentHeavyProvider)?.defaultModel || 'model-name'}
+                              />
+                            )
+                          })()}
+                        </div>
+                        <button
+                          className="cp__verify-btn"
+                          onClick={() => handleAgentVerify('heavy')}
+                          disabled={verifyState === 'testing'}
+                        >
+                          {verifyState === 'testing' && verifyingTier === 'heavy' ? '⚙️ 验证中...' : '🔍 验证复杂模型'}
+                        </button>
+                      </div>
+                    </div>
                   </div>
+
+                  <div className="cp__form-actions">
+                    <button className="cp__save-btn" onClick={handleSaveAgentConfig}>
+                      💾 保存快慢模型
+                    </button>
+                    <button className="cp__clear-btn" onClick={handleClearAgentConfig}>
+                      🗑 清除独立配置
+                    </button>
+                  </div>
+                  {verifyMsg && (
+                    <div
+                      className={`cp__verify-result ${verifyState === 'success' ? 'cp__verify-result--ok' : verifyState === 'error' ? 'cp__verify-result--fail' : ''}`}
+                    >
+                      {verifyMsg}
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -1022,6 +1310,132 @@ export default function ControlPanelTab() {
             />
             <div style={{ fontSize: '0.7rem', color: 'var(--hd-text-muted)' }}>
               命令: /ask 关键词 → 知识库 | /search → 网络搜索 | /status → 系统状态 | 其他 → AI 对话
+            </div>
+          </div>
+
+          <div className="cp__channel-card" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className="cp__channel-icon">👤</span>
+                <span className="cp__channel-name">Telegram User Sync</span>
+                <StatusBadge
+                  status={tgUserSyncStatus?.authorized && tgUserSyncEnabled ? 'active' : 'inactive'}
+                  label={tgUserSyncStatus?.authorized && tgUserSyncEnabled ? '用户侧已同步' : '未登录用户侧'}
+                />
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem' }}>
+                <input
+                  type="checkbox"
+                  checked={tgUserSyncEnabled}
+                  onChange={(event) => {
+                    const enabled = event.target.checked
+                    setTgUserSyncEnabled(enabled)
+                    setSetting('telegram_user_sync_enabled', enabled ? 'true' : 'false')
+                  }}
+                />
+                启用用户气泡同步
+              </label>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <input
+                className="cp__input"
+                placeholder="Telegram API ID"
+                value={tgUserApiId}
+                onChange={(e) => setTgUserApiId(e.target.value)}
+                onBlur={() => setSetting('telegram_user_api_id', tgUserApiId)}
+              />
+              <input
+                className="cp__input"
+                type="password"
+                placeholder="Telegram API Hash"
+                value={tgUserApiHash}
+                onChange={(e) => setTgUserApiHash(e.target.value)}
+                onBlur={() => setSetting('telegram_user_api_hash', tgUserApiHash)}
+              />
+              <input
+                className="cp__input"
+                placeholder="手机号，如 +8613800000000"
+                value={tgUserPhone}
+                onChange={(e) => setTgUserPhone(e.target.value)}
+                onBlur={() => setSetting('telegram_user_phone', tgUserPhone)}
+              />
+              <button
+                className="cp__btn"
+                disabled={tgUserSyncBusy || !tgUserApiId.trim() || !tgUserApiHash.trim() || !tgUserPhone.trim()}
+                onClick={async () => {
+                  setTgUserSyncBusy(true)
+                  try {
+                    const status = await window.electronAPI?.telegramUserSyncRequestCode?.({
+                      apiId: tgUserApiId.trim(),
+                      apiHash: tgUserApiHash.trim(),
+                      phone: tgUserPhone.trim(),
+                      enabled: tgUserSyncEnabled,
+                    })
+                    if (status) setTgUserSyncStatus(status)
+                  } finally {
+                    setTgUserSyncBusy(false)
+                  }
+                }}
+              >
+                {tgUserSyncBusy ? '发送中...' : '发送登录码'}
+              </button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8 }}>
+              <input
+                className="cp__input"
+                placeholder="Telegram 登录码"
+                value={tgUserCode}
+                onChange={(e) => setTgUserCode(e.target.value)}
+              />
+              <input
+                className="cp__input"
+                type="password"
+                placeholder="2FA 密码（如有）"
+                value={tgUserPassword}
+                onChange={(e) => setTgUserPassword(e.target.value)}
+              />
+              <button
+                className="cp__btn"
+                disabled={tgUserSyncBusy || !tgUserCode.trim()}
+                onClick={async () => {
+                  setTgUserSyncBusy(true)
+                  try {
+                    const status = await window.electronAPI?.telegramUserSyncConfirmCode?.({
+                      code: tgUserCode.trim(),
+                      password: tgUserPassword,
+                    })
+                    if (status) {
+                      setTgUserSyncStatus(status)
+                      if (status.authorized) {
+                        setTgUserCode('')
+                        setTgUserPassword('')
+                      }
+                    }
+                  } finally {
+                    setTgUserSyncBusy(false)
+                  }
+                }}
+              >
+                确认登录
+              </button>
+            </div>
+            <div style={{ fontSize: '0.7rem', color: tgUserSyncStatus?.error ? 'var(--hd-danger)' : 'var(--hd-text-muted)' }}>
+              {tgUserSyncStatus?.error
+                ? `用户侧同步错误: ${tgUserSyncStatus.error}`
+                : '用途：Openbasaka 的 Boss 输入会用你的 Telegram 用户账号发给对应 bot，Telegram 里就会出现真实用户气泡。'}
+            </div>
+            <div className="cp__telegram-guide">
+              <strong>小白找这些参数：</strong>
+              <ol>
+                <li>
+                  打开 <a href="https://my.telegram.org" target="_blank" rel="noreferrer">my.telegram.org</a>，用你的 Telegram 手机号登录。
+                </li>
+                <li>进入 API development tools；没有应用就新建一个，App title 和 Short name 随便取一个你能认出的名字。</li>
+                <li>页面生成后，把 api_id 填到 Telegram API ID，把 api_hash 填到 Telegram API Hash。</li>
+                <li>手机号要带国家区号，例如 +8613800000000；登录码会发到你的 Telegram 官方聊天里，不是短信。</li>
+                <li>如果你的 Telegram 开了两步验证，再把那个 2FA 密码填到最后一格。</li>
+              </ol>
+              <span>Bot Token 是 @BotFather 给 bot 用的；这里的 API ID / Hash 是你的用户账号授权用的，两者不是同一个东西。</span>
             </div>
           </div>
 

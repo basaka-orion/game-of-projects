@@ -9,7 +9,7 @@ interface OnboardingProps {
 }
 
 const PROVIDERS = [
-  { id: 'deepseek', name: 'DeepSeek', desc: '国产顶级推理 · V3.2' },
+  { id: 'deepseek', name: 'DeepSeek', desc: 'V4 Flash · 快速轻量' },
   { id: 'minimax', name: 'MiniMax', desc: '多模态长文本' },
   { id: 'glm', name: '智谱 GLM', desc: 'GLM-5.1 · 最新旗舰模型' },
   { id: 'ollama', name: 'Ollama', desc: '本地私有 · 零成本' },

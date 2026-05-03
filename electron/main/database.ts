@@ -26,16 +26,30 @@ export function getDatabase(): Database.Database {
   db.pragma('synchronous = NORMAL')
   db.pragma('foreign_keys = ON')
 
-  // 初始化所有表
-  db.exec(getSchema())
+  // 初始化所有表。旧库可能缺少新列，而 schema 里的新索引会先引用这些列；
+  // 所以这里允许第一次 schema 部分失败，随后先跑列迁移，再做一次完整收口。
+  try {
+    db.exec(getSchema())
+  } catch (err) {
+    console.warn('[database] Schema initialization deferred until migrations finish:', err)
+  }
 
   // 安全迁移（幂等）
   for (const sql of getMigrations()) {
     try {
       db.exec(sql)
-    } catch {
-      /* 列已存在，忽略 */
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (!message.includes('duplicate column name') && !message.includes('already exists')) {
+        console.warn('[database] Migration skipped:', sql, err)
+      }
     }
+  }
+
+  try {
+    db.exec(getSchema())
+  } catch (err) {
+    console.warn('[database] Schema finalization skipped:', err)
   }
 
   // 复杂迁移（重建表等，仅在标记文件不存在时执行）

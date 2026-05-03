@@ -6,7 +6,7 @@ import SearchStatsBar from '../../../components/SearchStatsBar'
 import EmptyState from '../../../components/EmptyState'
 import StatusBadge from '../../../components/StatusBadge'
 import CollapsibleSection from '../../../components/CollapsibleSection'
-import { updateProject, type StoredProject } from '../../../lib/db/store'
+import { deleteProject, updateProject, type ProjectPriorityLevel, type StoredProject } from '../../../lib/db/store'
 import { NeuronData } from '../SandboxMap'
 import { listAllAgents, AgentDefinition } from '../../../lib/agents/registry'
 import { getAgentPerspective } from '../../../lib/ai/agent-perspective'
@@ -17,8 +17,22 @@ interface NeuronsTabProps {
   neurons: NeuronData[]
   loading: boolean
   selectedId: string | null
-  setSelectedId: (id: string) => void
+  setSelectedId: (id: string | null) => void
   onReload?: () => void
+}
+
+const PRIORITY_LABELS: Record<ProjectPriorityLevel, string> = {
+  low: '低',
+  normal: '普通',
+  high: '高',
+  urgent: '最高',
+}
+
+const PRIORITY_TONES: Record<ProjectPriorityLevel, 'danger' | 'warning' | 'accent' | undefined> = {
+  low: undefined,
+  normal: 'accent',
+  high: 'warning',
+  urgent: 'danger',
 }
 
 export default function NeuronsTab({ neurons, loading, selectedId, setSelectedId, onReload }: NeuronsTabProps) {
@@ -27,6 +41,7 @@ export default function NeuronsTab({ neurons, loading, selectedId, setSelectedId
   const [editTitle, setEditTitle] = useState('')
   const [editOneLiner, setEditOneLiner] = useState('')
   const [editTags, setEditTags] = useState('')
+  const [editPriority, setEditPriority] = useState<ProjectPriorityLevel>('normal')
 
   // Agent 视角评估
   const [agents, setAgents] = useState<AgentDefinition[]>([])
@@ -53,6 +68,8 @@ export default function NeuronsTab({ neurons, loading, selectedId, setSelectedId
 
   const highCount = neurons.filter(n => n.project.survivalRate >= 75).length
   const lowCount = neurons.filter(n => n.project.survivalRate < 50).length
+  const pinnedCount = neurons.filter(n => n.project.isPinned).length
+  const urgentCount = neurons.filter(n => n.project.priorityLevel === 'urgent').length
 
   const selected = useMemo(
     () => neurons.find(n => n.project.id === selectedId),
@@ -77,6 +94,7 @@ export default function NeuronsTab({ neurons, loading, selectedId, setSelectedId
     setEditTitle(selected.project.title)
     setEditOneLiner(selected.project.oneLiner)
     setEditTags(selected.project.tags.join(', '))
+    setEditPriority(selected.project.priorityLevel)
     setEditSummary(selected.project.summary)
     setEditRecommendation(selected.project.recommendation)
     setIsEditing(true)
@@ -95,6 +113,7 @@ export default function NeuronsTab({ neurons, loading, selectedId, setSelectedId
         title: editTitle,
         oneLiner: editOneLiner,
         tags: tagsArray,
+        priorityLevel: editPriority,
         summary: editSummary,
         recommendation: editRecommendation,
       })
@@ -104,7 +123,30 @@ export default function NeuronsTab({ neurons, loading, selectedId, setSelectedId
       console.error('保存失败:', err)
     }
     setIsSaving(false)
-  }, [selected, editTitle, editOneLiner, editTags, editSummary, editRecommendation, isSaving, onReload])
+  }, [selected, editTitle, editOneLiner, editTags, editPriority, editSummary, editRecommendation, isSaving, onReload])
+
+  const handleTogglePin = useCallback(async (project: StoredProject) => {
+    await updateProject(project.id, { isPinned: !project.isPinned })
+    onReload?.()
+  }, [onReload])
+
+  const handleToggleStar = useCallback(async (project: StoredProject) => {
+    await updateProject(project.id, { isStarred: !project.isStarred })
+    onReload?.()
+  }, [onReload])
+
+  const handleChangePriority = useCallback(async (project: StoredProject, priorityLevel: ProjectPriorityLevel) => {
+    await updateProject(project.id, { priorityLevel })
+    onReload?.()
+  }, [onReload])
+
+  const handleDelete = useCallback(async (project: StoredProject) => {
+    if (!confirm(`确定要删除「${project.title}」吗？相关分类和突触也会随项目一起移除。`)) return
+    await deleteProject(project.id)
+    const next = neurons.find(n => n.project.id !== project.id)?.project.id || null
+    setSelectedId(next)
+    onReload?.()
+  }, [neurons, onReload, setSelectedId])
 
   // 当 selectedId 变化时退出编辑
   const handleSelect = useCallback((id: string) => {
@@ -123,6 +165,8 @@ export default function NeuronsTab({ neurons, loading, selectedId, setSelectedId
           stats={[
             { label: '总计', value: neurons.length },
             { label: '高存活', value: highCount, color: 'var(--hd-success)' },
+            ...(pinnedCount > 0 ? [{ label: '置顶', value: pinnedCount, color: 'var(--hd-accent-cyan)' }] : []),
+            ...(urgentCount > 0 ? [{ label: '最高优先', value: urgentCount, color: 'var(--hd-danger)' }] : []),
             ...(lowCount > 0 ? [{ label: '低存活', value: lowCount, color: 'var(--hd-danger)' }] : []),
           ]}
         />
@@ -157,6 +201,11 @@ export default function NeuronsTab({ neurons, loading, selectedId, setSelectedId
                 <div style={{ flex: 1 }}>
                   <div className="sandbox-map__neuron-title">{project.title}</div>
                   <div className="sandbox-map__neuron-tags">
+                    {project.isPinned && <span className="sandbox-map__tag">置顶</span>}
+                    {project.isStarred && <span className="sandbox-map__tag">星标</span>}
+                    {project.priorityLevel !== 'normal' && (
+                      <span className="sandbox-map__tag">优先级：{PRIORITY_LABELS[project.priorityLevel]}</span>
+                    )}
                     {taxonomy?.taxonomy ? (
                       <>
                         <span className="sandbox-map__tag">{taxonomy.taxonomy.industry}</span>
@@ -176,6 +225,25 @@ export default function NeuronsTab({ neurons, loading, selectedId, setSelectedId
                 }`}>
                   {project.survivalRate}%
                 </div>
+                <div
+                  style={{ display: 'flex', flexDirection: 'column', gap: 4 }}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <button
+                    className="sandbox-map__mini-btn"
+                    title={project.isPinned ? '取消置顶' : '置顶'}
+                    onClick={() => handleTogglePin(project)}
+                  >
+                    {project.isPinned ? '置顶' : '顶'}
+                  </button>
+                  <button
+                    className="sandbox-map__mini-btn"
+                    title={project.isStarred ? '取消星标' : '星标'}
+                    onClick={() => handleToggleStar(project)}
+                  >
+                    {project.isStarred ? '星标' : '星'}
+                  </button>
+                </div>
               </div>
             </div>
           ))
@@ -192,13 +260,17 @@ export default function NeuronsTab({ neurons, loading, selectedId, setSelectedId
               description={selected.project.oneLiner || selected.project.summary || '这颗神经元已经进入系统，但还需要更清晰的一句话定位。'}
               metrics={[
                 { label: '存活率', value: `${selected.project.survivalRate}%`, detail: selected.project.survivalGrade, tone: selected.project.survivalRate >= 75 ? 'success' : selected.project.survivalRate >= 50 ? 'warning' : 'danger' },
+                { label: '优先级', value: PRIORITY_LABELS[selected.project.priorityLevel], detail: selected.project.isPinned ? '已置顶' : selected.project.isStarred ? '已星标' : '常规排序', tone: PRIORITY_TONES[selected.project.priorityLevel] },
                 { label: '战争日志', value: selected.project.warLogs.length, detail: '红蓝军推演痕迹' },
                 { label: '标签', value: selected.project.tags.length, detail: '项目语义切面' },
                 { label: '分类状态', value: selected.taxonomy ? '已分类' : '待分类', detail: selected.taxonomy?.taxonomy.innovationType || '等待再次推演', tone: selected.taxonomy ? 'accent' : 'warning' },
               ]}
               actions={[
+                { label: selected.project.isPinned ? '取消置顶' : '置顶', onClick: () => handleTogglePin(selected.project) },
+                { label: selected.project.isStarred ? '取消星标' : '星标', onClick: () => handleToggleStar(selected.project) },
                 { label: isEditing ? '取消编辑' : '编辑项目', onClick: isEditing ? cancelEdit : startEdit, variant: 'primary' },
                 { label: '去推演室', onClick: () => navigateSandboxTab('warroom') },
+                { label: '删除', onClick: () => handleDelete(selected.project) },
               ]}
               leftRail={
                 <>
@@ -329,6 +401,53 @@ export default function NeuronsTab({ neurons, loading, selectedId, setSelectedId
             />
 
             <div className="sandbox-map__grid">
+            {!isEditing && (
+              <CollapsibleSection title="神经元控制台" defaultOpen={true}>
+                <div className="sandbox-map__neuron-control-grid">
+                  <div className="sandbox-map__neuron-control-card">
+                    <span>位置</span>
+                    <strong>{selected.project.isPinned ? '已置顶' : '普通排序'}</strong>
+                    <small>置顶后会成为项目神经网络里的优先观察对象。</small>
+                    <button className="sandbox-map__action-btn" onClick={() => handleTogglePin(selected.project)}>
+                      {selected.project.isPinned ? '取消置顶' : '置顶'}
+                    </button>
+                  </div>
+                  <div className="sandbox-map__neuron-control-card">
+                    <span>关注</span>
+                    <strong>{selected.project.isStarred ? '已星标' : '未星标'}</strong>
+                    <small>星标适合短期要反复回看的项目。</small>
+                    <button className="sandbox-map__action-btn" onClick={() => handleToggleStar(selected.project)}>
+                      {selected.project.isStarred ? '取消星标' : '星标'}
+                    </button>
+                  </div>
+                  <div className="sandbox-map__neuron-control-card">
+                    <span>优先级</span>
+                    <strong>{PRIORITY_LABELS[selected.project.priorityLevel]}</strong>
+                    <small>决定系统提醒、排序和后续推演的紧迫程度。</small>
+                    <select
+                      className="sandbox-map__edit-input"
+                      value={selected.project.priorityLevel}
+                      onChange={(event) => handleChangePriority(selected.project, event.target.value as ProjectPriorityLevel)}
+                      aria-label="项目优先级"
+                    >
+                      <option value="low">低优先级</option>
+                      <option value="normal">普通优先级</option>
+                      <option value="high">高优先级</option>
+                      <option value="urgent">最高优先级</option>
+                    </select>
+                  </div>
+                  <div className="sandbox-map__neuron-control-card sandbox-map__neuron-control-card--danger">
+                    <span>移除</span>
+                    <strong>删除项目</strong>
+                    <small>删除会移走项目、分类和关联突触，适合确认不再推进时使用。</small>
+                    <button className="sandbox-map__action-btn" onClick={() => handleDelete(selected.project)}>
+                      删除
+                    </button>
+                  </div>
+                </div>
+              </CollapsibleSection>
+            )}
+
             {/* 编辑/查看切换 */}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginBottom: '4px' }}>
               {isEditing ? (
@@ -368,6 +487,19 @@ export default function NeuronsTab({ neurons, loading, selectedId, setSelectedId
                     <input className="sandbox-map__edit-input" value={editTags}
                       onChange={e => setEditTags(e.target.value)}
                       placeholder="标签1, 标签2, ..." />
+                  </div>
+                  <div>
+                    <label className="hd-label" style={{ marginBottom: '4px', display: 'block' }}>优先级</label>
+                    <select
+                      className="sandbox-map__edit-input"
+                      value={editPriority}
+                      onChange={e => setEditPriority(e.target.value as ProjectPriorityLevel)}
+                    >
+                      <option value="low">低优先级</option>
+                      <option value="normal">普通优先级</option>
+                      <option value="high">高优先级</option>
+                      <option value="urgent">最高优先级</option>
+                    </select>
                   </div>
                   <div>
                     <label className="hd-label" style={{ marginBottom: '4px', display: 'block' }}>摘要</label>

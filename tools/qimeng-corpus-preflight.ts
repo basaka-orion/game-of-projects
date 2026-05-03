@@ -3,8 +3,9 @@ import path from 'node:path'
 import os from 'node:os'
 import { DatabaseSync } from 'node:sqlite'
 import { classifyQimengText, type QimengClassification } from '../src/lib/memory/qimeng-taxonomy.ts'
+import { KNOWLEDGE_MASTERS_ROOT } from '../src/lib/knowledge/default-paths.ts'
 
-const DEFAULT_CORPUS_PATH = '/Users/apple/Documents/Openbasaka_Brain/Wiki'
+const DEFAULT_CORPUS_PATH = KNOWLEDGE_MASTERS_ROOT
 const REPORT_MD_PATH = path.resolve('docs/启蒙-语料预检报告.md')
 const REPORT_JSON_PATH = path.resolve('docs/启蒙-语料预检报告.json')
 const SUPPORTED_EXTENSIONS = new Set(['.md', '.markdown', '.txt'])

@@ -34,7 +34,7 @@ describe('wiki compiler event ledger', () => {
     const result = await runCompileCycle({
       provider: 'deepseek',
       apiKey: '',
-      baseUrl: 'https://api.deepseek.com/v1',
+      baseUrl: 'https://api.deepseek.com',
       model: 'deepseek-chat',
     })
 
