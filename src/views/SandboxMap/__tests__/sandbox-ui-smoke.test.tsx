@@ -11,11 +11,65 @@ import ControlPanelTab from '../tabs/ControlPanelTab'
 import OverviewTab from '../tabs/OverviewTab'
 import UIStyleMuseumMacApp, { getUiMuseumStyleRealizationForTest } from '../tabs/ui-museum/UIStyleMuseumMacApp'
 import BiliHelperMacApp from '../tabs/bili-helper/BiliHelperMacApp'
+import CouncilMacApp from '../tabs/xiaobai-council/CouncilMacApp'
 
 vi.mock('@remotion/player', () => ({
   Player: ({ inputProps }: { inputProps?: { state?: { headline?: string } } }) => (
     <div className="remotion-player-mock">Remotion Guide: {inputProps?.state?.headline || 'waiting'}</div>
   ),
+}))
+
+vi.mock('../../../lib/xiaobai-council/profile', () => ({
+  buildCouncilPersonaProfile: vi.fn(async ({ persona }: { persona: any }) => ({
+    persona,
+    dreamState: {
+      personaId: persona.id,
+      currentDream: `${persona.shortName} 正在把私有记忆转成动态 dream`,
+      evidence: [{ kind: 'dream-seed', label: '初始志向', text: persona.dreamSeed }],
+      growthSignals: ['本轮学到要保留独立判断'],
+      nextAspiration: '下一轮更明确地指出分歧与证据缺口',
+      freezeRule: '本轮新学习只在下一轮生效。',
+    },
+    distillationProfile: {
+      personaId: persona.id,
+      personaName: persona.name,
+      realHumanBasis: persona.realHumanBasis,
+      nuwaSkillId: persona.nuwaSkillId,
+      distillationStatus: persona.distillationStatus,
+      skillPackagePath: `.openbasaka/nuwa-council/${persona.id}/`,
+      researchFiles: [],
+      auditCard: {
+        whyEssential: '必须有它，因为它提供不可替代的方法论。',
+        irreplaceableAbility: persona.promptSeed,
+        fitsProblems: ['PRD'],
+        misfitProblems: ['私人未公开观点'],
+      },
+      mentalModels: [{ id: 'm1', label: 'focus', description: '聚焦', sourcePolicy: 'mock' }],
+      decisionHeuristics: [{ id: 'h1', label: 'prd', description: '落地', sourcePolicy: 'mock' }],
+      expressionDna: ['清晰'],
+      antiPatterns: persona.honestLimits || [],
+      innerTensions: ['强项与盲点需要质询'],
+      honestLimits: persona.honestLimits || [],
+      validationQuestions: ['未知问题要表达不确定'],
+      sourceSummary: 'mock source summary',
+    },
+    memory: {
+      entriesCount: 1,
+      totalChars: 12,
+      recentEntries: [{ text: '私有记忆短摘', createdAt: '2026-05-04T00:00:00.000Z' }],
+    },
+    contributions: {
+      briefCount: 0,
+      reflectionCount: 0,
+      latest: '还没有本轮贡献。',
+      disagreements: [],
+    },
+    safety: {
+      sourcePolicy: persona.sourcePolicy,
+      localOnly: true,
+      privateDataRule: '只展示安全摘要。',
+    },
+  })),
 }))
 
 function receipt(): AgentExecutionReceipt {
@@ -365,9 +419,62 @@ describe('sandbox UI smoke contracts', () => {
 
     expect(container.textContent).toContain('如何把一个 B 站视频变成自己的学习包')
     expect(container.textContent).toContain('ARTIFACT DASHBOARD')
+    expect(container.textContent).toContain('BAOYU 秒懂视觉')
     expect(container.textContent).toContain('SOURCE NOTEBOOK')
     expect(container.textContent).toContain('LEARNING PACK')
+    expect(container.textContent).toContain('归档去向')
     expect(container.textContent).toContain('覆盖矩阵')
+
+    await act(async () => {
+      root.unmount()
+    })
+    container.remove()
+  })
+
+  it('renders XiaoBai council as a parallel PRD loop surface', () => {
+    const html = renderToStaticMarkup(<CouncilMacApp />)
+
+    expect(html).toContain('小白智囊团 · PRD 闭环')
+    expect(html).toContain('隐藏思想原型')
+    expect(html).toContain('生成推荐编队')
+    expect(html).toContain('确认激活')
+    expect(html).toContain('隐藏角色库')
+    expect(html).toContain('Creative DNA')
+    expect(html).toContain('UI风格馆')
+    expect(html).toContain('Baoyu')
+  })
+
+  it('opens a XiaoBai council persona dossier with dynamic dream and local profile summaries', async () => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: vi.fn(() => null),
+        setItem: vi.fn(),
+        removeItem: vi.fn(),
+        clear: vi.fn(),
+      },
+    })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(<CouncilMacApp />)
+    })
+
+    const card = container.querySelector('.council-app__hidden-persona')
+    expect(card).toBeTruthy()
+
+    await act(async () => {
+      card?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+
+    expect(container.textContent).toContain('独立角色档案')
+    expect(container.textContent).toContain('当前动态 Dream')
+    expect(container.textContent).toContain('正在把私有记忆转成动态 dream')
+    expect(container.textContent).toContain('私有记忆短摘')
 
     await act(async () => {
       root.unmount()

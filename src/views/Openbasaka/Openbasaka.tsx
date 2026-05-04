@@ -44,7 +44,13 @@ import {
   SessionMessage,
 } from '../../lib/chat/session'
 import { assembleContext, detectProjectIdea } from '../../lib/chat/context'
-import { routeToExpert, getExpertConfig, ExpertRole, getAllExperts } from '../../lib/chat/router'
+import { routeToExpert } from '../../lib/chat/router'
+import {
+  getAgentSurfaceProfile,
+  getBuiltInAgentSurfaceProfiles,
+  resolveAgentSurfaceProfiles,
+  type AgentSurfaceProfile,
+} from '../../lib/agents/surface'
 import { parseToolCall, executeTool } from '../../lib/tools'
 import { getSoul, saveSoul, resetSoul, renderSoulPrompt, AgentSoul } from '../../lib/agents/soul'
 import { recordAgentExecutionReceipt } from '../../lib/agents/execution-audit'
@@ -588,7 +594,8 @@ export default function Openbasaka({ onSwitchToWarRoom, onOpenProfilingStudio, o
   const [projects, setProjects] = useState<Awaited<ReturnType<typeof getAllProjects>>>([])
   const [session, setSession] = useState<ChatSession>(() => createSession())
   const [sessions, setSessions] = useState<ChatSession[]>([])
-  const [activeExpert, setActiveExpert] = useState<ExpertRole>('general')
+  const [activeExpert, setActiveExpert] = useState<string>('general')
+  const [agentProfiles, setAgentProfiles] = useState<AgentSurfaceProfile[]>(() => getBuiltInAgentSurfaceProfiles())
   const [routingMode, setRoutingMode] = useState<'auto' | 'locked'>('locked')
   const [showExpertBar, setShowExpertBar] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
@@ -696,6 +703,31 @@ export default function Openbasaka({ onSwitchToWarRoom, onOpenProfilingStudio, o
       .then((rows) => setProfileTimeline(rows.slice(0, 3)))
       .catch(() => {})
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    resolveAgentSurfaceProfiles()
+      .then((profiles) => {
+        if (!cancelled) setAgentProfiles(profiles)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!showExpertBar) return
+    let cancelled = false
+    resolveAgentSurfaceProfiles()
+      .then((profiles) => {
+        if (!cancelled) setAgentProfiles(profiles)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [showExpertBar])
 
   // 尝试恢复上次会话
   useEffect(() => {
@@ -1006,7 +1038,7 @@ export default function Openbasaka({ onSwitchToWarRoom, onOpenProfilingStudio, o
         openSoulPanel(role)
       } else {
         // 切换角色 → 脉冲光效
-        setActiveExpert(role as ExpertRole)
+        setActiveExpert(role)
         setPulseAgent(role)
         setTimeout(() => setPulseAgent(null), 600)
         setShowExpertBar(false)
@@ -1130,7 +1162,7 @@ export default function Openbasaka({ onSwitchToWarRoom, onOpenProfilingStudio, o
         if (detected !== 'general') expert = detected
       }
       setActiveExpert(expert)
-      const expertConfig = getExpertConfig(expert)
+      const expertConfig = getAgentSurfaceProfile(expert, agentProfiles)
 
       // 检测项目构想
       if (detectProjectIdea(text)) {
@@ -1166,7 +1198,7 @@ export default function Openbasaka({ onSwitchToWarRoom, onOpenProfilingStudio, o
       ) => {
         recordAgentExecutionReceipt({
           agentId: expert,
-          subject: `Openbasaka｜${getExpertConfig(expert).name}`,
+          subject: `Openbasaka｜${expertConfig.name}`,
           input: text,
           output,
           status,
@@ -1210,7 +1242,7 @@ export default function Openbasaka({ onSwitchToWarRoom, onOpenProfilingStudio, o
           const transcriptMessage: SessionMessage = {
             ...assistantMessage,
             id: `tg-transcript-${assistantTimestamp}`,
-            content: `Boss：${text}\n\n${getExpertConfig(expert).name}：${content}`,
+            content: `Boss：${text}\n\n${expertConfig.name}：${content}`,
           }
           syncOpenbasakaMessageToTelegram(expert, transcriptMessage).catch(() => {})
         }
@@ -1368,7 +1400,18 @@ export default function Openbasaka({ onSwitchToWarRoom, onOpenProfilingStudio, o
         finishWithAssistant(`⚠️ ${(err as Error).message}`, 'failed')
       }
     },
-    [input, isStreaming, messages, projects, session, scheduleAutoSave, autoSearchIfNeeded, activeExpert, routingMode],
+    [
+      input,
+      isStreaming,
+      messages,
+      projects,
+      session,
+      scheduleAutoSave,
+      autoSearchIfNeeded,
+      activeExpert,
+      routingMode,
+      agentProfiles,
+    ],
   )
 
   const handleKeyDown = useCallback(
@@ -1437,7 +1480,7 @@ export default function Openbasaka({ onSwitchToWarRoom, onOpenProfilingStudio, o
   // 新建对话
   const newChat = useCallback(() => {
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
-    const agentRole: ExpertRole = 'general'
+    const agentRole = 'general'
     const fresh: ChatSession = {
       ...createSession(agentRole),
       id: getSharedAgentConversationId(agentRole),
@@ -1900,7 +1943,9 @@ export default function Openbasaka({ onSwitchToWarRoom, onOpenProfilingStudio, o
     }
   }
 
-  const experts = getAllExperts()
+  const experts = agentProfiles
+  const activeProfile = getAgentSurfaceProfile(activeExpert, experts)
+  const activeDisplayName = activeExpert === 'general' ? 'BASAKA' : activeProfile.name
   const archiveInboxSourceSurfaceOptions = archiveInboxSourceSurfaceCounts.map((option) => option.value)
   const archiveInboxBatchSessionOptions = archiveInboxBatchSessionCounts.map((option) => ({
     id: option.value,
@@ -1943,8 +1988,8 @@ export default function Openbasaka({ onSwitchToWarRoom, onOpenProfilingStudio, o
       <div className="hd-nav">
         <div className="hd-nav__item hd-nav__item--active">
           <span className="openbasaka__logo">
-            <span className="openbasaka__logo-icon">{getExpertConfig(activeExpert).emoji}</span>
-            {activeExpert !== 'general' ? getExpertConfig(activeExpert).name : 'BASAKA'}
+            <span className="openbasaka__logo-icon">{activeProfile.emoji}</span>
+            {activeDisplayName}
           </span>
         </div>
         <div className="hd-nav__item hd-nav__item--clickable" onClick={() => setShowExpertBar(!showExpertBar)}>
@@ -2077,15 +2122,16 @@ export default function Openbasaka({ onSwitchToWarRoom, onOpenProfilingStudio, o
           <span className="openbasaka__expert-hint">
             {routingMode === 'auto' ? '点角色看灵魂 · 系统自动匹配专家' : '点角色看灵魂 · 再点切换专家'}
           </span>
-          {experts.map(({ role, config }) => (
+          {experts.map((profile) => (
             <button
-              key={role}
-              className={`openbasaka__expert-btn ${activeExpert === role ? 'openbasaka__expert-btn--active' : ''} ${pulseAgent === role ? 'openbasaka__expert-btn--pulse' : ''}`}
-              onClick={() => handleExpertClick(role)}
+              key={profile.id}
+              className={`openbasaka__expert-btn ${activeExpert === profile.id ? 'openbasaka__expert-btn--active' : ''} ${pulseAgent === profile.id ? 'openbasaka__expert-btn--pulse' : ''}`}
+              onClick={() => handleExpertClick(profile.id)}
+              title={profile.isCustom ? '自定义 Agent · 可在控制面板绑定 Telegram' : undefined}
             >
-              <span>{config.emoji}</span>
-              <span>{config.name}</span>
-              {activeExpert === role && (
+              <span>{profile.emoji}</span>
+              <span>{profile.name}</span>
+              {activeExpert === profile.id && (
                 <span className="openbasaka__expert-soul-dot" title="点击查看灵魂">
                   🧠
                 </span>
@@ -2100,8 +2146,8 @@ export default function Openbasaka({ onSwitchToWarRoom, onOpenProfilingStudio, o
         <div className="openbasaka__soul-panel hd-fade-in">
           <div className="openbasaka__soul-header">
             <div className="openbasaka__soul-title">
-              <span className="openbasaka__soul-icon">{getExpertConfig(activeExpert).emoji}</span>
-              <span>{getExpertConfig(activeExpert).name}</span>
+              <span className="openbasaka__soul-icon">{activeProfile.emoji}</span>
+              <span>{activeProfile.name}</span>
               <span className="openbasaka__soul-badge">灵魂 SOUL</span>
             </div>
             <button className="openbasaka__soul-close" onClick={() => setShowSoulPanel(false)}>
@@ -2635,7 +2681,7 @@ export default function Openbasaka({ onSwitchToWarRoom, onOpenProfilingStudio, o
           return (
             <div key={msg.id} className={`openbasaka__msg openbasaka__msg--${msg.role}`}>
               {msg.role === 'assistant' && (
-                <div className="openbasaka__msg-avatar">{getExpertConfig(activeExpert).emoji}</div>
+                <div className="openbasaka__msg-avatar">{activeProfile.emoji}</div>
               )}
               <div className="openbasaka__msg-body">
                 <div className="openbasaka__msg-content">{renderMessageText(msg.content)}</div>
@@ -2695,7 +2741,7 @@ export default function Openbasaka({ onSwitchToWarRoom, onOpenProfilingStudio, o
         {/* 流式输出 */}
         {isStreaming && streamingText && (
           <div className="openbasaka__msg openbasaka__msg--assistant">
-            <div className="openbasaka__msg-avatar">{getExpertConfig(activeExpert).emoji}</div>
+            <div className="openbasaka__msg-avatar">{activeProfile.emoji}</div>
             <div className="openbasaka__msg-body">
               <div className="openbasaka__msg-content openbasaka__msg-content--streaming">
                 {renderMessageText(streamingText)}
@@ -2708,7 +2754,7 @@ export default function Openbasaka({ onSwitchToWarRoom, onOpenProfilingStudio, o
         {/* 等待指示器 */}
         {isStreaming && !streamingText && (
           <div className="openbasaka__msg openbasaka__msg--assistant">
-            <div className="openbasaka__msg-avatar">{getExpertConfig(activeExpert).emoji}</div>
+            <div className="openbasaka__msg-avatar">{activeProfile.emoji}</div>
             <div className="openbasaka__msg-body">
               <div className="openbasaka__thinking">
                 <span className="openbasaka__dot" />
@@ -2768,7 +2814,7 @@ export default function Openbasaka({ onSwitchToWarRoom, onOpenProfilingStudio, o
         <textarea
           ref={inputRef}
           className="openbasaka__textarea"
-          placeholder={`对 ${activeExpert === 'general' ? 'BASAKA' : getExpertConfig(activeExpert).name} 说点什么...`}
+          placeholder={`对 ${activeDisplayName} 说点什么...`}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}

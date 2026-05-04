@@ -1,4 +1,4 @@
-import { chatCompletion, getLLMConfig, type ChatMessage } from '../ai/provider'
+import { chatCompletion, type ChatMessage } from '../ai/provider'
 import {
   BILI_ARTIFACT_MODES,
   createBiliChatMessage,
@@ -7,6 +7,7 @@ import {
   parseTranscriptTimeline,
 } from './state'
 import { detectBibiPlatform } from './platforms'
+import { getBaoyuModelRoute, type BaoyuModelRoute } from './model-routing'
 import type { BiliArtifactMode, BiliChatMessage, BiliLearningPack, BiliVideoInfo } from './types'
 
 function extractJsonObject(text: string): unknown {
@@ -20,8 +21,8 @@ function extractJsonObject(text: string): unknown {
   throw new Error('AI response is not JSON')
 }
 
-async function callBiliAI(messages: ChatMessage[], maxTokens = 2200): Promise<string> {
-  const config = getLLMConfig()
+async function callBiliAI(messages: ChatMessage[], maxTokens = 2200, route: BaoyuModelRoute = 'primary-structured'): Promise<string> {
+  const config = getBaoyuModelRoute(route).config
   if (!config.apiKey && config.provider !== 'ollama') throw new Error('LLM is not configured')
   return chatCompletion(config, messages, 0.45, maxTokens)
 }
@@ -47,6 +48,10 @@ async function fetchUrlMetadata(url: string): Promise<{
   description?: string
   author?: string
   content?: string
+  cover?: string
+  siteName?: string
+  canonicalUrl?: string
+  favicon?: string
 }> {
   const electronAPI = (window as any)?.electronAPI
   if (!electronAPI?.fetchUrl || !/^https?:\/\//i.test(url)) return {}
@@ -58,6 +63,10 @@ async function fetchUrlMetadata(url: string): Promise<{
       description: fetched.description,
       author: fetched.author,
       content: fetched.content,
+      cover: fetched.cover,
+      siteName: fetched.siteName,
+      canonicalUrl: fetched.canonicalUrl,
+      favicon: fetched.favicon,
     }
   } catch {
     return {}
@@ -102,7 +111,7 @@ export async function resolveBiliVideoInfo(url: string): Promise<BiliVideoInfo> 
       inputType: 'url',
       title: cleanOneLine(meta.title) || (videoId ? `YouTube 视频 · ${videoId}` : local.title),
       owner: cleanOneLine(meta.author) || host || 'YouTube Creator',
-      cover: videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : local.cover,
+      cover: cleanOneLine(meta.cover) || (videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : local.cover),
       description: cleanOneLine(meta.description) || local.description,
       durationSeconds: 0,
       tags: ['YouTube', '视频', 'BibiGPT 兼容来源'],
@@ -124,13 +133,16 @@ export async function resolveBiliVideoInfo(url: string): Promise<BiliVideoInfo> 
       inputType: /^https?:\/\//i.test(url) ? 'url' : 'manual',
       title: cleanOneLine(meta.title) || (host ? `${detected.label} · ${host}` : local.title),
       owner: cleanOneLine(meta.author) || host || '公开来源',
+      cover: cleanOneLine(meta.cover) || local.cover,
       description: cleanOneLine(meta.description) || local.description,
       durationSeconds: 0,
       tags: [detected.label, detected.kind, 'BibiGPT 兼容来源'],
       stats: zeroStats(),
       pages: [{ index: 1, title: cleanOneLine(meta.title) || detected.label, durationSeconds: 0 }],
       contentText: meta.content,
-      siteName: host,
+      siteName: cleanOneLine(meta.siteName) || host,
+      canonicalUrl: cleanOneLine(meta.canonicalUrl),
+      favicon: cleanOneLine(meta.favicon),
       subtitleStatus: detected.kind === 'webpage' ? 'metadata' : 'missing',
       capabilities: [detected.intake, detected.organize, detected.chat],
       resolvedBy: meta.title || meta.content ? 'api' : 'local',

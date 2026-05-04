@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createSampleBiliWorkspace } from '../state'
-import { buildSourceOsGuideState } from '../source-os-guide'
+import { buildSourceOsArrowGeometry, buildSourceOsGuideState } from '../source-os-guide'
 import type { BiliVideoWorkspace } from '../types'
 
 function unpackedWorkspace(): BiliVideoWorkspace {
@@ -38,7 +38,7 @@ describe('SourceOS guide state', () => {
     expect(state.focusTarget).toBe('source-card')
   })
 
-  it('points parsed sources toward artifact selection', () => {
+  it('points parsed sources toward Baoyu visual guidance', () => {
     const state = buildSourceOsGuideState({
       processing: 'idle',
       workspace: unpackedWorkspace(),
@@ -46,9 +46,10 @@ describe('SourceOS guide state', () => {
       artifactMode: 'mindmap',
     })
 
-    expect(state.activeStep.id).toBe('artifact-choice')
+    expect(state.activeStep.id).toBe('visual-brief')
     expect(state.artifactMode).toBe('mindmap')
     expect(state.steps.find((step) => step.id === 'source-ready')?.status).toBe('complete')
+    expect(state.focusTarget).toBe('baoyu-visuals')
   })
 
   it('shows active generation while building a pack', () => {
@@ -95,5 +96,18 @@ describe('SourceOS guide state', () => {
     expect(chatState.intensity).toBe('active')
     expect(downloadState.activeStep.id).toBe('dialog-export')
     expect(downloadState.cta).toContain('导出')
+  })
+
+  it('builds a short target-aware Remotion arrow', () => {
+    const arrow = buildSourceOsArrowGeometry({
+      rootRect: { left: 100, top: 100, width: 700, height: 220 },
+      targetRect: { left: 610, top: 165, width: 120, height: 80 },
+      width: 700,
+      height: 220,
+      compact: true,
+    })
+
+    expect(arrow.endX).toBeGreaterThan(arrow.startX)
+    expect(Math.hypot(arrow.endX - arrow.startX, arrow.endY - arrow.startY)).toBeLessThanOrEqual(151)
   })
 })

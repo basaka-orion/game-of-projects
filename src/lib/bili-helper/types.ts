@@ -32,6 +32,60 @@ export type BiliDownloadStatus = 'queued' | 'running' | 'done' | 'failed'
 
 export type BiliChatRole = 'user' | 'assistant'
 
+export type BaoyuVisualArtifactKind = 'image-cards' | 'infographic' | 'comic' | 'diagram' | 'cover' | 'article-illustration'
+
+export type BaoyuVisualArtifactStatus = 'ready' | 'generating' | 'generated' | 'failed' | 'needs-config'
+
+export type BiliArchiveTarget = 'knowledge-master' | 'knowledge-folder' | 'backup'
+
+export type BiliArchiveStatus = 'idle' | 'saving' | 'saved' | 'failed'
+
+export interface BaoyuStructuredCard {
+  id: string
+  title: string
+  subtitle: string
+  label: string
+  points: string[]
+  visualIntent: string
+  accent: string
+}
+
+export interface BaoyuVisualArtifact {
+  id: string
+  kind: BaoyuVisualArtifactKind
+  label: string
+  title: string
+  rationale: string
+  style: string
+  layout: string
+  palette: string
+  prompt: string
+  previewMarkdown: string
+  status: BaoyuVisualArtifactStatus
+  isRecommended: boolean
+  structuredCards?: BaoyuStructuredCard[]
+  textRenderMode?: 'local-svg' | 'model-text'
+  modelRoute?: {
+    primary: string
+    review: string
+    renderer: string
+  }
+  imageDataUrls?: string[]
+  error?: string
+  createdAt: number
+  generatedBy: 'baoyu-plan' | 'gemini' | 'local'
+}
+
+export interface BiliArchiveState {
+  target: BiliArchiveTarget
+  folderPath: string
+  knowledgeTags: string[]
+  status: BiliArchiveStatus
+  sourceId?: string
+  savedAt?: number
+  error?: string
+}
+
 export interface BiliVideoStats {
   views: number
   danmaku: number
@@ -66,6 +120,8 @@ export interface BiliVideoInfo {
   contentText?: string
   filePath?: string
   siteName?: string
+  canonicalUrl?: string
+  favicon?: string
   subtitleStatus: 'found' | 'missing' | 'manual' | 'sidecar' | 'ocr' | 'transcribed' | 'metadata'
   capabilities: string[]
   warnings: string[]
@@ -92,6 +148,7 @@ export interface BiliLearningPack {
   tutorial: string
   actionList: string[]
   questions: string[]
+  visualArtifacts?: BaoyuVisualArtifact[]
   markdown: string
   createdAt: number
   generatedBy: 'ai' | 'local'
@@ -122,6 +179,8 @@ export interface BiliVideoWorkspace {
   video: BiliVideoInfo
   transcript: string
   pack?: BiliLearningPack
+  visualArtifacts?: BaoyuVisualArtifact[]
+  archive?: BiliArchiveState
   chat: BiliChatMessage[]
 }
 

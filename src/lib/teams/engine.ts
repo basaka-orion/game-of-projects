@@ -29,12 +29,20 @@ import { loadCognitiveProfile, renderCognitivePrompt } from '../boss/cognitive-p
 import { recordAgentExecutionReceipt } from '../agents/execution-audit'
 import type { ExecutionEvidenceRef } from '../agents/execution-receipt'
 import { getSoul, renderSoulPrompt } from '../agents/soul'
+import {
+  extractMemoryKeywords,
+  loadAgentSessionSnapshot,
+  recordAgentReflection,
+  renderAgentHermesPrompt,
+  type AgentReflection,
+} from '../agents/hermes-identity'
 import { buildUiMuseumPrdContext, type UiMuseumPrdContext } from '../ui-museum/context'
 
 const TEAM_AGENT_MAX_TOKENS = 760
 const TEAM_BRAINSTORM_MAX_TOKENS = 620
 const TEAM_ARTIFACT_MAX_TOKENS = 7600
 const TEAM_ACTION_MAX_TOKENS = 1800
+const TEAM_SESSION_IDENTITY_PROMPT_CACHE = new Map<string, string>()
 
 const EXECUTABLE_ACTION_TOOLS: TeamActionToolId[] = [
   'terminal',
@@ -309,6 +317,7 @@ function pushSystemTeamMessage(
   content: string,
   onProgress?: (msg: TeamMessage) => void,
   kind: TeamMessage['kind'] = 'progress',
+  metadata?: Record<string, unknown>,
 ): void {
   const msg: TeamMessage = {
     id: generateId(),
@@ -318,6 +327,7 @@ function pushSystemTeamMessage(
     content,
     timestamp: Date.now(),
     kind,
+    metadata,
   }
   session.messages.push(msg)
   onProgress?.(msg)
@@ -762,10 +772,18 @@ async function pushTeamRoleDeclarations(params: {
         `交付物：${mission.deliverable}`,
         `能力衔接：${mission.capabilityBridge}。`,
         `边界：${mission.boundary}`,
+        'Hermes 机制：本角色使用独立 SOUL、私有 MEMORY 和本轮冻结快照；本轮学习只写入未来会话。',
         `任务焦点：${params.topic.slice(0, 120)}`,
       ].join('\n'),
       timestamp: Date.now(),
       kind: 'progress',
+      metadata: {
+        phase: 'role-declaration',
+        hermes: {
+          snapshotFrozen: true,
+          privateMemory: true,
+        },
+      },
     }
     params.session.messages.push(msg)
     params.onProgress?.(msg)
@@ -782,13 +800,31 @@ async function buildTeamAgentPrompt(params: {
   workflow: TeamWorkflowProfile
   capabilities: AgentCapabilityId[]
   executionMode: TeamExecutionMode
+  topic?: string
+  sessionId?: string
   uiStyleContext?: UiMuseumPrdContext | null
 }): Promise<string> {
   let soulPrompt = ''
   try {
-    soulPrompt = renderSoulPrompt(await getSoul(params.agentId))
+    const cacheKey = params.sessionId ? `${params.sessionId}:${params.agentId}` : ''
+    soulPrompt = cacheKey ? TEAM_SESSION_IDENTITY_PROMPT_CACHE.get(cacheKey) || '' : ''
+    if (!soulPrompt) {
+      soulPrompt = renderAgentHermesPrompt(
+        await loadAgentSessionSnapshot({
+          agentId: params.agentId,
+          sessionId: params.sessionId,
+          topic: params.topic,
+          keywords: extractMemoryKeywords([params.topic || '', params.teamRole, params.roleBrief || ''].join('\n')),
+        }),
+      )
+      if (cacheKey) TEAM_SESSION_IDENTITY_PROMPT_CACHE.set(cacheKey, soulPrompt)
+    }
   } catch {
-    /* fallback below */
+    try {
+      soulPrompt = renderSoulPrompt(await getSoul(params.agentId))
+    } catch {
+      /* fallback below */
+    }
   }
 
   const fallbackIdentity = `你是 ${params.agentName}。${params.roleBrief || params.teamRole || ''}`
@@ -799,6 +835,8 @@ async function buildTeamAgentPrompt(params: {
   const collaborationRules = [
     '## 群策协作协议',
     `- 你当前只代表「${params.agentName}」发言，不要冒充其他角色，也不要替全队下最终结论。`,
+    '- 你的 SOUL 和 MEMORY 是私有的；可以引用自己的记忆命中，但不要把其他角色观点当成自己的记忆。',
+    '- 本轮快照已经冻结；如果你学到新东西，只在反思里写给下一轮，不要在当前发言中假装系统提示已改变。',
     '- 你的回答必须服务本次任务，不要泛泛介绍能力。',
     `- 本次工作流是「${params.workflow.label}」，你输出的是给「${params.workflow.hostName}」使用的角色短评，不是完整文章。`,
     `- 执行权限：${executionPolicy.label}。${executionPolicy.agentRule}`,
@@ -836,6 +874,73 @@ function buildTeamEvidenceRefs(knowledgeCtx: string, cognitivePrompt: string, te
   if (knowledgeCtx) refs.push({ kind: 'knowledge', title: 'Knowledge middleware quick context' })
   if (cognitivePrompt) refs.push({ kind: 'memory', title: 'Boss cognitive profile' })
   return refs
+}
+
+function getBrainstormPhase(round: number, maxRounds: number): string {
+  if (round === 1) return '独立初稿'
+  if (round === maxRounds) return '互相质询与收束'
+  return '分歧补充'
+}
+
+function clearTeamSessionIdentityPromptCache(sessionId: string): void {
+  for (const key of TEAM_SESSION_IDENTITY_PROMPT_CACHE.keys()) {
+    if (key.startsWith(`${sessionId}:`)) TEAM_SESSION_IDENTITY_PROMPT_CACHE.delete(key)
+  }
+}
+
+async function pushAgentReflectionMessage(params: {
+  team: Team
+  session: TeamSession
+  agentId: string
+  agentName: string
+  input: string
+  output: string
+  status: 'completed' | 'failed'
+  phase: string
+  round?: number
+  onProgress?: (msg: TeamMessage) => void
+}): Promise<AgentReflection | null> {
+  try {
+    const reflection = await recordAgentReflection({
+      agentId: params.agentId,
+      sessionId: params.session.id,
+      teamId: params.team.id,
+      subject: params.team.name,
+      phase: params.phase,
+      input: params.input,
+      output: params.output,
+      status: params.status,
+      updateMemory: params.status === 'completed',
+      metadata: {
+        round: params.round,
+        teamType: params.team.teamType,
+      },
+    })
+    const msg: TeamMessage = {
+      id: generateId(),
+      agentId: params.agentId,
+      agentName: params.agentName,
+      role: 'system',
+      content: [
+        `【本轮学习】${reflection.learned}`,
+        `【下次改进】${reflection.nextTime}`,
+        reflection.updateMemory ? '【记忆写入】已通过安全扫描并写入该角色私有 MEMORY，下轮才会进入 prompt。' : '【记忆写入】本轮未写入长期记忆。',
+      ].join('\n'),
+      timestamp: Date.now(),
+      round: params.round,
+      kind: 'reflection',
+      metadata: {
+        phase: params.phase,
+        reflectionId: reflection.id,
+        updateMemory: reflection.updateMemory,
+      },
+    }
+    params.session.messages.push(msg)
+    params.onProgress?.(msg)
+    return reflection
+  } catch {
+    return null
+  }
 }
 
 function recordTeamAgentExecution(params: {
@@ -1443,10 +1548,14 @@ export async function runTeamSession(
   team: Team,
   topic: string,
   onProgress?: (msg: TeamMessage) => void,
+  options?: { uiStyleContext?: UiMuseumPrdContext | null },
 ): Promise<TeamSession> {
   const executionTeam = ensureEssentialAgents(team, topic)
   const workflow = getWorkflowProfile(executionTeam, topic)
-  const uiStyleContext = buildUiMuseumPrdContext(topic)
+  const uiStyleContext =
+    options && 'uiStyleContext' in options
+      ? options.uiStyleContext || null
+      : buildUiMuseumPrdContext(topic)
   const sessionId = await createTeamSession(team.id, topic)
   const session = await getTeamSession(sessionId)
   if (!session) throw new Error('Failed to create team session')
@@ -1479,11 +1588,13 @@ export async function runTeamSession(
       onProgress,
     )
   }
-  pushSystemTeamMessage(
-    session,
-    `UI风格馆已自动接入：${uiStyleContext.styleNames.join(' / ')}${uiStyleContext.savedFusionName ? `；复用融合「${uiStyleContext.savedFusionName}」` : ''}。`,
-    onProgress,
-  )
+  if (uiStyleContext) {
+    pushSystemTeamMessage(
+      session,
+      `UI风格馆已自动接入：${uiStyleContext.styleNames.join(' / ')}${uiStyleContext.savedFusionName ? `；复用融合「${uiStyleContext.savedFusionName}」` : ''}。`,
+      onProgress,
+    )
+  }
   await pushTeamRoleDeclarations({
     team: executionTeam,
     session,
@@ -1541,6 +1652,7 @@ export async function runTeamSession(
   }
 
   await saveTeamSession(session)
+  clearTeamSessionIdentityPromptCache(session.id)
   return session
 }
 
@@ -1579,6 +1691,8 @@ async function runPermanentSession(
       workflow,
       capabilities,
       executionMode: team.config.executionMode || 'supervised',
+      topic,
+      sessionId: session.id,
       uiStyleContext,
     })
 
@@ -1634,6 +1748,17 @@ async function runPermanentSession(
         evidenceRefs: buildTeamEvidenceRefs(knowledgeCtx, cognitivePrompt, team),
         durationMs: Date.now() - startedAt,
       })
+      await pushAgentReflectionMessage({
+        team,
+        session,
+        agentId: agentConfig.agentId,
+        agentName,
+        input: userPrompt,
+        output: result,
+        status: 'failed',
+        phase: '顺序短评',
+        onProgress,
+      })
       pushSystemTeamMessage(session, result, onProgress, 'error')
       priorContext += `\n\n### ${agentName}\n${result}`
       continue
@@ -1649,6 +1774,17 @@ async function runPermanentSession(
       evidenceRefs: buildTeamEvidenceRefs(knowledgeCtx, cognitivePrompt, team),
       durationMs: Date.now() - startedAt,
     })
+    await pushAgentReflectionMessage({
+      team,
+      session,
+      agentId: agentConfig.agentId,
+      agentName,
+      input: userPrompt,
+      output: result,
+      status: 'completed',
+      phase: '顺序短评',
+      onProgress,
+    })
 
     const msg: TeamMessage = {
       id: generateId(),
@@ -1658,6 +1794,10 @@ async function runPermanentSession(
       content: result,
       timestamp: Date.now(),
       kind: 'brief',
+      metadata: {
+        phase: '顺序短评',
+        hermes: { snapshotFrozen: true, reflectionWritten: true },
+      },
     }
 
     session.messages.push(msg)
@@ -1708,6 +1848,8 @@ async function runAgencySession(
       workflow,
       capabilities,
       executionMode: team.config.executionMode || 'supervised',
+      topic: `${topic}\n${task.description}`,
+      sessionId: session.id,
       uiStyleContext,
     })
 
@@ -1769,6 +1911,17 @@ async function runAgencySession(
         evidenceRefs: buildTeamEvidenceRefs(knowledgeCtx, cognitivePrompt, team),
         durationMs: Date.now() - startedAt,
       })
+      await pushAgentReflectionMessage({
+        team,
+        session,
+        agentId: task.assignedAgent,
+        agentName,
+        input: userPrompt,
+        output: result,
+        status: 'failed',
+        phase: task.description || 'DAG任务',
+        onProgress,
+      })
       results[task.outputKey] = result
       pushSystemTeamMessage(session, result, onProgress, 'error')
       continue
@@ -1784,6 +1937,17 @@ async function runAgencySession(
       evidenceRefs: buildTeamEvidenceRefs(knowledgeCtx, cognitivePrompt, team),
       durationMs: Date.now() - startedAt,
     })
+    await pushAgentReflectionMessage({
+      team,
+      session,
+      agentId: task.assignedAgent,
+      agentName,
+      input: userPrompt,
+      output: result,
+      status: 'completed',
+      phase: task.description || 'DAG任务',
+      onProgress,
+    })
 
     results[task.outputKey] = result
 
@@ -1795,6 +1959,10 @@ async function runAgencySession(
       content: result,
       timestamp: Date.now(),
       kind: 'brief',
+      metadata: {
+        phase: task.description || 'DAG任务',
+        hermes: { snapshotFrozen: true, reflectionWritten: true },
+      },
     }
     session.messages.push(msg)
     onProgress?.(msg)
@@ -1823,6 +1991,14 @@ async function runBrainstormSession(
   const cognitivePrompt = renderCognitivePrompt(loadCognitiveProfile())
 
   for (let round = 1; round <= maxRounds; round++) {
+    const phase = getBrainstormPhase(round, maxRounds)
+    pushSystemTeamMessage(
+      session,
+      `进入「${phase}」阶段：${round === 1 ? '各角色先独立给出初稿，不急着求平均共识。' : round === maxRounds ? '角色必须点名质询、保留分歧并提出可裁决条款。' : '围绕上一轮差异补强证据、风险和体验条款。'}`,
+      onProgress,
+      'progress',
+      { phase },
+    )
     for (const agentConfig of team.agents) {
       const agent = await getAgentById(agentConfig.agentId)
       const agentLLM = getAgentLLMConfig(agentConfig.agentId)
@@ -1844,6 +2020,8 @@ async function runBrainstormSession(
         workflow,
         capabilities,
         executionMode: team.config.executionMode || 'supervised',
+        topic,
+        sessionId: session.id,
         uiStyleContext,
       })
 
@@ -1862,13 +2040,19 @@ async function runBrainstormSession(
 
       const systemPrompt = [agentPrompt, cognitivePrompt, knowledgeCtx].filter(Boolean).join('\n\n')
 
-      const userPrompt = `${roundContext}\n\n## 工作流\n${workflow.label}\n\n这是第 ${round}/${maxRounds} 轮。请给出你的顾问短评，服务最终「${workflow.artifactLabel}」。`
+      const userPrompt = `${roundContext}\n\n## 工作流\n${workflow.label}\n\n## 本轮阶段\n${phase}\n${
+        phase === '独立初稿'
+          ? '先给出你的独立初稿，不要迎合还没出现的共识。'
+          : phase === '互相质询与收束'
+            ? '请点名你同意、反对或修正的对象，并给出能进入主持人裁决的条款。'
+            : '请补强上一轮缺口，说明你反驳或补充的对象。'
+      }\n\n这是第 ${round}/${maxRounds} 轮。请给出你的顾问短评，服务最终「${workflow.artifactLabel}」。`
 
       const startedAt = Date.now()
       let result = ''
       pushSystemTeamMessage(
         session,
-        buildTeamProgressMessage(agentName, `第 ${round}/${maxRounds} 轮发散，正在结合已有观点生成互补想法。`),
+        buildTeamProgressMessage(agentName, `${phase} · 第 ${round}/${maxRounds} 轮，正在形成独立判断与质询对象。`),
         onProgress,
       )
       try {
@@ -1895,6 +2079,18 @@ async function runBrainstormSession(
           durationMs: Date.now() - startedAt,
           round,
         })
+        await pushAgentReflectionMessage({
+          team,
+          session,
+          agentId: agentConfig.agentId,
+          agentName,
+          input: userPrompt,
+          output: result,
+          status: 'failed',
+          phase,
+          round,
+          onProgress,
+        })
         pushSystemTeamMessage(session, result, onProgress, 'error')
         roundContext += `\n\n### ${agentName} (Round ${round})\n${result}`
         continue
@@ -1911,6 +2107,18 @@ async function runBrainstormSession(
         durationMs: Date.now() - startedAt,
         round,
       })
+      await pushAgentReflectionMessage({
+        team,
+        session,
+        agentId: agentConfig.agentId,
+        agentName,
+        input: userPrompt,
+        output: result,
+        status: 'completed',
+        phase,
+        round,
+        onProgress,
+      })
 
       const msg: TeamMessage = {
         id: generateId(),
@@ -1921,6 +2129,10 @@ async function runBrainstormSession(
         timestamp: Date.now(),
         round,
         kind: 'brief',
+        metadata: {
+          phase,
+          hermes: { snapshotFrozen: true, reflectionWritten: true },
+        },
       }
       session.messages.push(msg)
       onProgress?.(msg)

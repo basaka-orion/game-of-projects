@@ -21,7 +21,7 @@ export interface QuickProfilingAnswers {
 }
 
 export interface ExternalProfilingResult {
-  source: 'multi_dimension_profiling'
+  source: 'multi_dimension_profiling' | 'creative_profile'
   mode: ProfilingMode
   profileVersion: string
   raw: Record<string, unknown>

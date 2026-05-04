@@ -108,7 +108,7 @@ export interface TeamMessage {
   content: string
   timestamp: number
   round?: number
-  kind?: 'progress' | 'brief' | 'error' | 'artifact'
+  kind?: 'progress' | 'brief' | 'error' | 'artifact' | 'reflection'
   artifactType?:
     | 'prd'
     | 'discussion'
@@ -118,6 +118,7 @@ export interface TeamMessage {
     | 'visual-review'
     | 'automation-runbook'
   tags?: string[]
+  metadata?: Record<string, unknown>
 }
 
 export interface TeamAction {

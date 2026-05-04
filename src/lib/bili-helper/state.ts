@@ -1,4 +1,6 @@
 import type {
+  BaoyuVisualArtifact,
+  BiliArchiveState,
   BiliArtifactMode,
   BiliChatMessage,
   BiliDownloadFormat,
@@ -92,6 +94,8 @@ export function createLocalVideoInfo(url: string, overrides: Partial<BiliVideoIn
     contentText: overrides.contentText,
     filePath: overrides.filePath,
     siteName: overrides.siteName,
+    canonicalUrl: overrides.canonicalUrl,
+    favicon: overrides.favicon,
     subtitleStatus: overrides.subtitleStatus || (detected.status === 'direct' ? 'metadata' : 'missing'),
     capabilities: overrides.capabilities || [detected.intake, detected.organize, detected.chat],
     warnings: overrides.warnings || [],
@@ -340,10 +344,18 @@ export function normalizeBiliState(input: Partial<BiliHelperState>): BiliHelperS
 
 function normalizeWorkspace(input: Partial<BiliVideoWorkspace>): BiliVideoWorkspace {
   const video = normalizeVideoInfo(input.video || createLocalVideoInfo(BILI_SAMPLE_URL))
+  const pack = input.pack ? normalizePack(input.pack, video.id) : undefined
+  const visualArtifacts = Array.isArray(input.visualArtifacts)
+    ? input.visualArtifacts.map(normalizeVisualArtifact)
+    : Array.isArray(pack?.visualArtifacts)
+      ? pack.visualArtifacts.map(normalizeVisualArtifact)
+      : []
   return {
     video,
     transcript: input.transcript || '',
-    pack: input.pack ? normalizePack(input.pack, video.id) : undefined,
+    pack,
+    visualArtifacts,
+    archive: input.archive ? normalizeArchiveState(input.archive) : undefined,
     chat: Array.isArray(input.chat) ? input.chat.map(normalizeChat) : [],
   }
 }
@@ -364,11 +376,45 @@ function normalizePack(input: Partial<BiliLearningPack>, videoId: string): BiliL
     tutorial: input.tutorial || '',
     actionList: Array.isArray(input.actionList) ? input.actionList : [],
     questions: Array.isArray(input.questions) ? input.questions : [],
+    visualArtifacts: Array.isArray(input.visualArtifacts) ? input.visualArtifacts.map(normalizeVisualArtifact) : [],
     markdown: input.markdown || '',
     createdAt: input.createdAt || Date.now(),
     mode: input.mode || 'tutorial',
     depth: Number.isFinite(input.depth) ? Number(input.depth) : 70,
     generatedBy: input.generatedBy || 'local',
+  }
+}
+
+function normalizeVisualArtifact(input: Partial<BaoyuVisualArtifact>): BaoyuVisualArtifact {
+  return {
+    id: input.id || createBiliId('baoyu'),
+    kind: input.kind || 'image-cards',
+    label: input.label || '图文卡',
+    title: input.title || '秒懂视觉',
+    rationale: input.rationale || '',
+    style: input.style || 'notion',
+    layout: input.layout || 'balanced',
+    palette: input.palette || 'macaron',
+    prompt: input.prompt || '',
+    previewMarkdown: input.previewMarkdown || '',
+    status: input.status || 'ready',
+    isRecommended: Boolean(input.isRecommended),
+    imageDataUrls: Array.isArray(input.imageDataUrls) ? input.imageDataUrls : undefined,
+    error: input.error,
+    createdAt: input.createdAt || Date.now(),
+    generatedBy: input.generatedBy || 'baoyu-plan',
+  }
+}
+
+function normalizeArchiveState(input: Partial<BiliArchiveState>): BiliArchiveState {
+  return {
+    target: input.target || 'knowledge-master',
+    folderPath: input.folderPath || '万象学习',
+    knowledgeTags: Array.isArray(input.knowledgeTags) ? input.knowledgeTags.map(String).filter(Boolean) : ['万象学习'],
+    status: input.status || 'idle',
+    sourceId: input.sourceId,
+    savedAt: input.savedAt,
+    error: input.error,
   }
 }
 

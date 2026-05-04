@@ -1,7 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Player } from '@remotion/player'
 import { AbsoluteFill, Easing, interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion'
-import type { SourceOsGuideProps, SourceOsGuideState } from '../../../../lib/bili-helper/source-os-guide'
+import {
+  buildSourceOsArrowGeometry,
+  type SourceOsGuideArrowGeometry,
+  type SourceOsGuideProps,
+  type SourceOsGuideState,
+} from '../../../../lib/bili-helper/source-os-guide'
 
 export const SOURCE_OS_GUIDE_FPS = 30
 export const SOURCE_OS_GUIDE_DURATION = 210
@@ -39,6 +44,8 @@ function targetLabel(target: string): string {
       return '来源身份卡'
     case 'artifact-dashboard':
       return 'AI 产物仪表盘'
+    case 'baoyu-visuals':
+      return 'Baoyu 秒懂图文'
     case 'learning-pack':
       return '学习包预览'
     case 'chat-export':
@@ -54,7 +61,7 @@ function railText(state: SourceOsGuideState): string {
     .join(' / ')
 }
 
-export function SourceOsGuideComposition({ state, compact = false, reducedMotion = false }: SourceOsGuideProps) {
+export function SourceOsGuideComposition({ state, compact = false, reducedMotion = false, arrow }: SourceOsGuideProps) {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const entrance = reducedMotion
@@ -79,8 +86,19 @@ export function SourceOsGuideComposition({ state, compact = false, reducedMotion
   const cardLeft = compact ? 18 : 24
   const cardTop = compact ? 22 : 28
   const cardHeight = compact ? 162 : 188
-  const lineStart = cardLeft + cardWidth - 4
-  const lineEnd = width - (compact ? 150 : 190)
+  const guideArrow =
+    arrow || {
+      startX: cardLeft + cardWidth - 4,
+      startY: compact ? 118 : 128,
+      endX: width - (compact ? 128 : 160),
+      endY: compact ? 112 : 122,
+      controlX: width - (compact ? 250 : 300),
+      controlY: compact ? 82 : 92,
+    }
+  const drawnEndX = guideArrow.startX + (guideArrow.endX - guideArrow.startX) * lineDraw
+  const drawnEndY = guideArrow.startY + (guideArrow.endY - guideArrow.startY) * lineDraw
+  const drawnControlX = guideArrow.startX + (guideArrow.controlX - guideArrow.startX) * lineDraw
+  const drawnControlY = guideArrow.startY + (guideArrow.controlY - guideArrow.startY) * lineDraw
 
   return (
     <AbsoluteFill
@@ -183,30 +201,30 @@ export function SourceOsGuideComposition({ state, compact = false, reducedMotion
         </div>
       </div>
 
-      <div
-        style={{
-          position: 'absolute',
-          left: lineStart,
-          top: compact ? 108 : 118,
-          width: Math.max(80, lineEnd - lineStart),
-          height: 44,
-          transform: `scaleX(${lineDraw})`,
-          transformOrigin: 'left center',
-        }}
+      <svg
+        width={width}
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
+        style={{ position: 'absolute', inset: 0, overflow: 'visible', pointerEvents: 'none' }}
       >
-        <svg width="100%" height="44" viewBox="0 0 320 44" preserveAspectRatio="none" style={{ display: 'block', overflow: 'visible' }}>
-          <path
-            d="M4 24 C80 4 140 42 218 22 S292 12 316 26"
-            fill="none"
-            stroke={accent}
-            strokeWidth="5"
-            strokeLinecap="round"
-            strokeDasharray="9 12"
-            opacity="0.92"
-          />
-          <path d="M304 14 L320 26 L300 34" fill="none" stroke={accent} strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </div>
+        <defs>
+          <marker id="sourceos-paper-arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+            <path d="M1 1 L9 5 L1 9" fill="none" stroke={accent} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+          </marker>
+        </defs>
+        <path
+          d={`M ${guideArrow.startX} ${guideArrow.startY} Q ${drawnControlX} ${drawnControlY} ${drawnEndX} ${drawnEndY}`}
+          fill="none"
+          stroke={accent}
+          strokeWidth={compact ? 4 : 5}
+          strokeLinecap="round"
+          opacity="0.94"
+          pathLength={1}
+          strokeDasharray="0.16 0.075"
+          markerEnd="url(#sourceos-paper-arrow)"
+          style={{ filter: `drop-shadow(0 0 12px ${accent}66)` }}
+        />
+      </svg>
 
       <div
         style={{
@@ -281,16 +299,52 @@ export default function SourceOsGuidePlayer({ state, compact = false, className 
   const reducedMotion = usePrefersReducedMotion()
   const size = compact ? SOURCE_OS_GUIDE_COMPACT_SIZE : SOURCE_OS_GUIDE_SIZE
   const rootClass = ['sourceos-guide', compact ? 'sourceos-guide--compact' : '', className].filter(Boolean).join(' ')
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const [arrow, setArrow] = useState<SourceOsGuideArrowGeometry | undefined>()
+
+  useLayoutEffect(() => {
+    if (typeof document === 'undefined') return
+    let frame = 0
+    const measure = () => {
+      const root = rootRef.current
+      const target = document.querySelector(`[data-guide-target="${state.focusTarget}"]`)
+      if (!root || !(target instanceof HTMLElement)) {
+        setArrow(undefined)
+        return
+      }
+      setArrow(
+        buildSourceOsArrowGeometry({
+          rootRect: root.getBoundingClientRect(),
+          targetRect: target.getBoundingClientRect(),
+          width: size.width,
+          height: size.height,
+          compact,
+        }),
+      )
+    }
+    const schedule = () => {
+      window.cancelAnimationFrame(frame)
+      frame = window.requestAnimationFrame(measure)
+    }
+    schedule()
+    window.addEventListener('resize', schedule)
+    window.addEventListener('scroll', schedule, true)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.removeEventListener('resize', schedule)
+      window.removeEventListener('scroll', schedule, true)
+    }
+  }, [compact, size.height, size.width, state.focusTarget])
 
   if (reducedMotion) {
     return <SourceOsGuideStatic state={state} compact={compact} reducedMotion className={className} />
   }
 
   return (
-    <div className={rootClass} data-intensity={state.intensity}>
+    <div className={rootClass} data-intensity={state.intensity} ref={rootRef}>
       <Player
         component={SourceOsGuideComposition}
-        inputProps={{ state, compact, reducedMotion: false }}
+        inputProps={{ state, compact, reducedMotion: false, arrow }}
         durationInFrames={SOURCE_OS_GUIDE_DURATION}
         compositionWidth={size.width}
         compositionHeight={size.height}

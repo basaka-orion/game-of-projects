@@ -11,6 +11,7 @@ import {
   AgentDefinition,
   getBuiltInAgentIMConfig,
   saveBuiltInAgentIMConfig,
+  updateCustomAgent,
 } from '../../../lib/agents/registry'
 import {
   loadSkills,
@@ -1262,7 +1263,7 @@ export default function ControlPanelTab() {
       <CollapsibleSection
         title="IM 渠道 — Telegram"
         defaultOpen={true}
-        count={1 + customAgents.filter((a) => a.botToken).length + allExperts.length}
+        count={1 + customAgents.length + allExperts.length}
       >
         <div className="cp__channels">
           {/* 全局 Bot */}
@@ -1440,7 +1441,7 @@ export default function ControlPanelTab() {
           </div>
 
           {/* Agent Bot 管理 */}
-          {customAgents.filter((a) => a.botToken).length > 0 && (
+          {customAgents.length > 0 && (
             <div style={{ marginTop: 'var(--hd-space-md)' }}>
               <div
                 style={{
@@ -1455,9 +1456,9 @@ export default function ControlPanelTab() {
               >
                 <span>🤖</span> 自定义 Agent Bot 管理
               </div>
-              {customAgents
-                .filter((a) => a.botToken)
-                .map((agent) => {
+              {customAgents.map((agent) => {
+                  const token = agent.botToken || ''
+                  const hasToken = token.trim().length > 0
                   const botStatus = botStatusList.find((b) => b.agentId === agent.id)
                   const isOnline = botStatus?.running || false
                   const isVerifying = verifyingBot === agent.id
@@ -1472,66 +1473,92 @@ export default function ControlPanelTab() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <span style={{ fontSize: '1.1rem' }}>{agent.icon}</span>
                           <span style={{ fontWeight: 600, color: agent.color }}>{agent.name}</span>
-                          <StatusBadge status={isOnline ? 'active' : 'inactive'} label={isOnline ? '在线' : '离线'} />
+                          <StatusBadge
+                            status={hasToken && isOnline ? 'active' : 'inactive'}
+                            label={hasToken ? (isOnline ? '在线' : '离线') : '可绑定 Telegram'}
+                          />
                         </div>
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          <button
-                            className="cp__btn"
-                            style={{ fontSize: '0.75rem', padding: '4px 10px' }}
-                            disabled={isVerifying}
-                            onClick={async () => {
-                              setVerifyingBot(agent.id)
-                              setBotVerifyResults((prev) => {
-                                const n = { ...prev }
-                                delete n[agent.id]
-                                return n
-                              })
-                              try {
-                                const electronAPI = (window as any)?.electronAPI
-                                const result = (await electronAPI?.telegramAgentVerify?.(agent.botToken)) as {
-                                  ok: boolean
-                                  botName?: string
-                                  error?: string
+                        {hasToken && (
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button
+                              className="cp__btn"
+                              style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+                              disabled={isVerifying}
+                              onClick={async () => {
+                                setVerifyingBot(agent.id)
+                                setBotVerifyResults((prev) => {
+                                  const n = { ...prev }
+                                  delete n[agent.id]
+                                  return n
+                                })
+                                try {
+                                  const electronAPI = (window as any)?.electronAPI
+                                  const result = (await electronAPI?.telegramAgentVerify?.(token)) as {
+                                    ok: boolean
+                                    botName?: string
+                                    error?: string
+                                  }
+                                  setBotVerifyResults((prev) => ({
+                                    ...prev,
+                                    [agent.id]: result?.ok
+                                      ? { ok: true, msg: `验证成功: @${result.botName}` }
+                                      : { ok: false, msg: result?.error || '验证失败' },
+                                  }))
+                                } catch (err) {
+                                  setBotVerifyResults((prev) => ({
+                                    ...prev,
+                                    [agent.id]: { ok: false, msg: String(err) },
+                                  }))
                                 }
-                                setBotVerifyResults((prev) => ({
-                                  ...prev,
-                                  [agent.id]: result?.ok
-                                    ? { ok: true, msg: `验证成功: @${result.botName}` }
-                                    : { ok: false, msg: result?.error || '验证失败' },
-                                }))
-                              } catch (err) {
-                                setBotVerifyResults((prev) => ({
-                                  ...prev,
-                                  [agent.id]: { ok: false, msg: String(err) },
-                                }))
-                              }
-                              setVerifyingBot(null)
-                            }}
-                          >
-                            {isVerifying ? '⏳' : '🔍 验证'}
-                          </button>
-                          <button
-                            className="cp__btn"
-                            style={{ fontSize: '0.75rem', padding: '4px 10px' }}
-                            onClick={async () => {
-                              const electronAPI = (window as any)?.electronAPI
-                              if (isOnline) {
-                                await electronAPI?.telegramAgentStop?.(agent.id)
-                              } else {
-                                await electronAPI?.telegramAgentStart?.(agent.id, agent.botToken!, agent.name)
-                              }
-                              await refreshTgStatus()
-                            }}
-                          >
-                            {isOnline ? '断开' : '连接'}
-                          </button>
+                                setVerifyingBot(null)
+                              }}
+                            >
+                              {isVerifying ? '⏳' : '🔍 验证'}
+                            </button>
+                            <button
+                              className="cp__btn"
+                              style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+                              onClick={async () => {
+                                const electronAPI = (window as any)?.electronAPI
+                                if (isOnline) {
+                                  await electronAPI?.telegramAgentStop?.(agent.id)
+                                } else {
+                                  await electronAPI?.telegramAgentStart?.(agent.id, token, agent.name)
+                                }
+                                await refreshTgStatus()
+                              }}
+                            >
+                              {isOnline ? '断开' : '连接'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <input
+                        className="cp__input"
+                        type="password"
+                        placeholder={`可选 — 为 ${agent.name} 绑定独立 Bot Token`}
+                        value={token}
+                        onChange={(e) => {
+                          const nextToken = e.target.value
+                          setCustomAgents((prev) =>
+                            prev.map((item) => (item.id === agent.id ? { ...item, botToken: nextToken } : item)),
+                          )
+                        }}
+                        onBlur={(e) => {
+                          updateCustomAgent(agent.id, { botToken: e.currentTarget.value }).catch(() => {})
+                        }}
+                      />
+                      {hasToken ? (
+                        <div
+                          style={{ fontFamily: 'var(--hd-font-mono)', fontSize: '0.7rem', color: 'var(--hd-text-muted)' }}
+                        >
+                          {token.slice(0, 8)}...{token.slice(-4)}
                         </div>
-                      </div>
-                      <div
-                        style={{ fontFamily: 'var(--hd-font-mono)', fontSize: '0.7rem', color: 'var(--hd-text-muted)' }}
-                      >
-                        {agent.botToken!.slice(0, 8)}...{agent.botToken!.slice(-4)}
-                      </div>
+                      ) : (
+                        <div style={{ fontSize: '0.7rem', color: 'var(--hd-text-muted)' }}>
+                          已激活但未绑定 Telegram；填入 Bot Token 后可独立上线。
+                        </div>
+                      )}
                       {verifyResult && (
                         <div
                           style={{
@@ -1549,9 +1576,9 @@ export default function ControlPanelTab() {
             </div>
           )}
 
-          {customAgents.filter((a) => a.botToken).length === 0 && (
+          {customAgents.length === 0 && (
             <div style={{ fontSize: '0.75rem', color: 'var(--hd-text-muted)', marginTop: 'var(--hd-space-sm)' }}>
-              提示: 在「群策 → 我的 Agent」中为 Agent 配置 Bot Token 后，可在此管理
+              提示: 在「群策 → 我的 Agent」或「小白智囊团」激活自定义 Agent 后，可在此绑定 Telegram
             </div>
           )}
 

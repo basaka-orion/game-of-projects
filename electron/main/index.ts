@@ -20,6 +20,7 @@ import { bundle as bundleRemotion } from '@remotion/bundler'
 import { renderMedia, selectComposition } from '@remotion/renderer'
 import { query, run, exportDatabase, importDatabase, getDatabase } from './database'
 import { validateCommand } from '../../src/lib/security/command-guard'
+import { extractFetchedUrlMetadata } from '../../src/lib/bili-helper/web-metadata'
 
 // ─── AI Provider helpers (main process) ───
 
@@ -223,7 +224,7 @@ interface GeminiImagePartMain {
 }
 
 interface GeminiGeneratePayload {
-  imagePart: GeminiImagePartMain
+  imagePart?: GeminiImagePartMain
   prompt: string
   count?: number
 }
@@ -252,7 +253,7 @@ async function generateOneGeminiImage(apiKey: string, payload: GeminiGeneratePay
       contents: [
         {
           role: 'user',
-          parts: [payload.imagePart, { text: payload.prompt }],
+          parts: [payload.imagePart, { text: payload.prompt }].filter(Boolean),
         },
       ],
       generationConfig: {
@@ -1892,31 +1893,7 @@ function registerIPC() {
       if (!response.ok) return { error: `HTTP ${response.status}` }
       const html = await response.text()
 
-      // 提取 title
-      const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i)
-      const title = titleMatch ? titleMatch[1].trim() : url
-
-      // 提取 author
-      const authorMatch = html.match(/<meta[^>]*name=["']author["'][^>]*content=["']([^"']+)["']/i)
-      const author = authorMatch ? authorMatch[1] : ''
-
-      // 提取 description
-      const descMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i)
-      const description = descMatch ? descMatch[1] : ''
-
-      // HTML → 纯文本
-      let text = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-      text = text.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-      text = text.replace(/<[^>]+>/g, ' ')
-      text = text
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-      text = text.replace(/\s+/g, ' ').trim()
-      text = text.slice(0, 50000) // 50k 上限
-
-      return { title, content: text, author, description, url }
+      return extractFetchedUrlMetadata(html, url)
     } catch (err) {
       return { error: String(err) }
     }
@@ -2194,8 +2171,8 @@ updated: "${updatedAt}"
           error: 'Gemini API Key 未配置。请设置 GEMINI_API_KEY / GOOGLE_API_KEY，或在 settings 写入 gemini_api_key。',
         }
       }
-      if (!payload?.imagePart?.inlineData?.data || !payload.prompt) {
-        return { images: [], warnings: [], error: '缺少图片或生成提示词。' }
+      if (!payload?.prompt) {
+        return { images: [], warnings: [], error: '缺少生成提示词。' }
       }
       const count = Math.min(Math.max(Number(payload.count) || 4, 1), 4)
       const settled = await Promise.allSettled(

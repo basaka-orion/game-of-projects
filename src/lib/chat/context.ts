@@ -24,7 +24,8 @@ import { renderProfilingContext } from '../boss/profiling/summary'
 import { getEraVariables, buildEraContext } from '../game/era-variables'
 import { buildToolPrompt } from './tool-loop'
 import { LLMConfig, getDefaultConfig } from '../ai/provider'
-import { getExpertConfig, ExpertRole } from './router'
+import { getExpertConfig } from './router'
+import { isExpertRole } from '../agents/surface'
 import { getSoul, renderSoulPrompt } from '../agents/soul'
 import {
   loadAgentMemory,
@@ -48,7 +49,7 @@ interface ContextLayer {
 /** 组装完整上下文 — Hermes 风格分层注入 */
 export async function assembleContext(
   projects: Array<{ title: string; survivalRate: number; survivalGrade: string; oneLiner: string }>,
-  expertRole?: ExpertRole,
+  expertRole?: string,
   userMessage?: string,
 ): Promise<string> {
   const layers: ContextLayer[] = []
@@ -82,7 +83,8 @@ export async function assembleContext(
 
   // Layer 1.5: 兼容旧的身份注入（如果 Soul 加载失败）
   if (!layers.find((l) => l.label === 'soul')) {
-    const expertConfig = getExpertConfig(expertRole || 'general')
+    const fallbackRole = isExpertRole(expertRole) ? expertRole : 'general'
+    const expertConfig = getExpertConfig(fallbackRole)
     const identityContent =
       expertConfig.identity
         .replace(/\$\{bossName\}/g, boss.name)

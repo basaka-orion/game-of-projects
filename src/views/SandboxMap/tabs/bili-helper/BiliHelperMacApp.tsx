@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from 'react'
 import { answerBiliQuestion, generateBiliLearningPack, resolveBiliVideoInfo } from '../../../../lib/bili-helper/ai'
 import {
+  BAOYU_VISUAL_FILTERS,
+  BAOYU_VISUAL_KIND_LABELS,
+  buildBaoyuVisualPlan,
+  renderBaoyuCardDeck,
+  topRecommendedVisual,
+} from '../../../../lib/bili-helper/baoyu-visuals'
+import {
   BILI_ARTIFACT_MODES,
   BILI_DEFAULT_TRANSCRIPT,
   BILI_SAMPLE_URL,
@@ -16,7 +23,18 @@ import {
 } from '../../../../lib/bili-helper/state'
 import { BIBI_PLATFORM_CAPABILITIES, platformStatusLabel } from '../../../../lib/bili-helper/platforms'
 import { buildSourceOsGuideState, type SourceOsGuideState } from '../../../../lib/bili-helper/source-os-guide'
+import { createSource } from '../../../../lib/knowledge/wiki'
+import {
+  buildKnowledgeFolderOptions,
+  getFolderDisplayPath,
+  loadKnowledgeSourceScopeEntries,
+  normalizeFolderPath,
+  type KnowledgeFolderOption,
+} from '../../../../lib/knowledge/folders'
 import type {
+  BaoyuVisualArtifact,
+  BaoyuVisualArtifactKind,
+  BiliArchiveTarget,
   BiliArtifactMode,
   BiliDownloadFormat,
   BiliHelperState,
@@ -30,6 +48,8 @@ import './BiliHelperMacApp.css'
 type ProcessingState = 'idle' | 'resolving' | 'generating' | 'chatting'
 
 const featureChips = ['视频/网页/文件/图片', '封面简介自动卡片', 'AI 产物 + 对话']
+
+type BaoyuVisualFilter = 'recommended' | BaoyuVisualArtifactKind
 
 const viewTabs: Array<[BiliHelperView, string]> = [
   ['workspace', '工作台'],
@@ -96,6 +116,45 @@ function downloadBlob(fileName: string, content: BlobPart, type: string) {
 
 function shellDoubleQuote(value: string): string {
   return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\$/g, '\\$').replace(/`/g, '\\`')}"`
+}
+
+function visualPromptFileName(workspace: BiliVideoWorkspace, artifact: BaoyuVisualArtifact): string {
+  return `${safeFileName(workspace.video.title)}-${artifact.kind}-${artifact.id.slice(-10)}.md`
+}
+
+function buildArchiveMarkdown(workspace: BiliVideoWorkspace): string {
+  const visualMarkdown = (workspace.visualArtifacts || [])
+    .slice(0, 4)
+    .map((artifact) => `### ${artifact.label} · ${artifact.title}\n\n${artifact.previewMarkdown}\n\nPrompt:\n\n${artifact.prompt}`)
+    .join('\n\n')
+  return `${workspace.pack?.markdown || `# ${workspace.video.title}\n\n${workspace.video.description}`}
+
+## Baoyu 秒懂视觉
+
+${visualMarkdown || '暂无视觉产物。'}
+
+## 原始来源正文
+
+${workspace.transcript || workspace.video.contentText || '暂无正文。'}`
+}
+
+function defaultArchiveTags(workspace: BiliVideoWorkspace, target: BiliArchiveTarget): string[] {
+  const base = [
+    '万象学习',
+    'SourceOS',
+    'Baoyu秒懂',
+    workspace.video.platformName,
+    workspace.video.sourceKind,
+    target === 'knowledge-master' ? '知识+大佬' : target === 'backup' ? '后备知识' : '知识文件夹',
+    ...workspace.video.tags,
+  ]
+  return Array.from(new Set(base.map((tag) => String(tag || '').trim()).filter(Boolean))).slice(0, 12)
+}
+
+function defaultArchiveFolder(target: BiliArchiveTarget, folderInput: string): string {
+  if (target === 'knowledge-master') return '知识+大佬/万象学习'
+  if (target === 'backup') return '后备知识/万象学习'
+  return normalizeFolderPath(folderInput || '万象学习')
 }
 
 function getDownloadableUrl(workspace: BiliVideoWorkspace): string | null {
@@ -182,6 +241,9 @@ export default function BiliHelperMacApp() {
   const [question, setQuestion] = useState('这个来源最值得我马上执行的动作是什么？')
   const [artifactMode, setArtifactMode] = useState<BiliArtifactMode>('tutorial')
   const [artifactDepth, setArtifactDepth] = useState(70)
+  const [visualFilter, setVisualFilter] = useState<BaoyuVisualFilter>('recommended')
+  const [folderInput, setFolderInput] = useState('万象学习')
+  const [folderOptions, setFolderOptions] = useState<KnowledgeFolderOption[]>([])
   const [toast, setToast] = useState('')
 
   const workspace = useMemo(() => activeWorkspace(state), [state])
@@ -229,13 +291,306 @@ export default function BiliHelperMacApp() {
     saveBiliHelperState(state)
   }, [state])
 
+  useEffect(() => {
+    let cancelled = false
+    loadKnowledgeSourceScopeEntries()
+      .then((sourceEntries) => {
+        if (cancelled) return
+        setFolderOptions(buildKnowledgeFolderOptions({ sourceEntries, pages: [], sourceFolderMap: new Map() }))
+      })
+      .catch(() => {
+        if (!cancelled) setFolderOptions([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (workspace?.archive?.folderPath) {
+      setFolderInput(workspace.archive.folderPath)
+    }
+  }, [workspace?.video.id, workspace?.archive?.folderPath])
+
+  useEffect(() => {
+    if (!workspace || (workspace.visualArtifacts || []).length > 0) return
+    const visualArtifacts = buildBaoyuVisualPlan({
+      video: workspace.video,
+      transcript: workspace.transcript || workspace.video.contentText,
+      pack: workspace.pack,
+      goal,
+    })
+    setState((prev) =>
+      patchWorkspace(prev, workspace.video.id, (item) => ({
+        ...item,
+        pack: item.pack ? { ...item.pack, visualArtifacts } : item.pack,
+        visualArtifacts,
+        archive: item.archive || {
+          target: 'knowledge-master',
+          folderPath: '知识+大佬/万象学习',
+          knowledgeTags: defaultArchiveTags(item, 'knowledge-master'),
+          status: 'idle',
+        },
+      })),
+    )
+  }, [goal, workspace?.video.id, workspace?.visualArtifacts?.length])
+
+  useEffect(() => {
+    const electronAPI = (window as any)?.electronAPI
+    if (!workspace || !electronAPI?.generateGeminiImages) return
+    const topVisual = topRecommendedVisual(workspace.visualArtifacts || [])
+    if (!topVisual || topVisual.status !== 'ready') return
+    void handleGenerateVisual(topVisual, true)
+  }, [workspace?.video.id, workspace?.visualArtifacts?.[0]?.id])
+
   function flash(message: string) {
     setToast(message)
     window.setTimeout(() => setToast(''), 1800)
   }
 
+  function enhanceWorkspace(nextWorkspace: BiliVideoWorkspace, pack = nextWorkspace.pack): BiliVideoWorkspace {
+    const visualArtifacts = buildBaoyuVisualPlan({
+      video: nextWorkspace.video,
+      transcript: nextWorkspace.transcript || nextWorkspace.video.contentText,
+      pack,
+      goal,
+    })
+    return {
+      ...nextWorkspace,
+      pack: pack ? { ...pack, visualArtifacts } : pack,
+      visualArtifacts,
+      archive: nextWorkspace.archive || {
+        target: 'knowledge-master',
+        folderPath: '知识+大佬/万象学习',
+        knowledgeTags: defaultArchiveTags(nextWorkspace, 'knowledge-master'),
+        status: 'idle',
+      },
+    }
+  }
+
+  async function writeVisualPromptRecord(workspace: BiliVideoWorkspace, artifact: BaoyuVisualArtifact) {
+    const electronAPI = (window as any)?.electronAPI
+    if (!electronAPI?.getAppData || !electronAPI?.writeFile) return
+    const appData = await electronAPI.getAppData()
+    const promptDir = `${appData}/BaoyuVisualPrompts`
+    if (electronAPI?.executeCommand) {
+      await electronAPI.executeCommand(`mkdir -p ${shellDoubleQuote(promptDir)}`, 10000)
+    }
+    await electronAPI.writeFile(`${promptDir}/${visualPromptFileName(workspace, artifact)}`, artifact.prompt)
+  }
+
+  async function handleGenerateVisual(artifact: BaoyuVisualArtifact, automatic = false) {
+    if (!workspace) return
+    if (artifact.structuredCards?.length) {
+      const imageDataUrls = artifact.imageDataUrls?.length ? artifact.imageDataUrls : renderBaoyuCardDeck(artifact.structuredCards)
+      setState((prev) =>
+        patchWorkspace(prev, workspace.video.id, (item) => ({
+          ...item,
+          visualArtifacts: (item.visualArtifacts || []).map((visual) =>
+            visual.id === artifact.id
+              ? { ...visual, status: 'generated', imageDataUrls, generatedBy: 'local', textRenderMode: 'local-svg', error: undefined }
+              : visual,
+          ),
+          pack: item.pack
+            ? {
+                ...item.pack,
+                visualArtifacts: (item.visualArtifacts || []).map((visual) =>
+                  visual.id === artifact.id
+                    ? { ...visual, status: 'generated', imageDataUrls, generatedBy: 'local', textRenderMode: 'local-svg', error: undefined }
+                    : visual,
+                ),
+              }
+            : item.pack,
+        })),
+      )
+      if (!automatic) flash('本地中文图文卡已生成')
+      return
+    }
+    const electronAPI = (window as any)?.electronAPI
+    if (!electronAPI?.generateGeminiImages) {
+      setState((prev) =>
+        patchWorkspace(prev, workspace.video.id, (item) => ({
+          ...item,
+          visualArtifacts: (item.visualArtifacts || []).map((visual) =>
+            visual.id === artifact.id ? { ...visual, status: 'needs-config', error: '当前环境没有图片生成代理，已保留 Baoyu 提示词。' } : visual,
+          ),
+          pack: item.pack
+            ? {
+                ...item.pack,
+                visualArtifacts: (item.visualArtifacts || []).map((visual) =>
+                  visual.id === artifact.id ? { ...visual, status: 'needs-config', error: '当前环境没有图片生成代理，已保留 Baoyu 提示词。' } : visual,
+                ),
+              }
+            : item.pack,
+        })),
+      )
+      if (!automatic) flash('已保留提示词，当前环境没有图片生成代理')
+      return
+    }
+
+    setState((prev) =>
+      patchWorkspace(prev, workspace.video.id, (item) => ({
+        ...item,
+        visualArtifacts: (item.visualArtifacts || []).map((visual) => (visual.id === artifact.id ? { ...visual, status: 'generating', error: undefined } : visual)),
+        pack: item.pack
+          ? {
+              ...item.pack,
+              visualArtifacts: (item.visualArtifacts || []).map((visual) =>
+                visual.id === artifact.id ? { ...visual, status: 'generating', error: undefined } : visual,
+              ),
+            }
+          : item.pack,
+      })),
+    )
+
+    try {
+      await writeVisualPromptRecord(workspace, artifact)
+      const result = await electronAPI.generateGeminiImages({ prompt: artifact.prompt, count: 1 })
+      if (result?.error) throw new Error(result.error)
+      const imageDataUrls = Array.isArray(result?.images) ? result.images.filter(Boolean) : []
+      if (imageDataUrls.length === 0) throw new Error(result?.warnings?.[0] || '图片模型没有返回图片')
+      setState((prev) =>
+        patchWorkspace(prev, workspace.video.id, (item) => ({
+          ...item,
+          visualArtifacts: (item.visualArtifacts || []).map((visual) =>
+            visual.id === artifact.id
+              ? { ...visual, status: 'generated', imageDataUrls, generatedBy: 'gemini', error: undefined }
+              : visual,
+          ),
+          pack: item.pack
+            ? {
+                ...item.pack,
+                visualArtifacts: (item.visualArtifacts || []).map((visual) =>
+                  visual.id === artifact.id
+                    ? { ...visual, status: 'generated', imageDataUrls, generatedBy: 'gemini', error: undefined }
+                    : visual,
+                ),
+              }
+            : item.pack,
+        })),
+      )
+      if (!automatic) flash('Baoyu 视觉图已生成')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setState((prev) =>
+        patchWorkspace(prev, workspace.video.id, (item) => ({
+          ...item,
+          visualArtifacts: (item.visualArtifacts || []).map((visual) =>
+            visual.id === artifact.id
+              ? {
+                  ...visual,
+                  status: /api key|key 未配置|未配置|credential/i.test(message) ? 'needs-config' : 'failed',
+                  error: message,
+                }
+              : visual,
+          ),
+          pack: item.pack
+            ? {
+                ...item.pack,
+                visualArtifacts: (item.visualArtifacts || []).map((visual) =>
+                  visual.id === artifact.id
+                    ? {
+                        ...visual,
+                        status: /api key|key 未配置|未配置|credential/i.test(message) ? 'needs-config' : 'failed',
+                        error: message,
+                      }
+                    : visual,
+                ),
+              }
+            : item.pack,
+        })),
+      )
+      if (!automatic) flash(/未配置|api key/i.test(message) ? '图片模型未配置，已保留提示词' : 'Baoyu 视觉生成失败')
+    }
+  }
+
+  async function handleArchive(target: BiliArchiveTarget) {
+    if (!workspace) return
+    const folderPath = defaultArchiveFolder(target, folderInput)
+    const knowledgeTags = defaultArchiveTags(workspace, target)
+    setState((prev) =>
+      patchWorkspace(prev, workspace.video.id, (item) => ({
+        ...item,
+        archive: {
+          target,
+          folderPath,
+          knowledgeTags,
+          status: 'saving',
+        },
+      })),
+    )
+
+    try {
+      const sourceId = await createSource({
+        title: workspace.video.title,
+        sourceType: workspace.video.sourceKind,
+        content: buildArchiveMarkdown(workspace),
+        rawContent: workspace.transcript || workspace.video.contentText || '',
+        url: workspace.video.canonicalUrl || workspace.video.url,
+        filePath: workspace.video.filePath || '',
+        folderPath,
+        author: workspace.video.owner,
+        language: 'zh',
+        tags: knowledgeTags,
+        status: 'pending',
+        metadata: {
+          folderPath,
+          sourceOs: true,
+          platform: workspace.video.platform,
+          platformName: workspace.video.platformName,
+          sourceKind: workspace.video.sourceKind,
+          cover: workspace.video.cover,
+          favicon: workspace.video.favicon,
+          baoyuVisuals: (workspace.visualArtifacts || []).map((visual) => ({
+            kind: visual.kind,
+            title: visual.title,
+            status: visual.status,
+            style: visual.style,
+            layout: visual.layout,
+          })),
+        },
+      })
+      const electronAPI = (window as any)?.electronAPI
+      if (electronAPI?.triggerWikiCompile) {
+        electronAPI.triggerWikiCompile().catch(() => undefined)
+      }
+      setState((prev) =>
+        patchWorkspace(prev, workspace.video.id, (item) => ({
+          ...item,
+          archive: {
+            target,
+            folderPath,
+            knowledgeTags,
+            status: 'saved',
+            sourceId,
+            savedAt: Date.now(),
+          },
+        })),
+      )
+      loadKnowledgeSourceScopeEntries()
+        .then((sourceEntries) => setFolderOptions(buildKnowledgeFolderOptions({ sourceEntries, pages: [], sourceFolderMap: new Map() })))
+        .catch(() => undefined)
+      flash(target === 'knowledge-master' ? '已置入知识+大佬' : target === 'backup' ? '已进入后备知识' : '已归档到知识文件夹')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setState((prev) =>
+        patchWorkspace(prev, workspace.video.id, (item) => ({
+          ...item,
+          archive: {
+            target,
+            folderPath,
+            knowledgeTags,
+            status: 'failed',
+            error: message,
+          },
+        })),
+      )
+      flash('归档失败')
+    }
+  }
+
   function handleLoadSample() {
-    const sample = createSampleBiliWorkspace()
+    const sample = enhanceWorkspace(createSampleBiliWorkspace())
     setState((prev) => {
       const exists = prev.workspaces.some((item) => item.video.bvid === sample.video.bvid)
       const nextWorkspaces = exists ? prev.workspaces : [sample, ...prev.workspaces]
@@ -260,11 +615,11 @@ export default function BiliHelperMacApp() {
     setProcessing('resolving')
     try {
       const video = await resolveBiliVideoInfo(url)
-      const newWorkspace: BiliVideoWorkspace = {
+      const newWorkspace: BiliVideoWorkspace = enhanceWorkspace({
         video,
         transcript: video.contentText || '',
         chat: [createBiliChatMessage('assistant', `${video.platformName} 来源已解析。下一步可以补正文/字幕/OCR，或直接生成 ${BILI_ARTIFACT_MODES.find((item) => item.id === artifactMode)?.label || '学习包'}。`)],
-      }
+      })
       setState((prev) => ({
         ...prev,
         workspaces: [newWorkspace, ...prev.workspaces.filter((item) => item.video.bvid !== video.bvid && item.video.url !== video.url)],
@@ -311,7 +666,7 @@ export default function BiliHelperMacApp() {
         }
 
         imported.push(
-          createFileSourceWorkspace({
+          enhanceWorkspace(createFileSourceWorkspace({
             filePath,
             fileName: extracted?.metadata?.fileName || filePath.split('/').pop() || '本地文件',
             kind: extracted?.kind || 'file',
@@ -320,7 +675,7 @@ export default function BiliHelperMacApp() {
             rawContent,
             warnings,
             size: extracted?.metadata?.size,
-          }),
+          })),
         )
       }
 
@@ -361,11 +716,19 @@ export default function BiliHelperMacApp() {
       mode: artifactMode,
       depth: artifactDepth,
     })
+    const visualArtifacts = buildBaoyuVisualPlan({
+      video: workspace.video,
+      transcript: workspace.transcript || BILI_DEFAULT_TRANSCRIPT,
+      pack,
+      goal,
+    })
+    const packWithVisuals = { ...pack, visualArtifacts }
     setState((prev) =>
       patchWorkspace(prev, workspace.video.id, (item) => ({
         ...item,
         transcript: item.transcript || BILI_DEFAULT_TRANSCRIPT,
-        pack,
+        pack: packWithVisuals,
+        visualArtifacts,
       })),
     )
     setProcessing('idle')
@@ -513,7 +876,7 @@ export default function BiliHelperMacApp() {
         <div className="bili-helper-mac__hero-inner">
           <div className="bili-helper-mac__badge">
             <i />
-            UI风格馆联动 · 多来源学习工作台
+            UI风格馆联动 · Remotion Guide · 多来源学习工作台
           </div>
           <h1>
             <span>Source</span>
@@ -677,6 +1040,13 @@ export default function BiliHelperMacApp() {
                   onDepthChange={setArtifactDepth}
                 />
 
+                <BaoyuVisualWorkbench
+                  workspace={workspace}
+                  filter={visualFilter}
+                  onFilterChange={setVisualFilter}
+                  onGenerateVisual={handleGenerateVisual}
+                />
+
                 <section className="bili-helper-panel bili-helper-panel--transcript sourceos-notebook">
                   <PanelHead
                     label="SOURCE NOTEBOOK"
@@ -691,6 +1061,14 @@ export default function BiliHelperMacApp() {
                 </section>
 
                 <PackPreview workspace={workspace} onCopy={() => handleCopyPack()} onOpenTutorial={() => setView('tutorial')} />
+
+                <ArchiveRouter
+                  workspace={workspace}
+                  folderInput={folderInput}
+                  folderOptions={folderOptions}
+                  onFolderInput={setFolderInput}
+                  onArchive={handleArchive}
+                />
               </div>
             )}
 
@@ -977,6 +1355,144 @@ function ArtifactControls({
         </div>
         <input type="range" min={10} max={100} step={5} value={depth} onChange={(event) => onDepthChange(Number(event.target.value))} />
       </div>
+    </section>
+  )
+}
+
+function BaoyuVisualWorkbench({
+  workspace,
+  filter,
+  onFilterChange,
+  onGenerateVisual,
+}: {
+  workspace: BiliVideoWorkspace | null
+  filter: BaoyuVisualFilter
+  onFilterChange: (filter: BaoyuVisualFilter) => void
+  onGenerateVisual: (artifact: BaoyuVisualArtifact, automatic?: boolean) => void
+}) {
+  const artifacts = workspace?.visualArtifacts || []
+  const filteredArtifacts =
+    filter === 'recommended' ? artifacts.filter((artifact) => artifact.isRecommended) : artifacts.filter((artifact) => artifact.kind === filter)
+  const visibleArtifacts = filteredArtifacts.length > 0 ? filteredArtifacts : artifacts.slice(0, 3)
+  const generatedCount = artifacts.filter((artifact) => artifact.status === 'generated').length
+
+  return (
+    <section className="bili-helper-panel bili-helper-panel--baoyu-visuals" data-guide-target="baoyu-visuals">
+      <PanelHead label="BAOYU 秒懂视觉" value={workspace ? `${generatedCount}/${artifacts.length || 0} READY` : 'WAITING'} />
+      {!workspace ? (
+        <div className="bili-helper-mac__empty-note">解析来源后，会自动出现契合内容气质的图文卡、漫画、信息图、图解和封面方案。</div>
+      ) : (
+        <>
+          <div className="baoyu-visuals__hero">
+            <div>
+              <span>智能自动 + 可控</span>
+              <h3>{workspace.video.title}</h3>
+              <p>{topRecommendedVisual(artifacts)?.rationale || '正在准备 Baoyu 视觉方案。'}</p>
+            </div>
+            <aside>
+              <strong>{BAOYU_VISUAL_KIND_LABELS[topRecommendedVisual(artifacts)?.kind || 'image-cards']}</strong>
+              <small>{topRecommendedVisual(artifacts)?.style || 'notion'} · {topRecommendedVisual(artifacts)?.layout || 'dense'}</small>
+            </aside>
+          </div>
+
+          <div className="baoyu-visuals__filters" aria-label="Baoyu 视觉类型">
+            {BAOYU_VISUAL_FILTERS.map((item) => (
+              <button key={item} className={filter === item ? 'baoyu-visuals__filter--active' : ''} onClick={() => onFilterChange(item)}>
+                {item === 'recommended' ? '推荐' : BAOYU_VISUAL_KIND_LABELS[item]}
+              </button>
+            ))}
+          </div>
+
+          <div className="baoyu-visuals__grid">
+            {visibleArtifacts.map((artifact) => (
+              <article key={artifact.id} className="baoyu-visual-card" data-status={artifact.status}>
+                <header>
+                  <span>{artifact.label}</span>
+                  <strong>{artifact.title}</strong>
+                </header>
+                <div className="baoyu-visual-card__preview">
+                  {artifact.imageDataUrls?.[0] ? (
+                    <img src={artifact.imageDataUrls[0]} alt="" />
+                  ) : (
+                    <pre>{artifact.previewMarkdown}</pre>
+                  )}
+                </div>
+                <p>{artifact.rationale}</p>
+                <div className="baoyu-visual-card__meta">
+                  <i>{artifact.style}</i>
+                  <i>{artifact.layout}</i>
+                  <i>{artifact.palette}</i>
+                  <i>{artifact.status}</i>
+                </div>
+                {artifact.error && <small>{artifact.error.slice(0, 120)}</small>}
+                <footer>
+                  <button onClick={() => onGenerateVisual(artifact)} disabled={artifact.status === 'generating'}>
+                    {artifact.status === 'generating' ? '生成中' : artifact.status === 'generated' ? '重新生成' : '生成图'}
+                  </button>
+                  <button onClick={() => copyText(artifact.prompt)}>复制提示词</button>
+                </footer>
+              </article>
+            ))}
+          </div>
+        </>
+      )}
+    </section>
+  )
+}
+
+function ArchiveRouter({
+  workspace,
+  folderInput,
+  folderOptions,
+  onFolderInput,
+  onArchive,
+}: {
+  workspace: BiliVideoWorkspace | null
+  folderInput: string
+  folderOptions: KnowledgeFolderOption[]
+  onFolderInput: (value: string) => void
+  onArchive: (target: BiliArchiveTarget) => void
+}) {
+  const archive = workspace?.archive
+  const folderChoices = folderOptions.filter((option) => option.path && option.path !== '__all__').slice(0, 8)
+  return (
+    <section className="bili-helper-panel bili-helper-panel--archive-router" data-guide-target="chat-export">
+      <PanelHead label="归档去向" value={archive?.status === 'saved' ? 'SAVED' : archive?.status === 'saving' ? 'SAVING' : 'READY'} />
+      <div className="archive-router__targets">
+        <button className="bili-helper-mac__primary" onClick={() => onArchive('knowledge-master')} disabled={!workspace || archive?.status === 'saving'}>
+          置入知识+大佬
+        </button>
+        <button onClick={() => onArchive('knowledge-folder')} disabled={!workspace || archive?.status === 'saving'}>
+          进入文件夹
+        </button>
+        <button onClick={() => onArchive('backup')} disabled={!workspace || archive?.status === 'saving'}>
+          后备知识
+        </button>
+      </div>
+      <div className="archive-router__folder">
+        <label>
+          <span>知识文件夹</span>
+          <input value={folderInput} onChange={(event) => onFolderInput(event.target.value)} list="bili-helper-folder-options" placeholder="万象学习/网页资料" />
+        </label>
+        <datalist id="bili-helper-folder-options">
+          {folderChoices.map((option) => (
+            <option key={option.path} value={option.path}>
+              {option.displayPath}
+            </option>
+          ))}
+        </datalist>
+      </div>
+      <div className="archive-router__chips">
+        {(archive?.knowledgeTags || ['万象学习', 'SourceOS', 'Baoyu秒懂', workspace?.video.sourceKind || 'source']).slice(0, 8).map((tag) => (
+          <span key={tag}>{tag}</span>
+        ))}
+      </div>
+      {archive?.sourceId && (
+        <p className="archive-router__result">
+          已写入 {getFolderDisplayPath(archive.folderPath)} · {archive.sourceId}
+        </p>
+      )}
+      {archive?.error && <p className="archive-router__error">{archive.error}</p>}
     </section>
   )
 }

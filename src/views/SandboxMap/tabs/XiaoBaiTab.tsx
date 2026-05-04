@@ -16,6 +16,7 @@ import RLJBMacApp from './rljb/RLJBMacApp'
 import FlashOfGeniusMacApp from './flash-of-genius/FlashOfGeniusMacApp'
 import ChuangyiMacApp from './chuangyi/ChuangyiMacApp'
 import BiliHelperMacApp from './bili-helper/BiliHelperMacApp'
+import CouncilMacApp from './xiaobai-council/CouncilMacApp'
 import UIStyleMuseumMacApp from './ui-museum/UIStyleMuseumMacApp'
 import FoodAdCrafterMacApp from './food-ad-crafter/FoodAdCrafterMacApp'
 import './XiaoBaiTab.css'
@@ -26,7 +27,7 @@ type SourceType = 'local' | 'web' | 'generated'
 type ActionType = 'copy' | 'run_terminal' | 'open_url' | 'multi_step'
 type SidebarTab = 'history' | 'notes'
 type MainView = 'home' | 'result' | 'note'
-type XiaoBaiMode = 'diagnose' | 'rljb' | 'flash' | 'chuangyi' | 'bili' | 'uiMuseum' | 'foodAd'
+type XiaoBaiMode = 'diagnose' | 'rljb' | 'flash' | 'chuangyi' | 'bili' | 'council' | 'uiMuseum' | 'foodAd'
 
 interface FollowUp {
   question: string
@@ -219,9 +220,11 @@ export default function XiaoBaiTab() {
             ? '创意孵化器 · Chuangyi Mac'
             : workspaceMode === 'bili'
               ? '万象学习助手 · SourceOS Mac'
-              : workspaceMode === 'uiMuseum'
-                ? 'UI 风格博物馆 · UI- Mac'
-                : '美食广告大片生成器 · AI Studio Mac'
+              : workspaceMode === 'council'
+                ? '小白智囊团 · PRD 闭环'
+                : workspaceMode === 'uiMuseum'
+                  ? 'UI 风格博物馆 · UI- Mac'
+                  : '美食广告大片生成器 · AI Studio Mac'
 
   // ─── Data Loading ────────────────────────────────────────
 
@@ -686,6 +689,12 @@ export default function XiaoBaiTab() {
             万象学习
           </button>
           <button
+            className={workspaceMode === 'council' ? 'xiaobai-tab__mode-btn--active' : ''}
+            onClick={() => setWorkspaceMode('council')}
+          >
+            小白智囊团
+          </button>
+          <button
             className={workspaceMode === 'uiMuseum' ? 'xiaobai-tab__mode-btn--active' : ''}
             onClick={() => setWorkspaceMode('uiMuseum')}
           >
@@ -1146,6 +1155,8 @@ export default function XiaoBaiTab() {
         <ChuangyiMacApp />
       ) : workspaceMode === 'bili' ? (
         <BiliHelperMacApp />
+      ) : workspaceMode === 'council' ? (
+        <CouncilMacApp />
       ) : workspaceMode === 'uiMuseum' ? (
         <UIStyleMuseumMacApp />
       ) : (

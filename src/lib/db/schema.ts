@@ -291,6 +291,40 @@ export function getSchema(): string {
 
     CREATE INDEX IF NOT EXISTS idx_agent_memories_agent ON agent_memories(agent_id);
 
+    -- Agent 会话快照（Hermes 冻结记忆模式）
+    CREATE TABLE IF NOT EXISTS agent_session_snapshots (
+      id TEXT PRIMARY KEY,
+      agent_id TEXT NOT NULL,
+      session_id TEXT DEFAULT '',
+      topic TEXT DEFAULT '',
+      soul_json TEXT DEFAULT '{}',
+      memory_snapshot_json TEXT DEFAULT '{}',
+      prompt_preview TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now','localtime'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_agent_session_snapshots_agent ON agent_session_snapshots(agent_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_agent_session_snapshots_session ON agent_session_snapshots(session_id, created_at DESC);
+
+    -- Agent 反思记录（每轮结束后的学习与下次改进）
+    CREATE TABLE IF NOT EXISTS agent_reflections (
+      id TEXT PRIMARY KEY,
+      agent_id TEXT NOT NULL,
+      session_id TEXT DEFAULT '',
+      team_id TEXT DEFAULT '',
+      subject TEXT DEFAULT '',
+      phase TEXT DEFAULT '',
+      learned TEXT DEFAULT '',
+      next_time TEXT DEFAULT '',
+      memory_entry TEXT DEFAULT '',
+      update_memory INTEGER DEFAULT 1,
+      metadata_json TEXT DEFAULT '{}',
+      created_at TEXT DEFAULT (datetime('now','localtime'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_agent_reflections_agent ON agent_reflections(agent_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_agent_reflections_session ON agent_reflections(session_id, created_at DESC);
+
     -- 工作流
     CREATE TABLE IF NOT EXISTS workflows (
       id TEXT PRIMARY KEY,
@@ -921,6 +955,8 @@ export function getMigrations(): string[] {
   return [
     'ALTER TABLE custom_agents ADD COLUMN bot_token TEXT DEFAULT ""',
     'ALTER TABLE custom_agents ADD COLUMN platform_config_json TEXT DEFAULT "{}"',
+    'ALTER TABLE custom_agents ADD COLUMN soul_json TEXT DEFAULT ""',
+    'ALTER TABLE custom_agents ADD COLUMN memory_json TEXT DEFAULT ""',
     'ALTER TABLE scheduled_tasks ADD COLUMN agent_id TEXT DEFAULT ""',
     'ALTER TABLE scheduled_tasks ADD COLUMN platform_config_json TEXT DEFAULT "{}"',
     // MemPalace: Agent 独立记忆上下文

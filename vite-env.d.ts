@@ -121,6 +121,10 @@ interface Window {
       author: string
       description: string
       url: string
+      cover?: string
+      siteName?: string
+      canonicalUrl?: string
+      favicon?: string
       error?: string
     }>
     readClipboard: () => Promise<string>
@@ -207,7 +211,7 @@ interface Window {
     ) => Promise<{ embedding?: number[]; error?: string }>
     /** 通过主进程代理 Gemini 图片生成，避免在渲染进程暴露图片模型密钥 */
     generateGeminiImages: (payload: {
-      imagePart: { inlineData: { data: string; mimeType: string } }
+      imagePart?: { inlineData: { data: string; mimeType: string } }
       prompt: string
       count?: number
     }) => Promise<{ images?: string[]; warnings?: string[]; error?: string }>

@@ -4,6 +4,7 @@ export type SourceOsGuideStepId =
   | 'intake'
   | 'resolving'
   | 'source-ready'
+  | 'visual-brief'
   | 'artifact-choice'
   | 'generating'
   | 'pack-ready'
@@ -35,11 +36,21 @@ export interface SourceOsGuideState {
   artifactMode: BiliArtifactMode
 }
 
+export interface SourceOsGuideArrowGeometry {
+  startX: number
+  startY: number
+  endX: number
+  endY: number
+  controlX: number
+  controlY: number
+}
+
 export interface SourceOsGuideProps {
   state: SourceOsGuideState
   compact?: boolean
   reducedMotion?: boolean
   className?: string
+  arrow?: SourceOsGuideArrowGeometry
 }
 
 export type SourceOsProcessingState = 'idle' | 'resolving' | 'generating' | 'chatting'
@@ -74,29 +85,36 @@ const STEP_BASE: Array<Omit<SourceOsGuideStep, 'status'>> = [
     target: 'source-card',
   },
   {
+    id: 'visual-brief',
+    label: '04 秒懂',
+    title: '先看 Baoyu 图文',
+    description: '图文卡、漫画、信息图会先把复杂内容变成一眼能懂的视觉线索。',
+    target: 'baoyu-visuals',
+  },
+  {
     id: 'artifact-choice',
-    label: '04 选择产物',
+    label: '05 选择产物',
     title: '选择 AI 产物形态',
     description: '教程、导图、考题、金句、辩论、时间线、行动清单都在这里。',
     target: 'artifact-dashboard',
   },
   {
     id: 'generating',
-    label: '05 生成',
+    label: '06 生成',
     title: '把来源转成学习包',
     description: '系统正在把资料拆成地图、行动、时间线和可追问问题。',
     target: 'learning-pack',
   },
   {
     id: 'pack-ready',
-    label: '06 学习包',
+    label: '07 学习包',
     title: '阅读与复用学习包',
     description: '先扫资料地图，再看行动清单，最后回到原来源核对。',
     target: 'learning-pack',
   },
   {
     id: 'dialog-export',
-    label: '07 对话/导出',
+    label: '08 对话/导出',
     title: '继续追问或归档',
     description: '围绕当前来源对话，或导出 Markdown、字幕、封面和资料包。',
     target: 'chat-export',
@@ -110,7 +128,7 @@ function activeStepId(input: BuildSourceOsGuideInput): SourceOsGuideStepId {
   if (input.processing === 'chatting' || input.view === 'chat' || input.view === 'downloads') return 'dialog-export'
   if (input.workspace.pack) return 'pack-ready'
   if (input.view === 'insights' || input.view === 'tutorial') return 'artifact-choice'
-  return 'artifact-choice'
+  return 'visual-brief'
 }
 
 function progressFor(activeIndex: number, intensity: SourceOsGuideIntensity): number {
@@ -152,6 +170,13 @@ function stepCaption(stepId: SourceOsGuideStepId, input: BuildSourceOsGuideInput
         cta: '选择 AI 产物模式',
         intensity: 'calm',
       }
+    case 'visual-brief':
+      return {
+        headline: 'Baoyu 正在把来源变成秒懂视觉',
+        caption: '先扫图文卡和漫画分镜，再决定要生成教程、导图、考题还是行动清单。',
+        cta: '查看秒懂图文',
+        intensity: 'celebrate',
+      }
     case 'generating':
       return {
         headline: '正在生成学习包',
@@ -173,6 +198,53 @@ function stepCaption(stepId: SourceOsGuideStepId, input: BuildSourceOsGuideInput
         cta: '追问或导出',
         intensity: input.processing === 'chatting' ? 'active' : 'celebrate',
       }
+  }
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value))
+}
+
+export function buildSourceOsArrowGeometry(input: {
+  rootRect: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>
+  targetRect: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>
+  width: number
+  height: number
+  compact?: boolean
+}): SourceOsGuideArrowGeometry {
+  const scaleX = input.rootRect.width > 0 ? input.width / input.rootRect.width : 1
+  const scaleY = input.rootRect.height > 0 ? input.height / input.rootRect.height : 1
+  const targetX = (input.targetRect.left + input.targetRect.width / 2 - input.rootRect.left) * scaleX
+  const targetY = (input.targetRect.top + input.targetRect.height / 2 - input.rootRect.top) * scaleY
+  const card = {
+    left: input.compact ? 18 : 24,
+    top: input.compact ? 22 : 28,
+    width: input.compact ? 430 : 590,
+    height: input.compact ? 162 : 188,
+  }
+  const startX = clamp(targetX, card.left, card.left + card.width)
+  const startY = clamp(targetY, card.top, card.top + card.height)
+  const rightDistance = Math.abs(targetX - (card.left + card.width))
+  const leftDistance = Math.abs(targetX - card.left)
+  const fromRight = rightDistance < leftDistance || targetX >= card.left + card.width / 2
+  const anchorX = fromRight ? card.left + card.width - 4 : card.left + 4
+  const anchorY = startY
+  const dx = targetX - anchorX
+  const dy = targetY - anchorY
+  const distance = Math.max(1, Math.hypot(dx, dy))
+  const maxLength = input.compact ? 150 : 190
+  const minLength = input.compact ? 58 : 70
+  const length = clamp(distance, minLength, maxLength)
+  const endX = clamp(anchorX + (dx / distance) * length, 16, input.width - 16)
+  const endY = clamp(anchorY + (dy / distance) * length, 16, input.height - 16)
+
+  return {
+    startX: anchorX,
+    startY: anchorY,
+    endX,
+    endY,
+    controlX: (anchorX + endX) / 2,
+    controlY: (anchorY + endY) / 2 - 24,
   }
 }
 

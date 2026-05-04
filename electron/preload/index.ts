@@ -183,7 +183,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   generateEmbedding: (text: string, endpoint: string, apiKey: string, model: string) =>
     ipcRenderer.invoke('generate-embedding', text, endpoint, apiKey, model),
   generateGeminiImages: (payload: {
-    imagePart: { inlineData: { data: string; mimeType: string } }
+    imagePart?: { inlineData: { data: string; mimeType: string } }
     prompt: string
     count?: number
   }) => ipcRenderer.invoke('gemini-generate-images', payload),

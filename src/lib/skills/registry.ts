@@ -12,7 +12,7 @@ export interface Skill {
   name: string
   description: string
   enabled: boolean
-  source: 'builtin' | 'mcp' | 'custom' | 'hermes'
+  source: 'builtin' | 'mcp' | 'custom' | 'hermes' | 'nuwa'
   category: SkillCategory
   icon: string
   /** 运行此技能需要的前置条件 */
@@ -681,6 +681,17 @@ export const DEFAULT_SKILLS: Skill[] = [
     module: 'baoyu-skills/skills',
   },
   {
+    id: 'nuwa-persona-distiller',
+    name: 'Nuwa 人物蒸馏器',
+    description: '按 nuwa-skill 方法把真实存在的人类公开思想蒸馏为本地 Openbasaka Skill：六路调研、三重验证、心智模型、表达 DNA、反模式和诚实边界',
+    enabled: true,
+    source: 'nuwa',
+    category: '画像引擎',
+    icon: '🧬',
+    requires: ['llm', 'web', 'filesystem'],
+    module: 'lib/xiaobai-council/distillation',
+  },
+  {
     id: 'openbasaka-visual-master',
     name: 'Openbasaka 视觉大师 Skill',
     description: '为每个项目定义独有视觉气质、交互法则、信息密度、动效语法、组件规范、响应式策略和 UI 验收标准',
@@ -741,9 +752,10 @@ export function getSkillStats(skills: Skill[]) {
   const mcp = skills.filter(s => s.source === 'mcp').length
   const custom = skills.filter(s => s.source === 'custom').length
   const hermes = skills.filter(s => s.source === 'hermes').length
+  const nuwa = skills.filter(s => s.source === 'nuwa').length
   const needsLLM = skills.filter(s => s.requires.includes('llm')).length
   const needsWeb = skills.filter(s => s.requires.includes('web')).length
-  return { total, enabled, builtin, mcp, custom, hermes, needsLLM, needsWeb }
+  return { total, enabled, builtin, mcp, custom, hermes, nuwa, needsLLM, needsWeb }
 }
 
 // ─── Hermes 风格技能管理 ───
