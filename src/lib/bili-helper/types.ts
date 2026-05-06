@@ -40,6 +40,67 @@ export type BiliArchiveTarget = 'knowledge-master' | 'knowledge-folder' | 'backu
 
 export type BiliArchiveStatus = 'idle' | 'saving' | 'saved' | 'failed'
 
+export type WanxiangFusionSubsystem = 'knowledge' | 'agent-prompt' | 'workflow' | 'boss-cognition' | 'visual-learning'
+
+export type WanxiangMindMapLayout = 'process' | 'concept' | 'comparison' | 'decision'
+
+export type WanxiangMindMapNodeKind = 'root' | 'topic' | 'step' | 'evidence' | 'action' | 'warning'
+
+export interface SourceEvidenceRef {
+  id: string
+  label: string
+  quote: string
+  time?: string
+  sourceId?: string
+}
+
+export interface TeachingVerdictResult {
+  isTeaching: boolean
+  confidence: number
+  reasons: string[]
+  evidenceRefs: SourceEvidenceRef[]
+  beginnerTutorial?: string
+  modelTutorial?: string
+  nonTeachingDigest?: string
+}
+
+export interface OpenbasakaFusionResult {
+  applicable: boolean
+  targetSubsystems: WanxiangFusionSubsystem[]
+  rationale: string
+  masterPrompt: string
+  archiveTags: string[]
+  folderPath: string
+  risks: string[]
+}
+
+export interface MindMapNode {
+  id: string
+  label: string
+  note?: string
+  kind: WanxiangMindMapNodeKind
+  evidenceRefs?: SourceEvidenceRef[]
+  children?: MindMapNode[]
+}
+
+export interface WanxiangMindMap {
+  title: string
+  layout: WanxiangMindMapLayout
+  nodes: MindMapNode[]
+  markdown: string
+}
+
+export interface WanxiangLearningResult {
+  sourceId: string
+  sourceTitle: string
+  teaching: TeachingVerdictResult
+  openbasakaFusion: OpenbasakaFusionResult
+  mindMap: WanxiangMindMap
+  markdown: string
+  createdAt: number
+  generatedBy: 'ai' | 'local'
+}
+
 export interface BaoyuStructuredCard {
   id: string
   title: string
@@ -178,6 +239,7 @@ export interface BiliDownloadTask {
 export interface BiliVideoWorkspace {
   video: BiliVideoInfo
   transcript: string
+  wanxiang?: WanxiangLearningResult
   pack?: BiliLearningPack
   visualArtifacts?: BaoyuVisualArtifact[]
   archive?: BiliArchiveState

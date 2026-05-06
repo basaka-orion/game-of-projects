@@ -31,6 +31,13 @@ const UNIVERSAL_PATHS = [
     to: '/games',
     color: '#FFD166',
   },
+  {
+    key: 'matrix',
+    title: '矩阵推理',
+    subtitle: '原创规则 DSL · 流体推理短测',
+    to: '/matrix',
+    color: '#4FC3F7',
+  },
 ];
 
 const MODE_PERSONA_LABELS: Record<HumanMapMode, string> = {
@@ -201,6 +208,7 @@ function PersonalizedRouteSection() {
     completedDimensions,
     avgCompleted,
     gameResults,
+    matrixResults,
     humanMapMode,
     resetHumanMap,
     setHumanMapMode,
@@ -208,7 +216,7 @@ function PersonalizedRouteSection() {
 
   if (!humanMapBlueprint || humanMapMode === 'skip') return null;
 
-  const canGenerateReport = completedDimensions.length >= 2 || avgCompleted || gameResults.length > 0;
+  const canGenerateReport = completedDimensions.length >= 2 || avgCompleted || gameResults.length > 0 || matrixResults.length > 0;
 
   return (
     <>
@@ -535,12 +543,13 @@ export default function AssessmentSelectPage() {
     completedDimensions,
     avgCompleted,
     gameResults,
+    matrixResults,
     humanMapMode,
     humanMapBlueprint,
     humanMapAnswers,
   } = useAssessmentStore();
 
-  const canGenerateReport = completedDimensions.length >= 2 || avgCompleted || gameResults.length > 0;
+  const canGenerateReport = completedDimensions.length >= 2 || avgCompleted || gameResults.length > 0 || matrixResults.length > 0;
   const selectionPending = !humanMapMode;
   const intakePending = humanMapMode !== null && humanMapMode !== 'skip' && !humanMapBlueprint;
   const toolkitUnlocked = humanMapMode === 'skip' || Boolean(humanMapBlueprint);

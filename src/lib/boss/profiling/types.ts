@@ -1,3 +1,5 @@
+import type { SelfAgentConstitution } from '../../../features/profiling-studio/types'
+
 export type ProfilingMode = 'quick' | 'deep' | 'dialogue'
 
 export interface QuickProfilingAnswers {
@@ -21,10 +23,17 @@ export interface QuickProfilingAnswers {
 }
 
 export interface ExternalProfilingResult {
-  source: 'multi_dimension_profiling' | 'creative_profile'
+  source: 'multi_dimension_profiling' | 'creative_profile' | 'matrix_reasoning' | 'self_agent_distillation'
   mode: ProfilingMode
   profileVersion: string
   raw: Record<string, unknown>
+}
+
+export interface ProfilingEvidenceTrace {
+  source: 'quick' | 'human_map' | 'cat' | 'games' | 'matrix_reasoning' | 'dialogue' | 'self_agent_distillation' | 'openbasaka_export'
+  reference: string
+  insight: string
+  confidence: number
 }
 
 export interface ProfilingSummary {
@@ -41,6 +50,11 @@ export interface ProfilingSummary {
 export interface NormalizedBossProfile {
   summary: ProfilingSummary
   confidence: number
+  evidenceTrace?: ProfilingEvidenceTrace[]
+  confidenceInterval?: [number, number]
+  pendingVerification?: string[]
+  measurementNotes?: string[]
+  selfAgentConstitution?: SelfAgentConstitution
   dimensions: {
     cognition: Record<string, number>
     personality: Record<string, number>

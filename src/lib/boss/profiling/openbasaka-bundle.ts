@@ -48,7 +48,7 @@ function inferStrengths(profile: OpenBasakaExportBundle): string[] {
   ]
 
   const evidenceStrengths = profile.openbasakaBundle.bossCore.evidenceTrace
-    .filter(item => item.source === 'topology' || item.source === 'dialogue' || item.source === 'product' || item.source === 'human_map' || item.source === 'question_trace')
+    .filter(item => item.source === 'topology' || item.source === 'dialogue' || item.source === 'product' || item.source === 'human_map' || item.source === 'question_trace' || item.source === 'matrix_reasoning')
     .slice(0, 2)
     .map(item => item.insight)
 
@@ -80,6 +80,7 @@ function inferInterests(profile: OpenBasakaExportBundle): string[] {
 function inferConfidence(profile: OpenBasakaExportBundle): number {
   const confidenceMap = Object.values(profile.fusedProfileBundle.topology.confidenceMap || {})
   const humanMap = profile.rawSignalBundle.humanMapBlueprint
+  const matrix = profile.rawSignalBundle.matrixResults?.[0]
   if (confidenceMap.length === 0) {
     if (!humanMap) return 0.82
     const base = humanMap.mode === 'detailed' ? 0.8 : 0.75
@@ -88,7 +89,8 @@ function inferConfidence(profile: OpenBasakaExportBundle): number {
   const average = confidenceMap.reduce((sum, value) => sum + value, 0) / confidenceMap.length
   const modeBoost = humanMap?.mode === 'detailed' ? 0.03 : humanMap ? 0.015 : 0
   const answerBoost = humanMap ? Math.min(humanMap.answerCount, 12) * 0.003 : 0
-  return Math.max(0.58, Math.min(0.96, Number((average + modeBoost + answerBoost).toFixed(2))))
+  const matrixBoost = matrix ? Math.min(0.04, matrix.reliabilityEstimate * 0.03) : 0
+  return Math.max(0.58, Math.min(0.96, Number((average + modeBoost + answerBoost + matrixBoost).toFixed(2))))
 }
 
 export function normalizeOpenBasakaExportBundle(
@@ -100,6 +102,34 @@ export function normalizeOpenBasakaExportBundle(
 
   const baseProfile: Omit<NormalizedBossProfile, 'summary'> = {
     confidence: inferConfidence(bundle),
+    evidenceTrace: core.evidenceTrace.map(trace => ({
+      source: trace.source === 'matrix_reasoning'
+        ? 'matrix_reasoning'
+        : trace.source === 'human_map'
+          ? 'human_map'
+          : trace.source === 'dialogue'
+            ? 'dialogue'
+            : trace.source === 'game'
+              ? 'games'
+              : trace.source === 'cat'
+                ? 'cat'
+                : trace.source === 'self_agent_distillation'
+                  ? 'self_agent_distillation'
+                  : 'openbasaka_export',
+      reference: trace.reference,
+      insight: trace.insight,
+      confidence: trace.source === 'matrix_reasoning' ? 0.72 : 0.76,
+    })),
+    confidenceInterval: bundle.rawSignalBundle.matrixResults?.[0]?.confidenceInterval,
+    selfAgentConstitution: bundle.fusedProfileBundle.selfAgentConstitution || bundle.rawSignalBundle.selfAgentConstitution || undefined,
+    pendingVerification: unique([
+      ...bundle.fusedProfileBundle.topology.pendingVerification,
+      ...(bundle.rawSignalBundle.matrixResults?.[0]?.pendingVerification || []),
+    ], 10),
+    measurementNotes: unique([
+      ...(bundle.rawSignalBundle.matrixResults?.[0]?.measurementNotes || []),
+      'Openbasaka 导入画像是多源融合结果，不是单项正式心理测量结论。',
+    ], 10),
     dimensions: {
       cognition: {
         curiosity_breadth: core.curiosityBreadth,

@@ -7,6 +7,7 @@ import type {
   TopologyProfile,
   GameResult,
   CATResponse,
+  MatrixSessionResult,
   HumanMapBlueprint,
   QuestionPresentationSnapshot,
 } from '../types';
@@ -18,6 +19,7 @@ interface AISummaryInput {
   completedDimensions: string[];
   avgCompleted: boolean;
   gameResults: GameResult[];
+  matrixResults?: MatrixSessionResult[];
   catResponses: Record<string, CATResponse[]>;
   humanMapBlueprint?: HumanMapBlueprint | null;
   questionPresentationSnapshots?: QuestionPresentationSnapshot[];
@@ -73,6 +75,7 @@ function buildPrompt(input: AISummaryInput): string {
     completedDimensions,
     avgCompleted,
     gameResults,
+    matrixResults = [],
     catResponses,
     humanMapBlueprint,
     questionPresentationSnapshots,
@@ -101,6 +104,7 @@ function buildPrompt(input: AISummaryInput): string {
     `问卷量表: ${completedDimensions.length}/8 维度`,
     `AVG 情境: ${avgCompleted ? '已完成' : '未完成'}`,
     `行为实验: ${gameResults.length}/6 个游戏`,
+    `原创矩阵推理: ${matrixResults.length > 0 ? `${matrixResults[0].rawScore}/${matrixResults[0].maxScore}，难度加权 ${matrixResults[0].difficultyWeightedScore}` : '未完成'}`,
     `CAT 自适应: ${Object.keys(catResponses).length}/8 维度`,
   ].join(' | ');
 
@@ -150,6 +154,15 @@ ${confidenceInfo}
 ${humanMapContext}
 
 ${questionTraceContext}
+
+${matrixResults.length > 0 ? `## 原创矩阵推理证据
+版本: ${matrixResults[0].version}
+得分: ${matrixResults[0].rawScore}/${matrixResults[0].maxScore}
+正确率: ${Math.round(matrixResults[0].accuracy * 100)}%
+难度加权: ${matrixResults[0].difficultyWeightedScore}
+平均反应时: ${(matrixResults[0].meanResponseTimeMs / 1000).toFixed(1)} 秒
+规则族: ${matrixResults[0].ruleBreakdown.map(rule => `${rule.family} ${rule.correct}/${rule.attempted}`).join(' | ')}
+解释边界: 原创短测探索版，不复制 Raven APM 原题，也不能换算正式 IQ 或 Raven 分数。` : ''}
 
 ---
 

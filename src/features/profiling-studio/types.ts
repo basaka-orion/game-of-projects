@@ -175,7 +175,7 @@ export interface QuestionPresentationSnapshot {
 
 // ── 证据来源 — 铁证链条的基本单元 ──
 export interface EvidenceSource {
-  sourceType: 'questionnaire' | 'avg' | 'game' | 'cat';
+  sourceType: 'questionnaire' | 'avg' | 'game' | 'cat' | 'matrix_reasoning';
   itemId: string;           // 题目/场景/游戏 ID
   itemLabel: string;        // 人类可读描述
   observation: string;      // 观察到的具体行为或选择
@@ -399,6 +399,108 @@ export interface CATResponse {
   response: number;
   theta: number;       // 当时的能力估计
   se: number;          // 标准误
+  selectedOptionValue?: string | number;
+  selectedOptionLabel?: string;
+  answeredAt?: string;
+  openScoring?: CATOpenResponseScore;
+}
+
+export interface CATOpenResponseScore {
+  text: string;
+  fluency: number;
+  flexibility: number;
+  originalityProxy: number;
+  elaboration: number;
+  category: 0 | 1 | 2 | 3;
+  notes: string[];
+}
+
+// ── Original Matrix Reasoning Lab (原创矩阵推理，不复制 Raven APM 原题) ──
+export type MatrixRuleFamily =
+  | 'progression'
+  | 'rotation'
+  | 'count'
+  | 'overlay'
+  | 'distribution'
+  | 'compound';
+
+export interface MatrixCell {
+  shape: 'circle' | 'triangle' | 'square' | 'diamond';
+  count: number;
+  rotation: number;
+  fill: 'outline' | 'solid' | 'striped';
+  accent: 'cyan' | 'violet' | 'gold' | 'rose';
+}
+
+export interface MatrixOption {
+  id: string;
+  cell: MatrixCell;
+  rationale: string;
+}
+
+export interface MatrixReasoningItem {
+  id: string;
+  version: string;
+  family: MatrixRuleFamily;
+  difficulty: 1 | 2 | 3 | 4 | 5;
+  prompt: string;
+  ruleDsl: string;
+  matrix: Array<MatrixCell | null>;
+  options: MatrixOption[];
+  correctOptionId: string;
+  sourceType: 'original';
+  measurementNotes: string[];
+}
+
+export interface MatrixResponse {
+  itemId: string;
+  selectedOptionId: string;
+  correctOptionId: string;
+  isCorrect: boolean;
+  responseTimeMs: number;
+  answeredAt: string;
+}
+
+export interface MatrixRuleBreakdown {
+  family: MatrixRuleFamily;
+  attempted: number;
+  correct: number;
+  meanResponseTimeMs: number;
+}
+
+export interface MatrixSessionResult {
+  id: string;
+  version: string;
+  itemIds: string[];
+  responses: MatrixResponse[];
+  accuracy: number;
+  rawScore: number;
+  maxScore: number;
+  meanResponseTimeMs: number;
+  difficultyWeightedScore: number;
+  confidenceInterval: [number, number];
+  reliabilityEstimate: number;
+  ruleBreakdown: MatrixRuleBreakdown[];
+  pendingVerification: string[];
+  measurementNotes: string[];
+  completedAt: string;
+}
+
+export interface SelfAgentConstitution {
+  id: string;
+  generatedAt: string;
+  sourceRunId?: string;
+  headline: string;
+  cognitiveOperatingManual: string[];
+  expressionDNA: string[];
+  decisionBoundaries: string[];
+  authorizationBoundaries: string[];
+  forbiddenZones: string[];
+  evidenceLedger: string[];
+  delegableTasks: string[];
+  mustAskUserTasks: string[];
+  calibrationQuestions: string[];
+  measurementBoundaries: string[];
 }
 
 // ── User state ──

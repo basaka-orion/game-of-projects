@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from '../lib/motion-lite';
 import { useAssessmentStore } from '../store';
 import { DIMENSIONS } from '../data/dimensions';
 import { generateTopologyProfile } from '../engine/profiling';
+import { buildSelfAgentConstitutionFromSandbox } from '../engine/self-agent-constitution';
+import { buildQuestionTraceSnapshots } from '../engine/question-trace';
 import { streamAISummary } from '../api/ai-summary';
 import { buildOpenBasakaExportBundle, downloadOpenBasakaExportBundle } from '../utils/openbasaka-export';
 import { buildRemotionNarrativeBundle, downloadRemotionNarrativeBundle } from '../utils/remotion-bundle';
@@ -180,9 +182,13 @@ type StageAnchorId = 'remotion' | 'trace' | 'ai' | 'topology';
 export default function ReportPage() {
   const navigate = useNavigate();
   const {
-    topology, completedDimensions, avgCompleted, gameResults,
+    topology, completedDimensions, avgCompleted, gameResults, matrixResults,
     answers, avgChoices, avgProfile, catResponses, setTopology,
+    setSelfAgentConstitution,
+    humanMapMode,
+    humanMapAnswers,
     humanMapBlueprint,
+    humanMapAIQuestions,
     questionPresentationSnapshots,
     sageSessions: allSageSessions,
     sageInsights,
@@ -223,14 +229,17 @@ export default function ReportPage() {
   const aiSectionRef = useRef<HTMLElement | null>(null);
   const topologySectionRef = useRef<HTMLElement | null>(null);
   const questionTraceSnapshots = useMemo<QuestionPresentationSnapshot[]>(() => {
-    return Object.values(questionPresentationSnapshots)
-      .filter((snapshot) => Boolean(snapshot.answerLabel || snapshot.answerValue != null))
-      .sort((left, right) => {
-        const leftTime = new Date(left.answeredAt || left.cachedAt).getTime();
-        const rightTime = new Date(right.answeredAt || right.cachedAt).getTime();
-        return rightTime - leftTime;
-      });
-  }, [questionPresentationSnapshots]);
+    return buildQuestionTraceSnapshots({
+      storedSnapshots: questionPresentationSnapshots,
+      answers,
+      catResponses,
+      humanMapMode,
+      humanMapAnswers,
+      humanMapAIQuestions,
+      humanMapBlueprint,
+      matrixResults,
+    });
+  }, [answers, catResponses, humanMapAnswers, humanMapAIQuestions, humanMapBlueprint, humanMapMode, matrixResults, questionPresentationSnapshots]);
   const traceReferenceEntries = useMemo(() => (
     questionTraceSnapshots.map((snapshot, index) => ({
       refId: `Q${index + 1}`,
@@ -328,6 +337,21 @@ export default function ReportPage() {
     }
     return mapping;
   }, [aiInsightCards, traceReferenceMap]);
+  const generatedSelfAgentConstitution = useMemo(() => {
+    if (!topology) return null;
+    return buildSelfAgentConstitutionFromSandbox({
+      topology,
+      matrixResults,
+      sageInsights,
+      personalOS,
+    });
+  }, [topology, matrixResults, sageInsights, personalOS]);
+
+  useEffect(() => {
+    if (!generatedSelfAgentConstitution) return;
+    setSelfAgentConstitution(generatedSelfAgentConstitution);
+  }, [generatedSelfAgentConstitution, setSelfAgentConstitution]);
+
   const reportExportInput = useMemo(() => {
     if (!topology) return null;
     return {
@@ -338,6 +362,7 @@ export default function ReportPage() {
       avgCompleted,
       completedDimensions,
       gameResults,
+      matrixResults,
       catResponses,
       sageSessions: allSageSessions,
       sageInsights,
@@ -345,9 +370,10 @@ export default function ReportPage() {
       productJobs,
       productConcepts,
       implementationPlans,
+      selfAgentConstitution: generatedSelfAgentConstitution,
       aiSummary,
       humanMapBlueprint,
-      questionPresentationSnapshots: Object.values(questionPresentationSnapshots),
+      questionPresentationSnapshots: questionTraceSnapshots,
     };
   }, [
     topology,
@@ -357,6 +383,7 @@ export default function ReportPage() {
     avgCompleted,
     completedDimensions,
     gameResults,
+    matrixResults,
     catResponses,
     allSageSessions,
     sageInsights,
@@ -364,9 +391,10 @@ export default function ReportPage() {
     productJobs,
     productConcepts,
     implementationPlans,
+    generatedSelfAgentConstitution,
     aiSummary,
     humanMapBlueprint,
-    questionPresentationSnapshots,
+    questionTraceSnapshots,
   ]);
   const remotionNarrativeBundle = useMemo(() => {
     if (!reportExportInput) return null;
@@ -521,6 +549,7 @@ export default function ReportPage() {
         completedDimensions,
         avgCompleted,
         gameResults,
+        matrixResults,
         catResponses,
         humanMapBlueprint,
         questionPresentationSnapshots: questionTraceSnapshots,
@@ -537,7 +566,7 @@ export default function ReportPage() {
     } finally {
       setAiLoading(false);
     }
-  }, [topology, completedDimensions, avgCompleted, gameResults, catResponses, humanMapBlueprint, questionTraceSnapshots, aiLoading]);
+  }, [topology, completedDimensions, avgCompleted, gameResults, matrixResults, catResponses, humanMapBlueprint, questionTraceSnapshots, aiLoading]);
 
   const handleExportOpenBasaka = useCallback(() => {
     if (!reportExportInput) return;
@@ -629,10 +658,8 @@ export default function ReportPage() {
       const bundle = buildOpenBasakaExportBundle(reportExportInput);
       await importOpenBasakaExportBundle(bundle);
       setApplyStatus('done');
-      window.setTimeout(() => setApplyStatus('idle'), 3200);
     } catch {
       setApplyStatus('error');
-      window.setTimeout(() => setApplyStatus('idle'), 3200);
     }
   }, [
     applyStatus,
@@ -640,13 +667,13 @@ export default function ReportPage() {
   ]);
 
   // 如果尚未生成拓扑但有足够数据，自动生成
-  const canGenerate = completedDimensions.length >= 2 || avgCompleted || gameResults.length > 0;
+  const canGenerate = completedDimensions.length >= 2 || avgCompleted || gameResults.length > 0 || matrixResults.length > 0;
 
   // ── 自动刷新：每次进入报告页时重新生成拓扑画像 ──
   useEffect(() => {
     if (canGenerate) {
       const profile = generateTopologyProfile(
-        answers, avgChoices, avgProfile, gameResults, catResponses,
+        answers, avgChoices, avgProfile, gameResults, catResponses, matrixResults,
       );
       setTopology(profile);
     }
@@ -655,7 +682,7 @@ export default function ReportPage() {
 
   const handleGenerate = () => {
     const profile = generateTopologyProfile(
-      answers, avgChoices, avgProfile, gameResults, catResponses,
+      answers, avgChoices, avgProfile, gameResults, catResponses, matrixResults,
     );
     setTopology(profile);
   };
@@ -673,6 +700,7 @@ export default function ReportPage() {
                 你已完成 {completedDimensions.length} 个维度
                 {avgCompleted ? ' + AVG' : ''}
                 {gameResults.length > 0 ? ` + ${gameResults.length} 个游戏` : ''}
+                {matrixResults.length > 0 ? ' + 矩阵推理' : ''}
                 ，数据已就绪。
               </p>
               <button onClick={handleGenerate}
@@ -730,7 +758,7 @@ export default function ReportPage() {
       label: '可信读取度',
       value: `${averageConfidence}%`,
       accent: '#64FFDA',
-      description: `${completedDimensions.length} 个维度 + ${gameResults.length} 个实验输入`,
+      description: `${completedDimensions.length} 个维度 + ${gameResults.length} 个实验 + ${matrixResults.length} 个矩阵输入`,
     },
     {
       label: '题目留痕',
@@ -759,7 +787,7 @@ export default function ReportPage() {
     {
       id: 'trace' as const,
       title: 'Question Trace',
-      caption: `${questionTraceSnapshots.length} 道真实题目版本可回放`,
+      caption: `${questionTraceSnapshots.length} 条真实作答证据可回放`,
       accent: '#FFD166',
     },
     {
@@ -1266,12 +1294,12 @@ export default function ReportPage() {
                   <h2 style={{ fontSize: 22, margin: 0, fontFamily: 'var(--font-display)' }}>系统是这样一步步问到你的</h2>
                 </div>
                 <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>
-                  已缓存 {questionTraceSnapshots.length} 道题目的实际呈现版本
+                  已留痕 {questionTraceSnapshots.length} 条真实作答证据
                 </div>
               </div>
 
               <p style={{ margin: '0 0 18px', color: 'var(--text-secondary)', lineHeight: 1.9 }}>
-                下面展示的是你这次测评里真正看到过的题目版本，而不是题库原文。系统会把题干、选项语气、滑块解释和你的作答一起留痕，方便回头验证结论是怎么被问出来的。
+                下面展示的是你这次测评里真正产生过的作答证据。若前端展示快照存在，系统优先使用当时实际呈现版本；若快照丢失，则从 Human Map、维度题、CAT 与矩阵响应中恢复可审计回放。
               </p>
 
               <div style={{
@@ -1606,6 +1634,56 @@ export default function ReportPage() {
             )}
           </motion.div>
         </section>
+
+        {generatedSelfAgentConstitution && (
+          <section style={{ marginBottom: SECTION_GAP }}>
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+              style={{
+                background: 'rgba(100,255,218,0.035)',
+                border: '1px solid rgba(100,255,218,0.16)',
+                borderRadius: 20,
+                padding: '24px 28px',
+              }}>
+              <h2 style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent-cyan)', marginBottom: 16, letterSpacing: 2, textTransform: 'uppercase', textAlign: 'center' }}>
+                未来代理人宪法
+              </h2>
+              <h3 style={{ fontSize: 18, fontWeight: 800, textAlign: 'center', marginBottom: 18 }}>
+                {generatedSelfAgentConstitution.headline}
+              </h3>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+                gap: 14,
+              }}>
+                {[
+                  ['认知操作手册', generatedSelfAgentConstitution.cognitiveOperatingManual.slice(0, 3)],
+                  ['可代理任务', generatedSelfAgentConstitution.delegableTasks.slice(0, 3)],
+                  ['必须询问 Boss', generatedSelfAgentConstitution.mustAskUserTasks.slice(0, 3)],
+                  ['禁区', generatedSelfAgentConstitution.forbiddenZones.slice(0, 3)],
+                ].map(([title, lines]) => (
+                  <div key={String(title)} style={{
+                    borderRadius: 14,
+                    border: '1px solid rgba(255,255,255,0.07)',
+                    background: 'rgba(255,255,255,0.025)',
+                    padding: '14px 16px',
+                  }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-cyan)', marginBottom: 8 }}>{String(title)}</div>
+                    {(lines as string[]).map(line => (
+                      <p key={line} style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 6 }}>
+                        {line}
+                      </p>
+                    ))}
+                  </div>
+                ))}
+              </div>
+              {generatedSelfAgentConstitution.evidenceLedger.length > 0 && (
+                <div style={{ marginTop: 16, fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.7 }}>
+                  证据账本：{generatedSelfAgentConstitution.evidenceLedger.slice(0, 3).join(' ｜ ')}
+                </div>
+              )}
+            </motion.div>
+          </section>
+        )}
 
         {/* ═══ 8 维雷达图 ═══ */}
         <section style={{ marginBottom: SECTION_GAP, textAlign: 'center' }}>

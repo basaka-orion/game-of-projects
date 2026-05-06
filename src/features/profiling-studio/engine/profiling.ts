@@ -13,6 +13,7 @@ import type {
   EvidenceSource, TraitVerdict, DimensionTopology,
   CrossDimensionReaction, TopologyProfile,
   GameResult, CATResponse,
+  MatrixSessionResult,
   StroopResult, NBackResult, GoNoGoResult,
   UltimatumResult, TrustResult, PublicGoodsResult,
 } from '../types';
@@ -214,6 +215,34 @@ export function extractCATEvidence(
   return evidences;
 }
 
+/** 从原创矩阵推理短测中提取证据 */
+export function extractMatrixReasoningEvidence(
+  matrixResults: MatrixSessionResult[] = [],
+): EvidenceSource[] {
+  const latest = matrixResults[0];
+  if (!latest) return [];
+
+  const evidences: EvidenceSource[] = [{
+    sourceType: 'matrix_reasoning',
+    itemId: 'matrix_reasoning:cognitive:fluid_reasoning',
+    itemLabel: '原创矩阵推理短测',
+    observation: `原创矩阵短测 ${latest.rawScore}/${latest.maxScore}，难度加权 ${latest.difficultyWeightedScore}，平均反应时 ${safeFixed(latest.meanResponseTimeMs / 1000, 1)} 秒`,
+    confidence: Math.min(0.86, Math.max(0.58, latest.reliabilityEstimate)),
+  }];
+
+  for (const rule of latest.ruleBreakdown.filter(item => item.attempted > 0).slice(0, 4)) {
+    evidences.push({
+      sourceType: 'matrix_reasoning',
+      itemId: `matrix_reasoning:cognitive:fluid_reasoning:${rule.family}`,
+      itemLabel: `矩阵规则族 / ${rule.family}`,
+      observation: `${rule.family} 规则 ${rule.correct}/${rule.attempted}，平均 ${(rule.meanResponseTimeMs / 1000).toFixed(1)} 秒`,
+      confidence: Math.min(0.82, Math.max(0.52, latest.reliabilityEstimate - 0.04)),
+    });
+  }
+
+  return evidences;
+}
+
 // ══════════════════════════════════════════════════════════════
 // 2. 特质分类层 — 模式匹配
 // ══════════════════════════════════════════════════════════════
@@ -399,6 +428,39 @@ const TRAIT_TYPES: Record<string, TraitTypeDef[]> = {
     { typology: '整合叙事者', description: '能把混乱经验整合为可理解的故事', flowZone: '写作、咨询、教学', energyDrainer: '完全不可理解的荒诞处境' },
     { typology: '片段感知者', description: '倾向将经验视为独立事件而非整体', flowZone: '即时任务处理', energyDrainer: '需要看到全局意义才能行动的场景' },
   ],
+  // 品格优势
+  creativity: [
+    { typology: '创造性重构者', description: '习惯把常规任务改造成更有新意的解法', flowZone: '概念设计、产品构思、跨界改造', energyDrainer: '只允许照本宣科的流程' },
+    { typology: '实用创新者', description: '创新服务于具体问题解决，而不是为了新奇本身', flowZone: '流程优化、工具改良、低成本实验', energyDrainer: '无边界的发散要求' },
+  ],
+  curiosity: [
+    { typology: '主动探秘者', description: '会被陌生领域自然吸引，并愿意继续深挖', flowZone: '研究、访谈、跨学科学习', energyDrainer: '信息封闭和长期重复输入' },
+    { typology: '定向好奇者', description: '对与当前目标相关的新知更容易投入', flowZone: '项目制学习、问题驱动探索', energyDrainer: '没有落点的泛泛浏览' },
+  ],
+  perseverance: [
+    { typology: '长线推进者', description: '能在反馈缓慢时维持基本节奏', flowZone: '长期项目、技能训练、耐心打磨', energyDrainer: '频繁推倒重来且没有意义说明' },
+    { typology: '节奏敏感者', description: '需要阶段反馈和重新点火来保持坚持', flowZone: '短周期冲刺、里程碑式推进', energyDrainer: '看不到尽头的消耗战' },
+  ],
+  kindness: [
+    { typology: '本能关怀者', description: '容易注意到他人的处境并自然伸手', flowZone: '支持型协作、用户关怀、社群维护', energyDrainer: '长期单向情绪劳动' },
+    { typology: '边界善意者', description: '愿意帮助他人，但需要清楚边界和可承受范围', flowZone: '明确角色内的支持与协作', energyDrainer: '模糊责任下的过度索取' },
+  ],
+  fairness: [
+    { typology: '公平守护者', description: '对贡献、机会和规则的不平衡高度敏感', flowZone: '规则设计、团队分配、质量仲裁', energyDrainer: '明知不公却被要求沉默' },
+    { typology: '情境均衡者', description: '会在公平、关系和效率之间做综合权衡', flowZone: '多方协调、复杂组织决策', energyDrainer: '单一标准压过所有现实约束' },
+  ],
+  prudence: [
+    { typology: '前置风控者', description: '重要行动前会自然评估代价、风险和回滚条件', flowZone: '策略判断、投资前评估、系统安全', energyDrainer: '被要求无验证冲刺' },
+    { typology: '机会试探者', description: '会被机会吸引，但适合用小样本方式控制风险', flowZone: '低成本试验、MVP、灰度探索', energyDrainer: '一锤定音式高风险下注' },
+  ],
+  self_regulation: [
+    { typology: '自我约束者', description: '能为了长期目标压住短期诱惑', flowZone: '稳定训练、节律化工作、长期交付', energyDrainer: '诱惑密集且缺少环境设计的场景' },
+    { typology: '环境调节者', description: '更依赖外部结构和环境布置来保持自控', flowZone: '清晰规则、提醒系统、同伴监督', energyDrainer: '完全靠意志力硬扛' },
+  ],
+  hope: [
+    { typology: '路径乐观者', description: '遇到挫折时仍能想象替代路径', flowZone: '转型期、创新项目、复盘重启', energyDrainer: '长期无反馈且无选择权的处境' },
+    { typology: '谨慎希望者', description: '希望感需要看见现实抓手后才会稳定', flowZone: '有阶段证据的计划推进', energyDrainer: '只有愿景没有路径的鼓动' },
+  ],
 };
 
 /** 根据证据集对子维度做模式匹配分类 */
@@ -573,6 +635,7 @@ export function generateTopologyProfile(
   avgProfile: Record<string, string>,
   gameResults: GameResult[],
   catResponses: Record<string, CATResponse[]>,
+  matrixResults: MatrixSessionResult[] = [],
 ): TopologyProfile {
   // 1. 提取全部证据
   const allEvidences = [
@@ -580,6 +643,7 @@ export function generateTopologyProfile(
     ...extractAVGEvidence(avgChoices, avgProfile),
     ...extractGameEvidence(gameResults),
     ...extractCATEvidence(catResponses),
+    ...extractMatrixReasoningEvidence(matrixResults),
   ];
 
   // 2. 按维度/子维度分组证据
@@ -598,6 +662,7 @@ export function generateTopologyProfile(
       // 匹配 AVG 和游戏中对应维度的证据
       if (e.itemId.includes(dim.id)) return true;
       if (e.sourceType === 'cat' && e.itemId.includes(dim.id)) return true;
+      if (e.sourceType === 'matrix_reasoning' && dim.id === 'cognitive') return true;
       return false;
     });
 

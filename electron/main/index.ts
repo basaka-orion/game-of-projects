@@ -2257,14 +2257,32 @@ import {
 // 初始化 Telegram 消息处理器
 initTelegramHandler()
 
+function shouldAutoStartTelegram(): boolean {
+  const envValue = process.env.OPENBASAKA_TELEGRAM_AUTO_START?.trim().toLowerCase()
+  if (envValue) return ['1', 'true', 'yes', 'on'].includes(envValue)
+
+  try {
+    const rows = query('SELECT value FROM settings WHERE key = ?', ['telegram_auto_start']) as Array<{ value: string }>
+    const value = rows[0]?.value?.trim().toLowerCase()
+    return value === 'true' || value === '1' || value === 'yes' || value === 'on'
+  } catch {
+    return false
+  }
+}
+
 app.whenReady().then(() => {
   registerIPC()
   createTray()
   createGhostWindow()
   startCronEngine()
 
-  // Telegram 多 Bot 自动启动（全局 token + 各 Agent token）
-  startMultiBotEngine()
+  // Telegram remains opt-in. Start from the Control Panel or set
+  // OPENBASAKA_TELEGRAM_AUTO_START=1 / settings.telegram_auto_start=true.
+  if (shouldAutoStartTelegram()) {
+    startMultiBotEngine()
+  } else {
+    console.log('[Telegram] Auto-start disabled; use Control Panel to connect bots explicitly.')
+  }
 
   // 注册 openbasaka:// URI 协议（Clipper 浏览器扩展剪藏用）
   app.setAsDefaultProtocolClient('openbasaka')

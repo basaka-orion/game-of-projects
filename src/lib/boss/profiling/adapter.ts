@@ -5,7 +5,7 @@ import type {
 } from './types'
 import { buildProfilingSummary } from './summary'
 import { DIMENSION_MAP } from '../../../features/profiling-studio/data/dimensions'
-import type { HumanMapBlueprint, HumanMapSignalId } from '../../../features/profiling-studio/types'
+import type { HumanMapBlueprint, HumanMapSignalId, MatrixSessionResult } from '../../../features/profiling-studio/types'
 
 function clamp(value: number, min = 0, max = 100): number {
   return Math.max(min, Math.min(max, Math.round(value)))
@@ -75,6 +75,27 @@ export function buildHumanMapProfilingResult(blueprint: HumanMapBlueprint): Exte
     mode: 'deep',
     profileVersion: `human-map-${blueprint.mode}-v1`,
     raw: blueprint as unknown as Record<string, unknown>,
+  }
+}
+
+function isMatrixSessionResult(input: unknown): input is MatrixSessionResult {
+  if (!input || typeof input !== 'object') return false
+  const candidate = input as Record<string, unknown>
+  return (
+    typeof candidate.version === 'string' &&
+    Array.isArray(candidate.responses) &&
+    Array.isArray(candidate.ruleBreakdown) &&
+    typeof candidate.rawScore === 'number' &&
+    typeof candidate.maxScore === 'number'
+  )
+}
+
+export function buildMatrixReasoningProfilingResult(result: MatrixSessionResult): ExternalProfilingResult {
+  return {
+    source: 'matrix_reasoning',
+    mode: 'deep',
+    profileVersion: result.version,
+    raw: result as unknown as Record<string, unknown>,
   }
 }
 
@@ -605,7 +626,153 @@ function buildRisks(input: QuickProfilingAnswers): string[] {
   return risks.slice(0, 3)
 }
 
+function normalizeMatrixReasoningProfilingResult(result: MatrixSessionResult): NormalizedBossProfile {
+  const accuracy = Math.round(result.accuracy * 100)
+  const weighted = result.difficultyWeightedScore
+  const fastEnough = result.meanResponseTimeMs > 0 && result.meanResponseTimeMs <= 14000
+  const strongestRules = result.ruleBreakdown
+    .filter(rule => rule.attempted > 0)
+    .sort((left, right) => (right.correct / Math.max(right.attempted, 1)) - (left.correct / Math.max(left.attempted, 1)))
+    .slice(0, 2)
+  const weakerRules = result.ruleBreakdown
+    .filter(rule => rule.attempted > 0 && rule.correct < rule.attempted)
+    .slice(0, 2)
+
+  const fluidReasoning = clamp(42 + (accuracy - 50) * 0.58 + (weighted - 50) * 0.32 + (fastEnough ? 4 : 0))
+  const executionDiscipline = clamp(54 + Math.min(result.responses.length, 6) * 3 - (result.meanResponseTimeMs > 22000 ? 8 : 0))
+  const innovationBias = clamp(58 + strongestRules.length * 5 + (weighted >= 60 ? 8 : 0))
+  const curiosityBreadth = clamp(56 + (weighted - 45) * 0.28 + (result.ruleBreakdown.length >= 5 ? 6 : 0))
+  const confidence = Math.max(0.56, Math.min(0.84, Number((result.reliabilityEstimate + Math.min(result.responses.length, 8) * 0.008).toFixed(2))))
+
+  const strengths = unique([
+    accuracy >= 67 ? '抽象规则捕捉' : '',
+    weighted >= 58 ? '难度承压推理' : '',
+    fastEnough ? '视觉模式快速扫描' : '稳态推理保持',
+    ...strongestRules.map(rule => `${rule.family} 规则族`),
+  ]).slice(0, 4)
+
+  const risks = unique([
+    ...weakerRules.map(rule => `${rule.family} 规则仍需复测校准`),
+    result.confidenceInterval[1] - result.confidenceInterval[0] > 0.45 ? '短测样本少，置信区间偏宽' : '',
+    '矩阵推理不能替代真实项目中的长期判断与执行证据',
+  ]).slice(0, 4)
+
+  const baseProfile: Omit<NormalizedBossProfile, 'summary'> = {
+    confidence,
+    evidenceTrace: [
+      {
+        source: 'matrix_reasoning',
+        reference: `原创矩阵推理 / ${result.version}`,
+        insight: `得分 ${result.rawScore}/${result.maxScore}，正确率 ${accuracy}%，难度加权 ${weighted}`,
+        confidence,
+      },
+      {
+        source: 'matrix_reasoning',
+        reference: '规则族表现',
+        insight: result.ruleBreakdown.filter(rule => rule.attempted > 0).map(rule => `${rule.family} ${rule.correct}/${rule.attempted}`).join('｜'),
+        confidence: Math.max(0.5, confidence - 0.06),
+      },
+    ],
+    confidenceInterval: result.confidenceInterval,
+    pendingVerification: result.pendingVerification,
+    measurementNotes: result.measurementNotes,
+    dimensions: {
+      cognition: {
+        curiosity_breadth: curiosityBreadth,
+        execution_discipline: executionDiscipline,
+        fluid_reasoning: fluidReasoning,
+        matrix_accuracy: accuracy,
+      },
+      personality: {
+        preferred_style: fluidReasoning >= 66 ? 84 : 72,
+        innovation_bias: innovationBias,
+      },
+      emotion: {
+        sensitivity: 50,
+      },
+      motivation: {
+        long_term_drive: curiosityBreadth,
+        execution_drive: executionDiscipline,
+      },
+      social: {
+        energy: 50,
+      },
+      aesthetic: {
+        sensitivity: 52,
+      },
+      worldview: {
+        meaning_drive: 55,
+        risk_tolerance: clamp(48 + (weighted - 50) * 0.18),
+      },
+      strengths: {
+        top: strengths.length > 0 ? strengths : ['原创矩阵推理样本已记录'],
+        risks,
+      },
+    },
+    operational: {
+      preferredStyle: 'analytical',
+      riskTolerance: clamp(48 + (weighted - 50) * 0.18),
+      innovationBias,
+      resourceStyle: 'balanced',
+      decisionSpeed: fastEnough && accuracy >= 67 ? 'analytical' : 'deliberate',
+      excitementTriggers: unique([
+        '抽象规则',
+        '视觉模式',
+        ...strongestRules.map(rule => `${rule.family} 规则`),
+      ]).slice(0, 8),
+      resonanceHooks: unique([
+        '用规则 DSL 拆解复杂图形',
+        '把看见的模式转成可解释证据',
+        ...result.measurementNotes,
+      ]).slice(0, 8),
+      explanationPreferences: ['先给规则，再给例子', '区分证据、推测与测量边界'],
+      addictiveFormats: ['矩阵图', '规则族对照表', '反应时曲线', '证据账本'],
+      understandingModes: ['先识别显性规律，再检查隐藏约束', '用短测结果提出假设，而不是下最终结论'],
+      antiPatterns: risks,
+      integrationGoals: ['把原创矩阵推理作为认知画像的补充证据', '继续用真实任务和复测数据校准流体推理判断'],
+      shortTermGoals: ['完成矩阵推理复测与证据融合'],
+      longTermVision: '让未来代理人能够理解你的抽象推理方式，但始终保留测量边界',
+      currentFocus: '补齐原创矩阵推理证据链',
+      interests: ['矩阵推理', '规则发现', '抽象建模', '认知测量'],
+      dislikes: ['无证据的能力标签', '把短测误当正式 IQ'],
+    },
+    recommendations: {
+      recommendedAgents: ['technical', 'critic', 'strategy'],
+      recommendedResearchTopics: unique([
+        '原创矩阵题校准',
+        'IRT/CAT 题参估计',
+        '规则族难度分层',
+        ...strongestRules.map(rule => `${rule.family} 规则族`),
+      ]).slice(0, 6),
+      recommendedProjectDirections: ['建立矩阵题库版本记录', '积累重测信度与常模样本', '把反应时纳入证据融合'],
+    },
+  }
+
+  const summary = buildProfilingSummary(baseProfile)
+  return {
+    ...baseProfile,
+    summary: {
+      ...summary,
+      headline: `原创矩阵推理：${strengths[0] || '规则探索者'}`,
+      narrative: [
+        `本轮原创矩阵推理得分为 ${result.rawScore}/${result.maxScore}。`,
+        summary.narrative,
+        `当前解释只能作为自我建模证据，不能换算 Raven APM 或正式 IQ。`,
+      ].join(''),
+      promptSummary: [
+        summary.promptSummary,
+        `matrix=${result.rawScore}/${result.maxScore}`,
+        `ci=${result.confidenceInterval[0]}-${result.confidenceInterval[1]}`,
+      ].join(' | '),
+    },
+  }
+}
+
 export function normalizeProfilingResult(input: ExternalProfilingResult): NormalizedBossProfile {
+  if (isMatrixSessionResult(input.raw)) {
+    return normalizeMatrixReasoningProfilingResult(input.raw)
+  }
+
   if (isHumanMapBlueprint(input.raw)) {
     return normalizeHumanMapProfilingResult(input.raw)
   }

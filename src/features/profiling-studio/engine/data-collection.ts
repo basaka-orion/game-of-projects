@@ -17,7 +17,7 @@ import { insforge } from '../api/insforge';
 export interface ResponseRecord {
   sessionId: string;
   module: string;              // 'cognitive' | 'personality' | 'avg' | 'stroop' | 'cat_personality' ...
-  moduleType: 'questionnaire' | 'avg' | 'game' | 'cat' | 'anchor';
+  moduleType: 'questionnaire' | 'avg' | 'game' | 'cat' | 'matrix_reasoning' | 'anchor';
   answers: Record<string, string | number>;
   metadata: {
     startedAt: string;

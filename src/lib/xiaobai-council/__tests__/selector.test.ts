@@ -18,6 +18,8 @@ describe('xiaobai council selector', () => {
     expect(selection.profile.artifactIntent).toBe('prd')
     expect(selection.matchGate.explanation.join('\n')).toContain('匹配闸门')
     expect(selection.matchGate.finalTeam).toHaveLength(selection.seats.length)
+    expect(selection.matchGate.decisionSource).toBe('local-fallback')
+    expect(selection.matchGate.judgeSummary).toContain('本地规则评分')
     expect(selection.seats[0].scoreFactors.nuwaCredibility).toBeGreaterThan(0)
   })
 

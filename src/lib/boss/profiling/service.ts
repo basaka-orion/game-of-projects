@@ -6,6 +6,7 @@ import {
 } from '../../db/repository'
 import {
   buildHumanMapProfilingResult,
+  buildMatrixReasoningProfilingResult,
   buildQuickProfilingResult,
   normalizeProfilingResult,
 } from './adapter'
@@ -20,6 +21,7 @@ import type {
   QuickProfilingAnswers,
 } from './types'
 import type { HumanMapBlueprint } from '../../../features/profiling-studio/types'
+import type { MatrixSessionResult } from '../../../features/profiling-studio/types'
 export { importOpenBasakaExportBundle, normalizeOpenBasakaExportBundle } from './openbasaka-bundle'
 
 function parseRunRow(row: Awaited<ReturnType<typeof dbGetBossAssessmentRun>>): BossAssessmentRun | null {
@@ -84,6 +86,20 @@ export async function runHumanMapProfiling(
   blueprint: HumanMapBlueprint
 ): Promise<{ runId: string; normalized: NormalizedBossProfile; changedKeys: string[]; summary: string }> {
   const external = buildHumanMapProfilingResult(blueprint)
+  const { runId, normalized } = await saveAssessmentRun(external)
+  const applyResult = await applyNormalizedBossProfile(runId, normalized)
+  return {
+    runId,
+    normalized,
+    changedKeys: applyResult.changedKeys,
+    summary: applyResult.summary,
+  }
+}
+
+export async function runMatrixReasoningProfiling(
+  result: MatrixSessionResult
+): Promise<{ runId: string; normalized: NormalizedBossProfile; changedKeys: string[]; summary: string }> {
+  const external = buildMatrixReasoningProfilingResult(result)
   const { runId, normalized } = await saveAssessmentRun(external)
   const applyResult = await applyNormalizedBossProfile(runId, normalized)
   return {

@@ -3,11 +3,13 @@ import type {
   GameResult,
   ImplementationPlan,
   Job,
+  MatrixSessionResult,
   PersonalOS,
   ProductConcept,
   QuestionPresentationSnapshot,
   SageInsight,
   SageSession,
+  SelfAgentConstitution,
   TopologyProfile,
 } from '../types';
 import type { HumanMapBlueprint } from '../types';
@@ -25,6 +27,7 @@ export interface OpenBasakaExportInput {
   avgCompleted: boolean;
   completedDimensions: string[];
   gameResults: GameResult[];
+  matrixResults: MatrixSessionResult[];
   catResponses: Record<string, CATResponse[]>;
   sageSessions: Partial<Record<string, SageSession>>;
   sageInsights: SageInsight[];
@@ -32,13 +35,14 @@ export interface OpenBasakaExportInput {
   productJobs: Job[];
   productConcepts: ProductConcept[];
   implementationPlans: ImplementationPlan[];
+  selfAgentConstitution?: SelfAgentConstitution | null;
   aiSummary?: string;
   humanMapBlueprint?: HumanMapBlueprint | null;
   questionPresentationSnapshots?: QuestionPresentationSnapshot[];
 }
 
 export interface OpenBasakaEvidenceTrace {
-  source: 'questionnaire' | 'avg' | 'game' | 'cat' | 'dialogue' | 'topology' | 'product' | 'human_map' | 'question_trace';
+  source: 'questionnaire' | 'avg' | 'game' | 'cat' | 'matrix_reasoning' | 'dialogue' | 'topology' | 'product' | 'human_map' | 'question_trace' | 'self_agent_distillation';
   reference: string;
   insight: string;
 }
@@ -80,8 +84,10 @@ export interface OpenBasakaExportBundle {
     avgChoices: Record<string, string>;
     avgProfile: Record<string, string>;
     gameResults: GameResult[];
+    matrixResults: MatrixSessionResult[];
     catResponses: Record<string, CATResponse[]>;
     sageSessions: Partial<Record<string, SageSession>>;
+    selfAgentConstitution?: SelfAgentConstitution | null;
     humanMapBlueprint?: HumanMapBlueprint | null;
     questionPresentationSnapshots?: QuestionPresentationSnapshot[];
   };
@@ -92,6 +98,7 @@ export interface OpenBasakaExportBundle {
     productJobs: Job[];
     productConcepts: ProductConcept[];
     implementationPlans: ImplementationPlan[];
+    selfAgentConstitution?: SelfAgentConstitution | null;
     aiSummary: string;
   };
   openbasakaBundle: {
@@ -427,6 +434,32 @@ function buildQuestionTraceInsights(input: OpenBasakaExportInput): OpenBasakaEvi
   });
 }
 
+function buildMatrixReasoningTrace(input: OpenBasakaExportInput): OpenBasakaEvidenceTrace[] {
+  const latest = input.matrixResults?.[0];
+  if (!latest) return [];
+
+  return [
+    {
+      source: 'matrix_reasoning',
+      reference: `原创矩阵推理 / ${latest.version}`,
+      insight: `得分 ${latest.rawScore}/${latest.maxScore}，正确率 ${Math.round(latest.accuracy * 100)}%，难度加权 ${latest.difficultyWeightedScore}，平均反应时 ${(latest.meanResponseTimeMs / 1000).toFixed(1)} 秒`,
+    },
+    {
+      source: 'matrix_reasoning',
+      reference: '规则族表现',
+      insight: latest.ruleBreakdown
+        .filter(rule => rule.attempted > 0)
+        .map(rule => `${rule.family} ${rule.correct}/${rule.attempted}`)
+        .join('｜') || '规则族样本不足',
+    },
+    {
+      source: 'matrix_reasoning',
+      reference: '测量边界',
+      insight: latest.measurementNotes[0] || '原创矩阵短测仅作为自我建模证据，不能换算正式 IQ 或 Raven 分数',
+    },
+  ];
+}
+
 function buildEvidenceTrace(input: OpenBasakaExportInput): OpenBasakaEvidenceTrace[] {
   const traces: OpenBasakaEvidenceTrace[] = [];
 
@@ -493,7 +526,20 @@ function buildEvidenceTrace(input: OpenBasakaExportInput): OpenBasakaEvidenceTra
     });
   }
 
+  traces.push(...buildMatrixReasoningTrace(input));
+
   traces.push(...buildQuestionTraceInsights(input));
+
+  if (input.selfAgentConstitution) {
+    traces.push({
+      source: 'self_agent_distillation',
+      reference: input.selfAgentConstitution.headline,
+      insight: [
+        ...input.selfAgentConstitution.delegableTasks.slice(0, 2),
+        ...input.selfAgentConstitution.mustAskUserTasks.slice(0, 1),
+      ].join('｜'),
+    });
+  }
 
   return unique(
     traces.map(trace => JSON.stringify(trace)),
@@ -516,6 +562,9 @@ function inferSignals(input: OpenBasakaExportInput) {
   const creatorInsight = input.sageInsights.find(insight => insight.sageId === 'creator');
   const hasCreatorSignal = Boolean(creatorInsight && 'aestheticProfile' in creatorInsight);
   const humanMapWeights = normalizeHumanMapWeights(input);
+  const latestMatrix = input.matrixResults?.[0];
+  const matrixAccuracyBoost = latestMatrix ? (latestMatrix.accuracy - 0.5) * 18 : 0;
+  const matrixWeightedBoost = latestMatrix ? (latestMatrix.difficultyWeightedScore - 45) * 0.18 : 0;
 
   return {
     riskTolerance: clamp(traitSignalScore(
@@ -534,7 +583,8 @@ function inferSignals(input: OpenBasakaExportInput) {
       58,
     ) +
       humanMapSignalScore(input, 'creativity_expression') * 8 +
-      humanMapSignalScore(input, 'cognition_learning') * 5),
+      humanMapSignalScore(input, 'cognition_learning') * 5 +
+      Math.max(0, matrixAccuracyBoost * 0.4)),
     socialEnergy: clamp(traitSignalScore(
       typologies,
       ['社交充能型'],
@@ -571,7 +621,9 @@ function inferSignals(input: OpenBasakaExportInput) {
     ) +
       (humanMapWeights.cognitive || 0) * 0.14 +
       humanMapSignalScore(input, 'cognition_learning') * 10 +
-      humanMapSignalScore(input, 'identity_meaning') * 5),
+      humanMapSignalScore(input, 'identity_meaning') * 5 +
+      matrixAccuracyBoost +
+      matrixWeightedBoost),
     worldviewDrive: clamp(
       52 +
       (input.personalOS?.upgradeRoadmap.length || 0) * 4 +
@@ -653,8 +705,10 @@ export function buildOpenBasakaExportBundle(input: OpenBasakaExportInput): OpenB
       avgChoices: input.avgChoices,
       avgProfile: input.avgProfile,
       gameResults: input.gameResults,
+      matrixResults: input.matrixResults || [],
       catResponses: input.catResponses,
       sageSessions: input.sageSessions,
+      selfAgentConstitution: input.selfAgentConstitution || null,
       humanMapBlueprint: input.humanMapBlueprint || null,
       questionPresentationSnapshots: input.questionPresentationSnapshots || [],
     },
@@ -665,6 +719,7 @@ export function buildOpenBasakaExportBundle(input: OpenBasakaExportInput): OpenB
       productJobs: input.productJobs,
       productConcepts: input.productConcepts,
       implementationPlans: input.implementationPlans,
+      selfAgentConstitution: input.selfAgentConstitution || null,
       aiSummary: input.aiSummary || '',
     },
     openbasakaBundle: {

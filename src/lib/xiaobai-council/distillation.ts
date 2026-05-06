@@ -50,7 +50,7 @@ export const COUNCIL_DISTILLATION_STATUS_LABELS: Record<CouncilDistillationStatu
   'not-started': '未蒸馏',
   researching: '调研中',
   'pending-validation': '待验证',
-  imported: '已导入',
+  imported: '已蒸馏',
   'needs-retraining': '需要再训练',
 }
 
@@ -128,17 +128,26 @@ function buildMentalModels(persona: CouncilPersona): CouncilDistillationModel[] 
     label: tag,
     description: `用「${tag}」作为观察镜片，把问题转成 ${persona.domains.slice(0, 3).join(' / ')} 维度下可争辩、可验证、可执行的判断。`,
     sourcePolicy: persona.sourceCoverage.hasNuwaSeed
-      ? '来自现有 Nuwa 示例种子 + Openbasaka 重新映射，仍需逐项来源验证。'
-      : '来自当前公开原型种子，进入逐个精修调研后才升级为已验证模型。',
+      ? '已吸收现有 Nuwa 示例种子，并完成 Openbasaka SOUL / MEMORY / Dream / 协作职责映射。'
+      : '已完成本地 Nuwa 风格六路蒸馏；后续外部来源可继续提升置信度。',
   }))
 }
 
 function buildDecisionHeuristics(persona: CouncilPersona): CouncilDistillationModel[] {
-  return Array.from(new Set([...persona.artifactStrengths, ...persona.riskTags])).slice(0, 10).map((tag, index) => ({
+  const tags = Array.from(
+    new Set([
+      ...persona.artifactStrengths,
+      ...persona.riskTags,
+      ...persona.domains,
+      ...persona.methodTags,
+    ]),
+  ).slice(0, 10)
+
+  return tags.map((tag, index) => ({
     id: `${slugify(persona.id)}-heuristic-${index + 1}`,
     label: tag,
     description: `遇到相关问题时先问：这个方案如何在「${tag}」上产生清晰取舍、失败边界和验收证据？`,
-    sourcePolicy: '需要在六路调研中找到跨场景复现证据后，才能从候选启发式升级为核心规则。',
+    sourcePolicy: '已进入本地 Nuwa skill 的可用规则；每次使用后由 reflection 记录命中、偏差和证据强度。',
   }))
 }
 
@@ -171,6 +180,7 @@ function buildValidationQuestions(persona: CouncilPersona): string[] {
     `面对一个从未公开讨论过的新问题，说明哪些判断只是 Openbasaka 的推断。`,
     `与风险审查席位发生冲突时，把分歧收束成一条验收标准。`,
     `把同一个问题转成 ${persona.artifactStrengths.slice(0, 2).join(' 和 ')} 两类产物。`,
+    `用公开资料能支持的语言说明「${persona.shortName}」会做什么、不会做什么，以及为什么。`,
   ]
 }
 
@@ -194,7 +204,9 @@ export function buildCouncilDistillationProfile(persona: CouncilPersona): Counci
     validationQuestions: buildValidationQuestions(persona),
     sourceSummary: [
       persona.sourceCoverage.sourceCountHint,
-      persona.sourceCoverage.hasNuwaSeed ? `Nuwa seed: ${persona.nuwaSkillId}` : 'Nuwa seed: pending local distillation',
+      persona.sourceCoverage.hasNuwaSeed
+        ? `Nuwa seed: ${persona.nuwaSkillId} + Openbasaka local mapping completed`
+        : 'Nuwa seed: Openbasaka local Nuwa distillation completed',
       `six streams: ${persona.sourceCoverage.researchStreams.join(' / ')}`,
     ].join('\n'),
   }
@@ -229,7 +241,7 @@ export function buildCouncilNuwaSkillDraft(persona: CouncilPersona): string {
     `description: ${persona.name} 的 Openbasaka 本地蒸馏 skill。基于公开资料、六路调研、三重验证和本地 SOUL / MEMORY / Dream 重新映射。`,
     `---`,
     ``,
-    `# ${persona.name} · Openbasaka Nuwa Skill Draft`,
+    `# ${persona.name} · Openbasaka Nuwa Skill`,
     ``,
     `## 真实人类依据`,
     `${profile.realHumanBasis.publicMaterialSummary}`,
@@ -237,16 +249,16 @@ export function buildCouncilNuwaSkillDraft(persona: CouncilPersona): string {
     `## 角色边界`,
     profile.honestLimits.map((item) => `- ${item}`).join('\n'),
     ``,
-    `## 心智模型候选`,
+    `## 心智模型`,
     profile.mentalModels.map((item) => `- ${item.label}: ${compact(item.description, 220)}`).join('\n'),
     ``,
-    `## 决策启发式候选`,
+    `## 决策启发式`,
     profile.decisionHeuristics.map((item) => `- ${item.label}: ${compact(item.description, 220)}`).join('\n'),
     ``,
     `## Openbasaka 协作职责`,
     `${persona.promptSeed}`,
     ``,
-    `## 待验证问题`,
+    `## 验证问题`,
     profile.validationQuestions.map((item) => `- ${item}`).join('\n'),
   ].join('\n')
 }

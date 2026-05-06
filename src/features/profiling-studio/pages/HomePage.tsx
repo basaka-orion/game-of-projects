@@ -8,10 +8,10 @@ import EasterEggReveal from '../components/EasterEggReveal';
 
 
 const PATH_IMAGES: Record<string, string> = {
-  avg: '/images/path-immersive.png',
-  assessment: '/images/path-assessment.png',
-  games: '/images/path-games.png',
-  cat: '/images/path-ai.png',
+  avg: 'images/path-immersive.png',
+  assessment: 'images/path-assessment.png',
+  games: 'images/path-games.png',
+  cat: 'images/path-ai.png',
 };
 
 /* ── Animation Variants ── */
@@ -235,6 +235,7 @@ export default function HomePage() {
   const avgCompleted = useAssessmentStore((s) => s.avgCompleted);
   const gameResults = useAssessmentStore((s) => s.gameResults);
   const catResponses = useAssessmentStore((s) => s.catResponses);
+  const matrixResults = useAssessmentStore((s) => s.matrixResults);
 
   const paths = [
     {
@@ -261,10 +262,16 @@ export default function HomePage() {
       badges: [`${Object.keys(catResponses).length}/8 维度`, 'IRT/GRM', 'EAP'],
       done: Object.keys(catResponses).length > 0, color: '#FF80AB',
     },
+    {
+      to: '/matrix', key: 'matrix', title: '矩阵推理', sub: '原创规则矩阵 · 6 题短测',
+      desc: '用原创规则 DSL 生成视觉矩阵题，记录正确率、反应时与规则族表现，作为流体推理证据。',
+      badges: [matrixResults.length > 0 ? '已完成' : '未完成', 'Original', 'Rule DSL'],
+      done: matrixResults.length > 0, color: '#4FC3F7',
+    },
   ];
 
-  const allPathsCompleted = avgCompleted && completedDimensions.length >= 8 && gameResults.length >= 6 && Object.keys(catResponses).length > 0;
-  const hasProgress = completedDimensions.length > 0 || avgCompleted || gameResults.length > 0 || Object.keys(catResponses).length > 0;
+  const allPathsCompleted = avgCompleted && completedDimensions.length >= 8 && gameResults.length >= 6 && Object.keys(catResponses).length > 0 && matrixResults.length > 0;
+  const hasProgress = completedDimensions.length > 0 || avgCompleted || gameResults.length > 0 || Object.keys(catResponses).length > 0 || matrixResults.length > 0;
   const nextStep = (() => {
     if (completedDimensions.length < 8) {
       return {
@@ -298,6 +305,14 @@ export default function HomePage() {
       };
     }
 
+    if (matrixResults.length === 0) {
+      return {
+        to: '/matrix',
+        label: '进入矩阵推理',
+        hint: '补上原创视觉规则推理证据，不复制 Raven APM 原题',
+      };
+    }
+
     return {
       to: '/report',
       label: '查看画像结果',
@@ -316,9 +331,9 @@ export default function HomePage() {
         {/* Hero background image */}
         <div style={{
           position: 'absolute', inset: 0, zIndex: 0,
-        }}>
+          }}>
           <img
-            src="/images/hero-banner.png" alt=""
+            src="images/hero-banner.png" alt=""
             style={{
               width: '100%', height: '100%', objectFit: 'cover',
               opacity: 0.15, filter: 'blur(2px) saturate(1.2)',
@@ -620,12 +635,13 @@ export default function HomePage() {
             <div style={{ marginBottom: '20px' }}>
               <h3 style={{ fontWeight: 700, fontSize: '1rem', fontFamily: 'var(--font-display)' }}>探索进度</h3>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', textAlign: 'center' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '12px', textAlign: 'center' }}>
               {[
                 { label: '问卷量表', value: `${completedDimensions.length}/8`, color: 'var(--accent-cyan)', active: completedDimensions.length > 0 },
                 { label: '城市漫游者', value: avgCompleted ? '✓' : '—', color: 'var(--accent-gold)', active: avgCompleted },
                 { label: '行为实验', value: `${gameResults.length}/6`, color: 'var(--accent-purple)', active: gameResults.length > 0 },
                 { label: 'CAT 自适应', value: `${Object.keys(catResponses).length}/8`, color: '#FF80AB', active: Object.keys(catResponses).length > 0 },
+                { label: '矩阵推理', value: matrixResults.length > 0 ? '✓' : '—', color: '#4FC3F7', active: matrixResults.length > 0 },
               ].map((s) => (
                 <div key={s.label}>
                   <p style={{ fontSize: '1.3rem', fontWeight: 700, color: s.active ? s.color : 'var(--text-tertiary)', fontFamily: 'var(--font-display)' }}>{s.value}</p>

@@ -7,7 +7,7 @@
  * 3. 解析智者的结构化 JSON 输出
  */
 
-import type { TopologyProfile, SageId, SageInsight } from '../types';
+import type { PersonalOS, TopologyProfile, SageId, SageInsight } from '../types';
 import { DEFAULT_SAGE_ORDER, SAGE_MAP } from '../data/sages';
 import { DIMENSION_MAP } from '../data/dimensions';
 import type { SocraticReport } from './socratic';
@@ -433,6 +433,124 @@ export function summarizeSageRound(
     keyInsight: keywords
       ? `${sage.name}指出了关键特质：${keywords}。「${coreObservation}…」`
       : `${sage.name}与用户探讨了其核心画像特征。`,
+  };
+}
+
+function findTrait(topology: TopologyProfile, dimensionId: string, subDimensionId: string): string {
+  const trait = topology.dimensionTopologies[dimensionId]?.dominantTraits.find(item => item.subDimension === subDimensionId);
+  return trait?.typology && trait.typology !== '待识别' ? trait.typology : '待继续校准';
+}
+
+export function buildSageInsightFromRoundSummary(
+  sageId: SageId,
+  summary: RoundtableSageSummary,
+  topology: TopologyProfile,
+): SageInsight {
+  const key = summary.keyInsight;
+  switch (sageId) {
+    case 'scientist':
+      return {
+        sageId,
+        cognitiveWorkflow: {
+          decisionStyle: findTrait(topology, 'cognitive', 'thinking_style'),
+          learningStyle: findTrait(topology, 'cognitive', 'need_for_cognition'),
+          strengths: [findTrait(topology, 'cognitive', 'metacognition'), key],
+          risks: topology.pendingVerification.slice(0, 3),
+          suggestedPractices: ['把重要判断拆成证据、假设、反例三栏', '用真实项目复盘校准短测推断'],
+        },
+      };
+    case 'philosopher':
+      return {
+        sageId,
+        worldviewModel: {
+          coreValues: [findTrait(topology, 'worldview', 'meaning_presence'), findTrait(topology, 'worldview', 'moral_fairness')],
+          meaningSources: [findTrait(topology, 'worldview', 'meaning_search'), key],
+          assumptions: ['意义线索需要通过长期选择继续验证'],
+          tensions: topology.crossReactions.slice(0, 3).map(reaction => reaction.title),
+        },
+      };
+    case 'analyst':
+      return {
+        sageId,
+        conflictMap: {
+          tensions: topology.crossReactions.slice(0, 4).map(reaction => ({
+            pair: reaction.dimensions.join(' × '),
+            narrative: reaction.narrative,
+            shadowSide: reaction.implication,
+          })),
+          currentFocus: key,
+        },
+      };
+    case 'relationalist':
+      return {
+        sageId,
+        relationshipPattern: {
+          attachmentSummary: `${findTrait(topology, 'social', 'attachment_anxiety')} / ${findTrait(topology, 'social', 'attachment_avoidance')}`,
+          defaultScript: findTrait(topology, 'social', 'conflict_style'),
+          desiredState: key,
+          experiments: ['选一个低风险关系练习清晰表达边界', '记录一次冲突前后的身体信号和解释假设'],
+        },
+      };
+    case 'creator':
+      return {
+        sageId,
+        aestheticProfile: {
+          stylePreferences: [findTrait(topology, 'aesthetic', 'aesthetic_sensitivity')],
+          creativeProcess: findTrait(topology, 'aesthetic', 'creative_self'),
+          blockPatterns: topology.pendingVerification.slice(0, 3),
+          aestheticManifesto: key,
+        },
+      };
+    case 'system_builder':
+      return {
+        sageId,
+        upgradePlan: {
+          horizonMonths: 6,
+          themes: [{
+            name: '自我建模校准',
+            motivation: key,
+            experiments: [{
+              title: '每周一次画像证据复盘',
+              cadence: 'weekly',
+              timeBoxMinutes: 45,
+              successMetric: '每周至少新增一条真实行为证据并修正一个画像假设',
+            }],
+          }],
+        },
+      };
+    case 'product_sage':
+      return {
+        sageId,
+        discoveredJobs: [],
+        painPoints: [],
+        selfSolverFits: [],
+        productConcepts: [],
+        implementationPlans: [],
+      };
+  }
+}
+
+export function buildPersonalOSFromSageSummaries(
+  summaries: RoundtableSageSummary[],
+  topology: TopologyProfile,
+): PersonalOS {
+  const bySage = Object.fromEntries(summaries.map(summary => [summary.sageId, summary.keyInsight])) as Partial<Record<SageId, string>>;
+  return {
+    id: `personal-os-${Date.now()}`,
+    cognitiveModel: bySage.scientist || topology.dimensionTopologies.cognitive?.collaborationRole || '认知模型待继续校准',
+    worldviewAnchor: bySage.philosopher || topology.dimensionTopologies.worldview?.collaborationRole || '意义锚点待继续校准',
+    tensionMap: [
+      ...(bySage.analyst ? [bySage.analyst] : []),
+      ...topology.crossReactions.slice(0, 4).map(reaction => `${reaction.title}: ${reaction.implication}`),
+    ],
+    relationshipSummary: bySage.relationalist || topology.dimensionTopologies.social?.collaborationRole || '关系模式待继续校准',
+    aestheticBaseline: bySage.creator || topology.dimensionTopologies.aesthetic?.collaborationRole || '审美基线待继续校准',
+    upgradeRoadmap: [
+      bySage.system_builder || '用每周复盘把画像假设和真实行为证据对齐',
+      '把高置信画像写入 Boss 记忆，把低置信画像保留为待验证问题',
+    ],
+    narrative: summaries.map(summary => summary.keyInsight).join('\n'),
+    createdAt: new Date().toISOString(),
   };
 }
 

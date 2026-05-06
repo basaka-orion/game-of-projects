@@ -12,6 +12,7 @@ import type {
   BiliVideoWorkspace,
 } from './types'
 import { detectBibiPlatform } from './platforms'
+import { createLocalWanxiangResult, normalizeWanxiangResult } from './wanxiang'
 
 export const BILI_HELPER_STORAGE_KEY = 'openbasaka-bili-helper-mac-state-v1'
 
@@ -126,6 +127,11 @@ export function createSampleBiliWorkspace(): BiliVideoWorkspace {
   return {
     video,
     transcript: BILI_DEFAULT_TRANSCRIPT,
+    wanxiang: createLocalWanxiangResult({
+      video,
+      transcript: BILI_DEFAULT_TRANSCRIPT,
+      goal: '把视频变成资料地图、双教程、Openbasaka 融合 prompt 和清晰思维导图',
+    }),
     pack: createLocalLearningPack(video, BILI_DEFAULT_TRANSCRIPT, '把视频变成资料地图、学习包和行动清单'),
     chat: [
       createBiliChatMessage('assistant', '我已准备好围绕这个视频回答问题。可以问“这个视频最值得做的行动是什么？”'),
@@ -345,6 +351,11 @@ export function normalizeBiliState(input: Partial<BiliHelperState>): BiliHelperS
 function normalizeWorkspace(input: Partial<BiliVideoWorkspace>): BiliVideoWorkspace {
   const video = normalizeVideoInfo(input.video || createLocalVideoInfo(BILI_SAMPLE_URL))
   const pack = input.pack ? normalizePack(input.pack, video.id) : undefined
+  const fallbackWanxiang = createLocalWanxiangResult({
+    video,
+    transcript: input.transcript || video.contentText || '',
+    goal: pack?.goal || '最大化利用这个来源',
+  })
   const visualArtifacts = Array.isArray(input.visualArtifacts)
     ? input.visualArtifacts.map(normalizeVisualArtifact)
     : Array.isArray(pack?.visualArtifacts)
@@ -353,6 +364,7 @@ function normalizeWorkspace(input: Partial<BiliVideoWorkspace>): BiliVideoWorksp
   return {
     video,
     transcript: input.transcript || '',
+    wanxiang: input.wanxiang ? normalizeWanxiangResult(input.wanxiang, fallbackWanxiang, video, input.transcript || video.contentText || '') : undefined,
     pack,
     visualArtifacts,
     archive: input.archive ? normalizeArchiveState(input.archive) : undefined,
@@ -517,8 +529,13 @@ export function createFileSourceWorkspace(input: {
   return {
     video,
     transcript: input.rawContent || input.content,
+    wanxiang: createLocalWanxiangResult({
+      video,
+      transcript: input.rawContent || input.content,
+      goal: '把这个本地来源转成双教程、Openbasaka 融合 prompt 和清晰思维导图',
+    }),
     chat: [
-      createBiliChatMessage('assistant', `${input.fileName} 已接入。可以直接生成学习包，或围绕文件内容继续追问。`),
+      createBiliChatMessage('assistant', `${input.fileName} 已接入。可以直接生成万象学习三结果。`),
     ],
   }
 }

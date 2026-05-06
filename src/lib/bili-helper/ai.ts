@@ -8,7 +8,8 @@ import {
 } from './state'
 import { detectBibiPlatform } from './platforms'
 import { getBaoyuModelRoute, type BaoyuModelRoute } from './model-routing'
-import type { BiliArtifactMode, BiliChatMessage, BiliLearningPack, BiliVideoInfo } from './types'
+import { createLocalWanxiangResult, normalizeWanxiangResult } from './wanxiang'
+import type { BiliArtifactMode, BiliChatMessage, BiliLearningPack, BiliVideoInfo, WanxiangLearningResult } from './types'
 
 function extractJsonObject(text: string): unknown {
   const trimmed = text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim()
@@ -260,6 +261,85 @@ ${input.transcript || input.video.contentText || '用户还没有提供正文，
     }
     pack.markdown = buildMarkdownFromPack(input.video, pack)
     return pack
+  } catch {
+    return fallback
+  }
+}
+
+export async function generateWanxiangLearningResult(input: {
+  video: BiliVideoInfo
+  transcript: string
+  goal: string
+}): Promise<WanxiangLearningResult> {
+  const fallback = createLocalWanxiangResult(input)
+  try {
+    const response = await callBiliAI(
+      [
+        {
+          role: 'system',
+          content: `你是 Openbasaka 的“万象学习”分析器。你的工作不是多做几个花哨产物，而是把用户扔进来的视频、网页、文件、图片 OCR、音频转写或社交链接，收敛成三个结果。
+
+必须输出严格 JSON，不要 markdown 代码块。语言：简体中文。
+铁律：
+1. 先判断是不是教学资料。是教学才输出两份教程：给超级小白看的教程、给计算机/大模型执行的教程。
+2. 不是教学资料时，明确说不是教学，不要伪造成教程，但仍然做内容理解、Openbasaka 融合判断和导图。
+3. Openbasaka 融合方案必须服务本地知识库、Agent prompt、workflow、Boss cognition 或 visual-learning，不要写空泛建议。
+4. 思维导图只输出结构，不让图片模型写中文。最多 1 个根节点、3-6 个一级分支、每支最多 5 个子节点。
+5. 每个关键判断尽量绑定 evidenceRefs。没有证据就标成待核对，不要编造。`,
+        },
+        {
+          role: 'user',
+          content: `来源标题：${input.video.title}
+平台：${input.video.platformName}
+来源类型：${input.video.sourceKind}
+作者/来源：${input.video.owner}
+来源 ID：${input.video.bvid}
+描述：${input.video.description}
+用户目标：${input.goal || '最大化利用用户扔进来的资料'}
+
+来源正文/字幕/转写/OCR：
+${input.transcript || input.video.contentText || '用户还没有提供正文，请基于标题、平台、简介和目标生成可继续补充的结构，并降低置信度。'}
+
+请返回 JSON，字段必须匹配：
+{
+  "sourceId": "${input.video.id}",
+  "sourceTitle": "${input.video.title}",
+  "teaching": {
+    "isTeaching": true,
+    "confidence": 0.86,
+    "reasons": ["为什么判定为教学或非教学"],
+    "evidenceRefs": [{"id":"ev_1","label":"时间点或片段","quote":"原文证据","time":"00:00","sourceId":"${input.video.id}"}],
+    "beginnerTutorial": "如果是教学，给超级小白看的详细 Markdown 教程",
+    "modelTutorial": "如果是教学，给计算机/大模型执行的详细 Markdown 教程",
+    "nonTeachingDigest": "如果不是教学，写内容摘要，不要伪造教程"
+  },
+  "openbasakaFusion": {
+    "applicable": true,
+    "targetSubsystems": ["knowledge","agent-prompt","workflow","boss-cognition","visual-learning"],
+    "rationale": "为什么能或不能融合进 Openbasaka",
+    "masterPrompt": "可复制到 Openbasaka 的大师融合 prompt",
+    "archiveTags": ["万象学习","教学资料"],
+    "folderPath": "知识+大佬/万象学习",
+    "risks": ["待核对风险"]
+  },
+  "mindMap": {
+    "title": "导图标题",
+    "layout": "process",
+    "nodes": [{
+      "id": "root",
+      "label": "中心主题",
+      "kind": "root",
+      "note": "一句话说明",
+      "children": [{"id":"branch_1","label":"一级分支","kind":"topic","children":[{"id":"leaf_1","label":"叶子节点","kind":"evidence"}]}]
+    }]
+  }
+}`,
+        },
+      ],
+      5200,
+    )
+    const parsed = extractJsonObject(response) as Partial<WanxiangLearningResult>
+    return normalizeWanxiangResult({ ...parsed, generatedBy: 'ai' }, fallback, input.video, input.transcript)
   } catch {
     return fallback
   }

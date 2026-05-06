@@ -112,7 +112,7 @@ function inferRealHumanBasis(persona: CouncilPersonaDraft): CouncilRealHumanBasi
     canonicalName,
     displayName: canonicalName,
     publicMaterialSummary: persona.publicBasis,
-    seedReference: nuwaSkillId ? `nuwa-skill/examples/${nuwaSkillId}` : undefined,
+    seedReference: nuwaSkillId ? `nuwa-skill/examples/${nuwaSkillId}` : 'openbasaka-local-nuwa-distillation',
   }
 }
 
@@ -121,8 +121,8 @@ function buildDefaultSourceCoverage(persona: CouncilPersonaDraft): CouncilSource
   return {
     publicMaterialEnough: true,
     sourceCountHint: nuwaSkillId
-      ? '已有 Nuwa 示例种子；仍需重新映射到 Openbasaka SOUL / MEMORY / Dream / 协作职责。'
-      : '公开著作、访谈、案例或学术材料足以进入第一批逐个精修蒸馏。',
+      ? '已完成本地 Nuwa 蒸馏，并吸收 nuwa-skill 示例种子；后续学习只会通过私有 MEMORY / reflection / evolution 继续细化。'
+      : '已完成第一批本地 Nuwa 蒸馏：以公开作品、访谈、案例或学术材料为依据，形成 SOUL / 技能 / Dream / 协作边界。',
     researchStreams: ['writings', 'conversations', 'expression', 'external-views', 'decisions', 'timeline'],
     hasNuwaSeed: Boolean(nuwaSkillId),
   }
@@ -719,8 +719,7 @@ export const COUNCIL_PERSONAS: CouncilPersona[] = COUNCIL_PERSONA_DRAFTS.map((pe
   ...persona,
   dreamSeed: persona.dreamSeed || buildDefaultDreamSeed(persona),
   nuwaSkillId: persona.nuwaSkillId || NUWA_SEED_SKILL_IDS[persona.id],
-  distillationStatus:
-    persona.distillationStatus || (persona.nuwaSkillId || NUWA_SEED_SKILL_IDS[persona.id] ? 'pending-validation' : 'not-started'),
+  distillationStatus: persona.distillationStatus || 'imported',
   realHumanBasis: persona.realHumanBasis || inferRealHumanBasis(persona),
   sourceCoverage: persona.sourceCoverage || buildDefaultSourceCoverage(persona),
   honestLimits: persona.honestLimits || buildDefaultHonestLimits(persona),

@@ -18,6 +18,7 @@ import {
   TeamAction,
   TeamActionRisk,
   TeamActionToolId,
+  TeamDebatePhase,
 } from './types'
 import { getTeamSession, saveTeamSession, createTeamSession, createTeamActions } from './store'
 import { getAgentById } from '../agents/registry'
@@ -1468,6 +1469,7 @@ async function synthesizeTeamArtifact(
   topic: string,
   profile: TeamWorkflowProfile,
   uiStyleContext: UiMuseumPrdContext | null,
+  debatePhases?: TeamDebatePhase[],
   onProgress?: (msg: TeamMessage) => void,
 ): Promise<void> {
   const briefs = collectTeamBriefs(session)
@@ -1498,6 +1500,9 @@ async function synthesizeTeamArtifact(
     '成稿标准：最终必须是一份单一完整文档，不是会议纪要、不是角色观点汇总、不是“下一步要不要我继续”。',
     '信息密度标准：每个关键功能都要写清楚用户动作、系统反应、数据去向、异常状态、验收标准和测试方式。',
     '体验标准：视觉与交互权重等同于功能；必须明确页面层级、组件状态、动效节奏、空态/加载/失败态和小白理解路径。',
+    debatePhases?.length
+      ? `六阶段博弈标准：本轮已按 ${debatePhases.map((phase) => phase.label).join(' -> ')} 推进；成稿必须写出保留的分歧、被裁掉的方案、关键裁决理由、突破性创意、落地 PRD、首版验证实验和 Baoyu-ready 视觉解释。`
+      : '',
     uiStyleContext ? 'UI风格馆标准：必须吸收自动视觉输入，把风格转成可执行 UI/UX 条款、组件状态、动效和视觉验收标准；不要只写“美观”。' : '',
     `本团队能力清单：${capabilities.length ? capabilities.map(formatCapabilityLabel).join('、') : '仅做策略协作'}。需要严格按执行权限判断哪些只是建议、哪些可进入待确认队列、哪些未来才允许自动执行。`,
     uiStyleContext ? `\n${uiStyleContext.promptFragment}` : '',
@@ -1548,7 +1553,7 @@ export async function runTeamSession(
   team: Team,
   topic: string,
   onProgress?: (msg: TeamMessage) => void,
-  options?: { uiStyleContext?: UiMuseumPrdContext | null },
+  options?: { uiStyleContext?: UiMuseumPrdContext | null; debatePhases?: TeamDebatePhase[] },
 ): Promise<TeamSession> {
   const executionTeam = ensureEssentialAgents(team, topic)
   const workflow = getWorkflowProfile(executionTeam, topic)
@@ -1556,6 +1561,7 @@ export async function runTeamSession(
     options && 'uiStyleContext' in options
       ? options.uiStyleContext || null
       : buildUiMuseumPrdContext(topic)
+  const debatePhases = options?.debatePhases || executionTeam.config.debatePhases
   const sessionId = await createTeamSession(team.id, topic)
   const session = await getTeamSession(sessionId)
   if (!session) throw new Error('Failed to create team session')
@@ -1613,11 +1619,11 @@ export async function runTeamSession(
         await runAgencySession(executionTeam, session, topic, workflow, capabilities, llmConfig, uiStyleContext, onProgress)
         break
       case 'brainstorm':
-        await runBrainstormSession(executionTeam, session, topic, workflow, capabilities, llmConfig, uiStyleContext, onProgress)
+        await runBrainstormSession(executionTeam, session, topic, workflow, capabilities, llmConfig, uiStyleContext, debatePhases, onProgress)
         break
     }
 
-    await synthesizeTeamArtifact(executionTeam, session, topic, workflow, uiStyleContext, onProgress)
+    await synthesizeTeamArtifact(executionTeam, session, topic, workflow, uiStyleContext, debatePhases, onProgress)
     await saveTeamArtifactToDesktop({
       team: executionTeam,
       session,
@@ -1984,22 +1990,38 @@ async function runBrainstormSession(
   capabilities: AgentCapabilityId[],
   _llmConfig: LLMConfig,
   uiStyleContext: UiMuseumPrdContext | null,
+  debatePhases?: TeamDebatePhase[],
   onProgress?: (msg: TeamMessage) => void,
 ): Promise<void> {
-  const maxRounds = team.config.maxRounds || 3
+  const maxRounds = debatePhases?.length || team.config.maxRounds || 3
   let roundContext = `## 头脑风暴主题\n${topic}`
   const cognitivePrompt = renderCognitivePrompt(loadCognitiveProfile())
 
   for (let round = 1; round <= maxRounds; round++) {
-    const phase = getBrainstormPhase(round, maxRounds)
+    const phaseSpec = debatePhases?.[round - 1]
+    const phase = phaseSpec?.label || getBrainstormPhase(round, maxRounds)
+    const phaseInstruction =
+      phaseSpec?.instruction ||
+      (round === 1
+        ? '各角色先独立给出初稿，不急着求平均共识。'
+        : round === maxRounds
+          ? '角色必须点名质询、保留分歧并提出可裁决条款。'
+          : '围绕上一轮差异补强证据、风险和体验条款。')
     pushSystemTeamMessage(
       session,
-      `进入「${phase}」阶段：${round === 1 ? '各角色先独立给出初稿，不急着求平均共识。' : round === maxRounds ? '角色必须点名质询、保留分歧并提出可裁决条款。' : '围绕上一轮差异补强证据、风险和体验条款。'}`,
+      `进入「${phase}」阶段：${phaseInstruction}`,
       onProgress,
       'progress',
-      { phase },
+      {
+        phase,
+        phaseId: phaseSpec?.id,
+        phaseLabel: phase,
+        challengedPersonaIds: [],
+        consensusImpact: phaseSpec?.consensusImpact,
+      },
     )
-    for (const agentConfig of team.agents) {
+    const phaseContext = roundContext
+    const phaseOutputs = await Promise.all(team.agents.map(async (agentConfig) => {
       const agent = await getAgentById(agentConfig.agentId)
       const agentLLM = getAgentLLMConfig(agentConfig.agentId)
       const agentName = agent?.name || agentConfig.role
@@ -2040,13 +2062,13 @@ async function runBrainstormSession(
 
       const systemPrompt = [agentPrompt, cognitivePrompt, knowledgeCtx].filter(Boolean).join('\n\n')
 
-      const userPrompt = `${roundContext}\n\n## 工作流\n${workflow.label}\n\n## 本轮阶段\n${phase}\n${
-        phase === '独立初稿'
-          ? '先给出你的独立初稿，不要迎合还没出现的共识。'
-          : phase === '互相质询与收束'
-            ? '请点名你同意、反对或修正的对象，并给出能进入主持人裁决的条款。'
-            : '请补强上一轮缺口，说明你反驳或补充的对象。'
-      }\n\n这是第 ${round}/${maxRounds} 轮。请给出你的顾问短评，服务最终「${workflow.artifactLabel}」。`
+      const userPrompt = `${phaseContext}\n\n## 工作流\n${workflow.label}\n\n## 本轮阶段\n${phase}
+同一阶段内，所有入选角色会基于上一阶段上下文并行独立思考；不要等待或迎合本阶段其他角色。
+${phaseInstruction}
+${phaseSpec?.requiresChallenge ? '本阶段必须点名至少一个你要质询、反对或修正的对象，并说明它如何改变最终共识。' : '如果你同意某个角色，也要说明保留条件；不要只附和。'}
+${phaseSpec?.consensusImpact ? `共识影响：${phaseSpec.consensusImpact}` : ''}
+
+这是第 ${round}/${maxRounds} 轮。请给出你的顾问短评，服务最终「${workflow.artifactLabel}」。`
 
       const startedAt = Date.now()
       let result = ''
@@ -2054,6 +2076,17 @@ async function runBrainstormSession(
         session,
         buildTeamProgressMessage(agentName, `${phase} · 第 ${round}/${maxRounds} 轮，正在形成独立判断与质询对象。`),
         onProgress,
+        'progress',
+        {
+          phase,
+          phaseId: phaseSpec?.id,
+          phaseLabel: phase,
+          agentId: agentConfig.agentId,
+          agentName,
+          challengedPersonaIds: [],
+          consensusImpact: phaseSpec?.consensusImpact,
+          status: 'agent-thinking',
+        },
       )
       try {
         result = await chatCompletion(
@@ -2091,9 +2124,25 @@ async function runBrainstormSession(
           round,
           onProgress,
         })
-        pushSystemTeamMessage(session, result, onProgress, 'error')
-        roundContext += `\n\n### ${agentName} (Round ${round})\n${result}`
-        continue
+        const msg: TeamMessage = {
+          id: generateId(),
+          agentId: agentConfig.agentId,
+          agentName,
+          role: 'assistant',
+          content: result,
+          timestamp: Date.now(),
+          round,
+          kind: 'error',
+          metadata: {
+            phase,
+            phaseId: phaseSpec?.id,
+            phaseLabel: phase,
+            challengedPersonaIds: [],
+            consensusImpact: phaseSpec?.consensusImpact,
+            hermes: { snapshotFrozen: true, reflectionWritten: true },
+          },
+        }
+        return { agentName, result, message: msg }
       }
       recordTeamAgentExecution({
         team,
@@ -2131,13 +2180,20 @@ async function runBrainstormSession(
         kind: 'brief',
         metadata: {
           phase,
+          phaseId: phaseSpec?.id,
+          phaseLabel: phase,
+          challengedPersonaIds: [],
+          consensusImpact: phaseSpec?.consensusImpact,
           hermes: { snapshotFrozen: true, reflectionWritten: true },
         },
       }
-      session.messages.push(msg)
-      onProgress?.(msg)
+      return { agentName, result, message: msg }
+    }))
 
-      roundContext += `\n\n### ${agentName} (Round ${round})\n${result}`
+    for (const output of phaseOutputs) {
+      session.messages.push(output.message)
+      onProgress?.(output.message)
+      roundContext += `\n\n### ${output.agentName} (Round ${round})\n${output.result}`
     }
   }
 

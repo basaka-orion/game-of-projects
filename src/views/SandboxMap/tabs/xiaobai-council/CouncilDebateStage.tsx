@@ -2,8 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { Player } from '@remotion/player'
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from 'remotion'
 import type { UiMuseumPrdContext } from '../../../../lib/ui-museum/context'
+import type { CouncilBaoyuVisualPlan } from '../../../../lib/xiaobai-council/baoyu'
 import type { CouncilCreativeEnhancement } from '../../../../lib/xiaobai-council/creative-enhancement'
+import type { CouncilDebateMap, CouncilDebateScene } from '../../../../lib/xiaobai-council/debate-theater'
 import type { AgentDreamState } from '../../../../lib/xiaobai-council/dream'
+import type { CouncilQualityGate } from '../../../../lib/xiaobai-council/quality-gate'
 import type { CouncilSelection } from '../../../../lib/xiaobai-council/selector'
 import type { TeamMessage } from '../../../../lib/teams/types'
 
@@ -15,6 +18,10 @@ interface CouncilDebateStageProps {
   uiStyleContext?: UiMuseumPrdContext | null
   creativeEnhancement?: CouncilCreativeEnhancement | null
   agentDreamStates?: AgentDreamState[]
+  debateScenes?: CouncilDebateScene[]
+  debateMap?: CouncilDebateMap | null
+  qualityGate?: CouncilQualityGate | null
+  baoyuVisualPlans?: CouncilBaoyuVisualPlan[]
 }
 
 interface CouncilDebateCompositionProps {
@@ -34,6 +41,13 @@ interface CouncilDebateCompositionProps {
   }
   creativeSource: string
   dreamLines: string[]
+  currentSceneTitle: string
+  currentSpeaker: string
+  currentTarget: string
+  conflictCount: number
+  qualityScore?: number
+  qualityStatus?: string
+  baoyuCount: number
 }
 
 function CouncilDebateComposition({
@@ -46,6 +60,13 @@ function CouncilDebateComposition({
   theme,
   creativeSource,
   dreamLines,
+  currentSceneTitle,
+  currentSpeaker,
+  currentTarget,
+  conflictCount,
+  qualityScore,
+  qualityStatus,
+  baoyuCount,
 }: CouncilDebateCompositionProps) {
   const frame = useCurrentFrame()
   const { durationInFrames } = useVideoConfig()
@@ -215,6 +236,26 @@ function CouncilDebateComposition({
         style={{
           position: 'absolute',
           right: 42,
+          top: 292,
+          width: 282,
+          border: `1px solid ${theme.border}66`,
+          background: 'rgba(2, 6, 23, 0.66)',
+          padding: 14,
+          display: 'grid',
+          gap: 8,
+          fontSize: 12,
+          lineHeight: 1.4,
+        }}
+      >
+        <div style={{ color: theme.accent, fontWeight: 800 }}>真实剧场信号</div>
+        <strong style={{ fontSize: 15 }}>{currentSceneTitle}</strong>
+        <span>{currentSpeaker}{currentTarget ? ` -> ${currentTarget}` : ' -> 主持裁决'}</span>
+        <span>冲突边 {conflictCount} · 质量 {qualityScore ?? '-'} {qualityStatus || ''} · 追溯 {baoyuCount}</span>
+      </div>
+      <div
+        style={{
+          position: 'absolute',
+          right: 42,
           bottom: 38,
           color: running ? theme.accent : theme.border,
           fontSize: 13,
@@ -234,6 +275,10 @@ export default function CouncilDebateStage({
   uiStyleContext,
   creativeEnhancement,
   agentDreamStates = [],
+  debateScenes = [],
+  debateMap,
+  qualityGate,
+  baoyuVisualPlans = [],
 }: CouncilDebateStageProps) {
   const [reducedMotion, setReducedMotion] = useState(false)
   useEffect(() => {
@@ -261,6 +306,9 @@ export default function CouncilDebateStage({
     motion: uiStyleContext?.visual.motion || 'guided motion',
   }
   const dreamLines = agentDreamStates.map((dream) => dream.currentDream)
+  const realScenes = debateScenes.filter((scene) => scene.id !== 'scene-waiting-for-briefs')
+  const currentScene = realScenes[realScenes.length - 1] || debateScenes[0]
+  const conflictCount = debateMap?.edges.filter((edge) => edge.relation === 'oppose' || edge.relation === 'cut').length || 0
 
   if (reducedMotion) {
     return (
@@ -268,6 +316,7 @@ export default function CouncilDebateStage({
         <div className="council-stage__kicker">XIAOBAI COUNCIL</div>
         <div className="council-stage__headline">{headline}</div>
         <div className="council-stage__phase">{phase}</div>
+        <div className="council-stage__phase">{currentScene?.sceneTitle || '等待剧场场景'}</div>
         <div className="council-stage__phase">{uiStyleContext?.styleNames.join(' / ') || 'UI Museum theme'}</div>
       </div>
     )
@@ -287,6 +336,13 @@ export default function CouncilDebateStage({
           theme,
           creativeSource: creativeEnhancement?.source || 'fallback',
           dreamLines,
+          currentSceneTitle: currentScene?.sceneTitle || '等待第一幕',
+          currentSpeaker: currentScene?.speakerName || '小白智囊团',
+          currentTarget: currentScene?.targetNames.join(' / ') || '',
+          conflictCount,
+          qualityScore: qualityGate?.score,
+          qualityStatus: qualityGate?.finalGateStatus || qualityGate?.status,
+          baoyuCount: baoyuVisualPlans.length,
         }}
         durationInFrames={210}
         fps={30}

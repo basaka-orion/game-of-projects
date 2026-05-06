@@ -70,11 +70,20 @@ export interface TeamAgent {
 export interface TeamConfig {
   maxRounds?: number
   tasks?: TeamTask[]
+  debatePhases?: TeamDebatePhase[]
   communicationPattern: 'round-robin' | 'broadcast' | 'sequential'
   temperature?: number
   workflowType?: TeamWorkflowType
   capabilities?: AgentCapabilityId[]
   executionMode?: TeamExecutionMode
+}
+
+export interface TeamDebatePhase {
+  id: string
+  label: string
+  instruction: string
+  consensusImpact: string
+  requiresChallenge?: boolean
 }
 
 export interface TeamTask {

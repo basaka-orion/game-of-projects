@@ -46,6 +46,27 @@ export interface CouncilSelection {
   matchGate: CouncilMatchGate
 }
 
+export type CouncilMatchDecisionSource = 'deep-model' | 'local-fallback'
+export type CouncilMatchProgressStatus = 'running' | 'completed' | 'failed'
+export type CouncilMatchPhaseId =
+  | 'problem-profile'
+  | 'creative-dna'
+  | 'candidate-pool'
+  | 'model-judge'
+  | 'collaboration-matrix'
+  | 'recommendation'
+
+export interface CouncilMatchProgressEvent {
+  phaseId: CouncilMatchPhaseId
+  label: string
+  status: CouncilMatchProgressStatus
+  detail: string
+  candidatePersonaIds: string[]
+  startedAt: number
+  endedAt?: number
+  decisionSource?: CouncilMatchDecisionSource
+}
+
 export interface CouncilMatchScoreFactors {
   domainFit: number
   methodFit: number
@@ -82,6 +103,11 @@ export interface CouncilMatchGate {
   gateId: string
   profile: CouncilProblemProfile
   seatPlan: Array<Pick<CouncilSeat, 'id' | 'label' | 'mission'>>
+  stageTrace: CouncilMatchProgressEvent[]
+  judgeSummary: string
+  decisionSource: CouncilMatchDecisionSource
+  creativeDnaUsed: boolean
+  styleContextUsed: boolean
   candidateScores: CouncilMatchCandidateScore[]
   collaborationMatrix: CouncilCollaborationEdge[]
   finalTeam: Array<{
@@ -399,7 +425,11 @@ function scorePersonaForSeat(
       ? `方法论 ${persona.methodTags.filter((tag) => seat.preferredMethodTags.includes(tag)).slice(0, 2).join(' / ')}`
       : '',
     conflictTags > 0 ? '能提供互补反方视角' : '',
-    persona.nuwaSkillId ? `已有 Nuwa 种子：${COUNCIL_DISTILLATION_STATUS_LABELS[distillation.distillationStatus]}` : '进入 Nuwa 逐个精修队列',
+    persona.nuwaSkillId
+      ? `已有 Nuwa 种子：${COUNCIL_DISTILLATION_STATUS_LABELS[distillation.distillationStatus]}`
+      : distillation.distillationStatus === 'imported'
+        ? '已导入 Openbasaka 本地 Nuwa skill 包'
+        : '进入 Nuwa 逐个精修队列',
   ].filter(Boolean)
 
   return {
@@ -435,7 +465,7 @@ function toCandidateScore(item: CouncilSelectedSeat): CouncilMatchCandidateScore
   }
 }
 
-function buildCollaborationMatrix(seats: CouncilSelectedSeat[]): CouncilCollaborationEdge[] {
+export function buildCouncilCollaborationMatrix(seats: CouncilSelectedSeat[]): CouncilCollaborationEdge[] {
   const edges: CouncilCollaborationEdge[] = []
   for (let i = 0; i < seats.length; i += 1) {
     for (let j = i + 1; j < seats.length; j += 1) {
@@ -497,8 +527,13 @@ function buildCouncilMatchGate(
     gateId: `council-match-${Date.now().toString(36)}`,
     profile,
     seatPlan: seatPlan.map((seat) => ({ id: seat.id, label: seat.label, mission: seat.mission })),
+    stageTrace: [],
+    judgeSummary: '本地规则评分已完成；尚未经过深度模型裁判。',
+    decisionSource: 'local-fallback',
+    creativeDnaUsed: false,
+    styleContextUsed: false,
     candidateScores,
-    collaborationMatrix: buildCollaborationMatrix(finalSeats),
+    collaborationMatrix: buildCouncilCollaborationMatrix(finalSeats),
     finalTeam: finalSeats.map((item) => ({
       seatId: item.seat.id,
       personaId: item.persona.id,
@@ -509,7 +544,7 @@ function buildCouncilMatchGate(
     })),
     alternates: alternates.slice(0, 8).map(toCandidateScore),
     readiness: {
-      nuwaCoverage: `${nuwaSeedCount}/${finalSeats.length} 位已有 Nuwa 示例种子，其余进入逐个精修蒸馏队列。`,
+      nuwaCoverage: `${finalSeats.length}/${finalSeats.length} 位已完成本地 Nuwa 蒸馏；其中 ${nuwaSeedCount} 位吸收 nuwa-skill 示例种子。`,
       skillMaturity: `平均技能成熟度 ${avgSkillMaturity.toFixed(1)}，本轮仍以本地 Openbasaka skill registry 为准。`,
       evidenceStrength: profile.needsEvidence
         ? `${evidenceCount} 位能提供证据地图或研究席位。`

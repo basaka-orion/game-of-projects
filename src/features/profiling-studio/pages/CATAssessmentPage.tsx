@@ -15,6 +15,9 @@ import { CAT_ITEM_BANK, getCATDimensionItemBank } from '../data/item-bank';
 import { catModules } from '../data/cat-questions';
 import { DIMENSIONS } from '../data/dimensions';
 import { useAssessmentStore } from '../store';
+import { scoreCreativeOpenResponse } from '../engine/aut-scoring';
+import { labelCATOption, scoreCATOption } from '../engine/cat-response-scoring';
+import type { CATOpenResponseScore } from '../types';
 
 const L5 = [
   { value: 1, label: '非常不同意' }, { value: 2, label: '不同意' },
@@ -40,35 +43,102 @@ export default function CATAssessmentPage() {
 
   const config: CATConfig = useMemo(() => ({
     ...DEFAULT_CAT_CONFIG,
-    maxItems: dimensionId && dimensionId !== 'full' ? 8 : 20,
-    minItems: dimensionId && dimensionId !== 'full' ? 3 : 5,
+    maxItems: dimensionId && dimensionId !== 'full' ? 8 : 24,
+    minItems: dimensionId && dimensionId !== 'full' ? 3 : 8,
   }), [dimensionId]);
 
   const dimension = dimensionId ? DIMENSIONS.find(d => d.id === dimensionId) : null;
+  const isFullCAT = !dimensionId || dimensionId === 'full';
+  const requiredDimensionIds = useMemo(
+    () => Array.from(new Set(itemBank.map(item => item.dimension))),
+    [itemBank],
+  );
+
+  const getCoveredDimensions = useCallback((state: CATState) => {
+    return new Set(
+      state.responses
+        .map(response => itemBank.find(item => item.questionId === response.itemId)?.dimension)
+        .filter((dimId): dimId is string => Boolean(dimId)),
+    );
+  }, [itemBank]);
+
+  const hasRequiredDimensionCoverage = useCallback((state: CATState) => {
+    if (!isFullCAT) return true;
+    const covered = getCoveredDimensions(state);
+    return requiredDimensionIds.every(dimId => covered.has(dimId));
+  }, [getCoveredDimensions, isFullCAT, requiredDimensionIds]);
+
+  const selectBalancedNextItem = useCallback((state: CATState) => {
+    if (isFullCAT) {
+      const covered = getCoveredDimensions(state);
+      const uncoveredItems = itemBank.filter(item => !covered.has(item.dimension));
+      if (uncoveredItems.length > 0) {
+        const nextUncovered = selectNextItem(
+          state.theta,
+          uncoveredItems,
+          state.administeredItems,
+          state.itemsPerDimension,
+          config,
+        );
+        if (nextUncovered) return nextUncovered;
+      }
+    }
+
+    return selectNextItem(state.theta, itemBank, state.administeredItems, state.itemsPerDimension, config);
+  }, [config, getCoveredDimensions, isFullCAT, itemBank]);
 
   const [catState, setCatState] = useState<CATState>(() => initCAT(config));
   const [phase, setPhase] = useState<'intro' | 'testing' | 'result'>('intro');
   const [currentItem, setCurrentItem] = useState<IRTItemParams | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [openText, setOpenText] = useState('');
+  const [openScores, setOpenScores] = useState<Record<string, CATOpenResponseScore>>({});
+  const [responseMeta, setResponseMeta] = useState<Record<string, {
+    selectedOptionValue?: string | number;
+    selectedOptionLabel?: string;
+    answeredAt: string;
+  }>>({});
 
   const startTest = useCallback(() => {
     const state = initCAT(config);
     setCatState(state);
-    const item = selectNextItem(state.theta, itemBank, state.administeredItems, state.itemsPerDimension, config);
+    setOpenText('');
+    setOpenScores({});
+    setResponseMeta({});
+    const item = selectBalancedNextItem(state);
     setCurrentItem(item);
     setPhase('testing');
-  }, [itemBank, config]);
+  }, [config, selectBalancedNextItem]);
 
-  const handleResponse = useCallback((value: number) => {
+  const handleResponse = useCallback((
+    value: number,
+    openScoring?: CATOpenResponseScore,
+    meta?: { selectedOptionValue?: string | number; selectedOptionLabel?: string },
+  ) => {
     if (!currentItem) return;
     const newState = processResponse(catState, itemBank, currentItem.questionId, value, config);
     setCatState(newState);
+    const mergedOpenScores = openScoring
+      ? { ...openScores, [currentItem.questionId]: openScoring }
+      : openScores;
+    if (openScoring) setOpenScores(mergedOpenScores);
+    const mergedResponseMeta = {
+      ...responseMeta,
+      [currentItem.questionId]: {
+        selectedOptionValue: meta?.selectedOptionValue,
+        selectedOptionLabel: meta?.selectedOptionLabel,
+        answeredAt: new Date().toISOString(),
+      },
+    };
+    setResponseMeta(mergedResponseMeta);
     const sePct = Math.round((1 - newState.se / config.thetaPriorSD) * 100);
     setFeedback(`精度 ${Math.min(99, Math.max(10, sePct))}%`);
 
     setTimeout(() => {
       setFeedback(null);
-      if (shouldTerminate(newState, config)) {
+      const shouldStop = shouldTerminate(newState, config) && hasRequiredDimensionCoverage(newState);
+
+      if (shouldStop) {
         const { saveCATResponses } = useAssessmentStore.getState();
         // Convert IRT responses to V2.0 CATResponse format
         const catResps = newState.responses.map(r => ({
@@ -76,6 +146,8 @@ export default function CATAssessmentPage() {
           response: r.response,
           theta: r.theta,
           se: r.se,
+          ...mergedResponseMeta[r.itemId],
+          openScoring: mergedOpenScores[r.itemId],
         }));
 
         if (dimensionId && dimensionId !== 'full') {
@@ -95,11 +167,29 @@ export default function CATAssessmentPage() {
         }
         setPhase('result');
       } else {
-        const next = selectNextItem(newState.theta, itemBank, newState.administeredItems, newState.itemsPerDimension, config);
+        const next = selectBalancedNextItem(newState);
         setCurrentItem(next);
+        setOpenText('');
       }
     }, 500);
-  }, [catState, currentItem, itemBank, config, dimensionId]);
+  }, [catState, currentItem, itemBank, config, dimensionId, openScores, responseMeta, hasRequiredDimensionCoverage, selectBalancedNextItem]);
+
+  const handleOpenSubmit = useCallback(() => {
+    if (!currentItem || openText.trim().length < 8) return;
+    const scored = scoreCreativeOpenResponse(openText);
+    handleResponse(scored.category, scored, {
+      selectedOptionLabel: openText.trim(),
+    });
+  }, [currentItem, handleResponse, openText]);
+
+  const handleChoice = useCallback((value: number | string) => {
+    if (!currentItem) return;
+    const question = getQuestionById(currentItem.questionId);
+    handleResponse(scoreCATOption(question, currentItem, value), undefined, {
+      selectedOptionValue: value,
+      selectedOptionLabel: labelCATOption(question, value),
+    });
+  }, [currentItem, handleResponse]);
 
   // ═══════════════════ INTRO ═══════════════════
   if (phase === 'intro') {
@@ -349,6 +439,8 @@ export default function CATAssessmentPage() {
   const sePct = catState.responses.length > 0 ? Math.round((1 - catState.se / config.thetaPriorSD) * 100) : 0;
   const options = question?.options || L5;
   const isBinary = currentItem.b.length === 1;
+  const isOpen = question?.type === 'open';
+  const openPreview = isOpen && openText.trim().length >= 8 ? scoreCreativeOpenResponse(openText) : null;
 
   return (
     <div style={{
@@ -453,16 +545,74 @@ export default function CATAssessmentPage() {
         </p>
 
         {/* Options */}
-        {isBinary && question?.options ? (
+        {isOpen ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, textAlign: 'left' }}>
+            <textarea
+              value={openText}
+              onChange={(event) => setOpenText(event.target.value)}
+              placeholder="逐条写下你的想法，可以用换行、顿号或分号分隔。系统会先做启发式 AUT 评分，后续报告会标注需要复核。"
+              style={{
+                minHeight: 160,
+                width: '100%',
+                resize: 'vertical',
+                borderRadius: 16,
+                border: '1px solid rgba(255,255,255,0.08)',
+                background: 'rgba(255,255,255,0.03)',
+                color: 'var(--text-primary)',
+                padding: '16px 18px',
+                fontSize: 14,
+                lineHeight: 1.7,
+                outline: 'none',
+              }}
+            />
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+              gap: 8,
+            }}>
+              {[
+                ['流畅性', openPreview?.fluency ?? 0],
+                ['灵活性', openPreview?.flexibility ?? 0],
+                ['独创线索', openPreview?.originalityProxy ?? 0],
+                ['精细化', openPreview?.elaboration ?? 0],
+              ].map(([label, value]) => (
+                <div key={label} style={{
+                  borderRadius: 12,
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  background: 'rgba(255,255,255,0.02)',
+                  padding: '10px 8px',
+                  textAlign: 'center',
+                }}>
+                  <div style={{ fontSize: 18, color: 'var(--accent-cyan)', fontWeight: 700 }}>{value}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{label}</div>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={handleOpenSubmit}
+              disabled={openText.trim().length < 8}
+              style={{
+                border: 'none',
+                borderRadius: 14,
+                padding: '14px 18px',
+                background: openText.trim().length >= 8
+                  ? 'linear-gradient(135deg, #64FFDA, #00BFA5)'
+                  : 'rgba(255,255,255,0.06)',
+                color: openText.trim().length >= 8 ? '#0a0a1a' : 'var(--text-tertiary)',
+                fontSize: 14,
+                fontWeight: 700,
+                cursor: openText.trim().length >= 8 ? 'pointer' : 'not-allowed',
+              }}
+            >
+              提交开放作答
+            </button>
+          </div>
+        ) : isBinary && question?.options ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {question.options.map((opt, i) => (
               <motion.button
                 key={i} whileTap={{ scale: 0.98 }}
-                onClick={() => handleResponse(
-                  question.correct
-                    ? (String(opt.value) === question.correct ? 1 : 0)
-                    : Number(opt.value)
-                )}
+                onClick={() => handleChoice(opt.value)}
                 style={{
                   width: '100%', textAlign: 'left', padding: '14px 20px',
                   borderRadius: 14, background: 'rgba(255,255,255,0.02)',
@@ -477,7 +627,7 @@ export default function CATAssessmentPage() {
             {options.map((opt, i) => (
               <motion.button
                 key={i} whileTap={{ scale: 0.9 }}
-                onClick={() => handleResponse(Number(opt.value))}
+                onClick={() => handleChoice(opt.value)}
                 style={{
                   display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
                   padding: '14px 16px', borderRadius: 14, minWidth: 72,

@@ -18,6 +18,7 @@ const TrackingPage = lazy(() => import('./pages/TrackingPage'));
 const AVGPage = lazy(() => import('./pages/AVGPage'));
 const AVGPreQuestionnaire = lazy(() => import('./pages/AVGPreQuestionnaire'));
 const GamesHubPage = lazy(() => import('./pages/GamesHubPage'));
+const MatrixReasoningPage = lazy(() => import('./pages/MatrixReasoningPage'));
 const StroopGame = lazy(() => import('./games/StroopGame'));
 const NBackGame = lazy(() => import('./games/NBackGame'));
 const GoNoGoGame = lazy(() => import('./games/GoNoGoGame'));
@@ -187,6 +188,7 @@ function AnimatedRoutes() {
           <Route path="/avg" element={withTestGate(<AVGPage />)} />
           <Route path="/avg/intro" element={withTestGate(<AVGPreQuestionnaire />)} />
           <Route path="/games" element={withTestGate(<GamesHubPage />)} />
+          <Route path="/matrix" element={withTestGate(<MatrixReasoningPage />)} />
           <Route path="/games/stroop" element={withTestGate(<GameWrapper gameType="stroop" Component={StroopGame} />)} />
           <Route path="/games/nback" element={withTestGate(<GameWrapper gameType="nback" Component={NBackGame} />)} />
           <Route path="/games/gonogo" element={withTestGate(<GameWrapper gameType="gonogo" Component={GoNoGoGame} />)} />

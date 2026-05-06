@@ -9,10 +9,12 @@ import {
   streamRoundtableSageResponse,
 } from '../engine/socratic';
 import type { DialogueMessage } from '../engine/socratic';
-import type { SageId } from '../types';
+import type { SageDialogueMessage, SageId } from '../types';
 import { SAGE_MAP } from '../data/sages';
 import {
   getRoundtableOrder,
+  buildPersonalOSFromSageSummaries,
+  buildSageInsightFromRoundSummary,
   summarizeSageRound,
   ROUNDTABLE_TURNS_PER_SAGE,
   type RoundtableSageSummary,
@@ -23,9 +25,27 @@ interface RoundtableMessage extends DialogueMessage {
   sageId?: SageId;
 }
 
+function toSageDialogueMessages(messages: RoundtableMessage[], sageId: SageId): SageDialogueMessage[] {
+  return messages
+    .filter(message => message.role === 'ai' || message.role === 'user')
+    .map((message) => ({
+      id: message.id,
+      role: message.role === 'ai' ? 'sage' : 'user',
+      content: message.content,
+      timestamp: message.timestamp,
+      sageId: message.sageId || sageId,
+      metadata: {
+        phase: message.metadata?.phase || 'roundtable',
+      },
+    }));
+}
+
 export default function SocraticDialoguePage() {
   const navigate = useNavigate();
   const topology = useAssessmentStore(s => s.topology);
+  const updateSageSession = useAssessmentStore(s => s.updateSageSession);
+  const saveSageInsight = useAssessmentStore(s => s.saveSageInsight);
+  const setPersonalOS = useAssessmentStore(s => s.setPersonalOS);
   const report = topology ? topologyToSocraticReport(topology) : null;
 
   // ── 圆桌核心状态 ──
@@ -75,6 +95,13 @@ export default function SocraticDialoguePage() {
   // ── 启动某位智者的圆桌回合 ──
   const startSageRound = useCallback((sageId: SageId, sageIdx: number, prevSummaries: RoundtableSageSummary[]) => {
     if (!report || !topology) return;
+    updateSageSession(sageId, {
+      sageId,
+      messages: [],
+      phase: 'observation',
+      turnCount: 0,
+      status: 'active',
+    });
 
     // 插入切换卡片
     if (sageIdx > 0) {
@@ -139,7 +166,7 @@ export default function SocraticDialoguePage() {
         setError('AI 服务暂不可用，已切换为预设对话模式');
       },
     );
-  }, [report, topology, sageOrder]);
+  }, [report, topology, sageOrder, updateSageSession]);
 
   // ── 发送消息 ──
   const handleSend = useCallback((text: string) => {
@@ -245,15 +272,27 @@ export default function SocraticDialoguePage() {
 
   // ── 切换到下一位智者 ──
   const transitionToNextSage = useCallback((completedSageId: SageId, _lastMsg: RoundtableMessage) => {
+    if (!topology) return;
     // 生成当前智者的摘要
-    const allCurrent = [...currentSageMessages];
+    const allCurrent = [...currentSageMessages, _lastMsg];
     const summary = summarizeSageRound(completedSageId, allCurrent);
     const newSummaries = [...sageSummaries, summary];
     setSageSummaries(newSummaries);
+    const structuredOutput = buildSageInsightFromRoundSummary(completedSageId, summary, topology);
+    saveSageInsight(structuredOutput);
+    updateSageSession(completedSageId, {
+      sageId: completedSageId,
+      messages: toSageDialogueMessages(allCurrent, completedSageId),
+      phase: 'completed',
+      turnCount: allCurrent.filter(message => message.role === 'user').length,
+      status: 'completed',
+      structuredOutput,
+    });
 
     const nextIdx = currentSageIdx + 1;
     if (nextIdx >= sageOrder.length) {
       // 圆桌结束
+      setPersonalOS(buildPersonalOSFromSageSummaries(newSummaries, topology));
       setRoundtableComplete(true);
       return;
     }
@@ -265,7 +304,7 @@ export default function SocraticDialoguePage() {
     setTimeout(() => {
       startSageRound(nextSageId, nextIdx, newSummaries);
     }, 1500);
-  }, [currentSageMessages, sageSummaries, currentSageIdx, sageOrder, startSageRound]);
+  }, [currentSageMessages, sageSummaries, currentSageIdx, sageOrder, startSageRound, topology, saveSageInsight, setPersonalOS, updateSageSession]);
 
   // ── 无数据 fallback ──
   if (!topology || !report) {

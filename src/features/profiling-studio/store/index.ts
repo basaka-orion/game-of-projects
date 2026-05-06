@@ -18,6 +18,8 @@ import type {
   HumanMapMode,
   HumanMapBlueprint,
   QuestionPresentationSnapshot,
+  MatrixSessionResult,
+  SelfAgentConstitution,
 } from '../types';
 import { recordModuleResponse } from '../engine/data-collection';
 
@@ -41,6 +43,10 @@ interface AssessmentState {
 
   // ── V2.0: CAT 原始响应 ──
   catResponses: Record<string, CATResponse[]>;
+
+  // ── V2.3: 原创矩阵推理 + 未来代理人蒸馏 ──
+  matrixResults: MatrixSessionResult[];
+  selfAgentConstitution: SelfAgentConstitution | null;
 
   // ── V2.0: 拓扑画像 + 锻造蓝图 ──
   topology: TopologyProfile | null;
@@ -72,6 +78,8 @@ interface AssessmentState {
   completeHumanMap: (blueprint: HumanMapBlueprint) => void;
   resetHumanMap: () => void;
   saveCATResponses: (dimensionId: string, responses: CATResponse[]) => void;
+  saveMatrixResult: (result: MatrixSessionResult) => void;
+  setSelfAgentConstitution: (constitution: SelfAgentConstitution | null) => void;
   setTopology: (topology: TopologyProfile) => void;
   setForgeBlueprint: (blueprint: ForgeBlueprint) => void;
   setForgeGenesisDoc: (doc: ForgeGenesisDoc) => void;
@@ -106,6 +114,8 @@ export const useAssessmentStore = create<AssessmentState>()(
       humanMapAIQuestions: [],
       questionPresentationSnapshots: {},
       catResponses: {},
+      matrixResults: [],
+      selfAgentConstitution: null,
       topology: null,
       forgeBlueprint: null,
       forgeGenesisDoc: null,
@@ -217,6 +227,30 @@ export const useAssessmentStore = create<AssessmentState>()(
             : [...s.completedDimensions, dimensionId],
         })),
 
+      saveMatrixResult: (result) => {
+        set((s) => ({
+          matrixResults: [
+            result,
+            ...s.matrixResults.filter(r => r.id !== result.id),
+          ].slice(0, 8),
+        }));
+        recordModuleResponse(
+          'matrix_reasoning',
+          'matrix_reasoning',
+          {
+            accuracy: result.accuracy,
+            rawScore: result.rawScore,
+            maxScore: result.maxScore,
+            meanResponseTimeMs: result.meanResponseTimeMs,
+            difficultyWeightedScore: result.difficultyWeightedScore,
+            reliabilityEstimate: result.reliabilityEstimate,
+          },
+          Math.max(0, result.responses.reduce((sum, response) => sum + response.responseTimeMs, 0)),
+        );
+      },
+
+      setSelfAgentConstitution: (constitution) => set({ selfAgentConstitution: constitution }),
+
       setTopology: (topology) => set({ topology }),
 
       setForgeBlueprint: (blueprint) => set({ forgeBlueprint: blueprint }),
@@ -239,6 +273,8 @@ export const useAssessmentStore = create<AssessmentState>()(
           humanMapAIQuestions: [],
           questionPresentationSnapshots: {},
           catResponses: {},
+          matrixResults: [],
+          selfAgentConstitution: null,
           topology: null,
           forgeBlueprint: null,
           sageSessions: {},

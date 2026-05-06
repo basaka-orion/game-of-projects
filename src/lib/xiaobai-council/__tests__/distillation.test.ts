@@ -3,6 +3,7 @@ import { COUNCIL_PERSONAS } from '../personas'
 import {
   buildAllCouncilDistillationProfiles,
   buildCouncilNuwaSkillDraft,
+  COUNCIL_DISTILLATION_STATUS_LABELS,
   getCouncilPersonaDistillationStatus,
   setCouncilPersonaDistillationStatus,
 } from '../distillation'
@@ -27,8 +28,16 @@ describe('xiaobai council Nuwa distillation profiles', () => {
       ])
       expect(profile.auditCard.whyEssential).toContain(profile.realHumanBasis.displayName)
       expect(profile.mentalModels.length).toBeGreaterThanOrEqual(3)
+      expect(profile.decisionHeuristics.length).toBeGreaterThanOrEqual(5)
+      expect(profile.distillationStatus).toBe('imported')
+      expect(profile.sourceSummary).toContain('completed')
       expect(profile.honestLimits.join('\n')).toContain('不代表本人')
     }
+  })
+
+  it('marks the first batch as locally distilled in the user-facing status label', () => {
+    expect(COUNCIL_PERSONAS.every((persona) => persona.distillationStatus === 'imported')).toBe(true)
+    expect(COUNCIL_DISTILLATION_STATUS_LABELS.imported).toBe('已蒸馏')
   })
 
   it('supports reading and overriding Nuwa distillation status locally', () => {
@@ -48,7 +57,8 @@ describe('xiaobai council Nuwa distillation profiles', () => {
     expect(draft).toContain(`name: ${persona.id}-nuwa-perspective`)
     expect(draft).toContain('## 真实人类依据')
     expect(draft).toContain('## 角色边界')
-    expect(draft).toContain('## 心智模型候选')
-    expect(draft).toContain('## 待验证问题')
+    expect(draft).toContain('Openbasaka Nuwa Skill')
+    expect(draft).toContain('## 心智模型')
+    expect(draft).toContain('## 验证问题')
   })
 })

@@ -60,12 +60,13 @@ export default function GoNoGoGame({ onComplete }: Props) {
   const omissions = useRef(0);
   const goCorrect = useRef(0);
   const nogoCorrect = useRef(0);
+  const respondedRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  const endTrial = useCallback(() => {
+  const endTrial = useCallback((wasResponded = respondedRef.current) => {
     const trial = trials[currentTrial];
-    if (trial === 'go' && !responded) { omissions.current++; setFeedback('miss'); }
-    else if (trial === 'nogo' && !responded) { nogoCorrect.current++; setFeedback('hold'); }
+    if (trial === 'go' && !wasResponded) { omissions.current++; setFeedback('miss'); }
+    else if (trial === 'nogo' && !wasResponded) { nogoCorrect.current++; setFeedback('hold'); }
     setTimeout(() => {
       if (currentTrial + 1 >= TOTAL_TRIALS) {
         const goTotal = TOTAL_TRIALS - NOGO_COUNT;
@@ -77,9 +78,14 @@ export default function GoNoGoGame({ onComplete }: Props) {
           totalTrials: TOTAL_TRIALS,
         };
         setResult(r); setPhase('result'); onComplete(r);
-      } else { setResponded(false); setFeedback(null); setCurrentTrial(prev => prev + 1); }
+      } else {
+        respondedRef.current = false;
+        setResponded(false);
+        setFeedback(null);
+        setCurrentTrial(prev => prev + 1);
+      }
     }, 300);
-  }, [currentTrial, trials, responded, onComplete]);
+  }, [currentTrial, trials, onComplete]);
 
   useEffect(() => {
     if (phase !== 'playing') return;
@@ -91,13 +97,14 @@ export default function GoNoGoGame({ onComplete }: Props) {
   }, [phase, currentTrial, endTrial]);
 
   const handleTap = () => {
-    if (!showStimulus || responded || phase !== 'playing') return;
+    if (!showStimulus || respondedRef.current || phase !== 'playing') return;
+    respondedRef.current = true;
     setResponded(true);
     const rt = performance.now() - startTime.current;
     const trial = trials[currentTrial];
     if (trial === 'go') { goCorrect.current++; goRTs.current.push(rt); setFeedback('hit'); }
     else { commissions.current++; setFeedback('error'); }
-    clearTimeout(timerRef.current); setShowStimulus(false); endTrial();
+    clearTimeout(timerRef.current); setShowStimulus(false); endTrial(true);
   };
 
   // ── Intro ──

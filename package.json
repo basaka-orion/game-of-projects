@@ -23,6 +23,7 @@
     "qimeng:compile": "node --experimental-strip-types tools/qimeng-pilot-compile.ts",
     "qimeng:page-chunks": "node --experimental-strip-types tools/qimeng-page-chunks.ts",
     "qimeng:rollback": "node --experimental-strip-types tools/qimeng-import-rollback.ts",
+    "xiaobai:distill": "node --experimental-strip-types tools/export-xiaobai-nuwa-skills.mjs",
     "lint": "eslint src/ electron/",
     "lint:fix": "eslint src/ electron/ --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"electron/**/*.ts\"",
