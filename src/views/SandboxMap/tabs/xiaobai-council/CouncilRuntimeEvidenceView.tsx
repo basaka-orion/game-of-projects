@@ -53,6 +53,10 @@ export function CouncilRuntimeEvidenceView({ ledger }: CouncilRuntimeEvidenceVie
           <strong>{ledger.actionTaskCount}</strong>
         </article>
         <article>
+          <span>联网证据</span>
+          <strong>{ledger.internetResearchGrounded ? `${ledger.internetSourceCount} sources` : ledger.internetResearchRequired ? 'needed' : 'not needed'}</strong>
+        </article>
+        <article>
           <span>追溯导出</span>
           <strong>{ledger.actionTaskCount}</strong>
         </article>

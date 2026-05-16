@@ -28,6 +28,9 @@ interface DebateTheaterViewProps {
   scenes: CouncilDebateScene[]
   currentIndex: number
   onCurrentIndexChange: (index: number) => void
+  onStartDebate?: () => void
+  canStartDebate?: boolean
+  startDisabled?: boolean
 }
 
 interface CouncilDebateActSummary {
@@ -73,18 +76,34 @@ function sceneMove(scene: CouncilDebateScene): CouncilDebateRelation {
   return 'support'
 }
 
-export function DebateTheaterView({ scenes, currentIndex, onCurrentIndexChange }: DebateTheaterViewProps) {
+export function DebateTheaterView({
+  scenes,
+  currentIndex,
+  onCurrentIndexChange,
+  onStartDebate,
+  canStartDebate = false,
+  startDisabled = false,
+}: DebateTheaterViewProps) {
   const safeIndex = Math.min(Math.max(currentIndex, 0), Math.max(0, scenes.length - 1))
   const scene = scenes[safeIndex]
   const actSummaries = useMemo(() => buildActSummaries(scenes), [scenes])
   const move = scene ? sceneMove(scene) : 'support'
 
-  if (!scene) {
+  if (!scene || scene.id === 'scene-waiting-for-briefs') {
     return (
       <section className="council-theater">
         <div className="council-app__section-kicker">辩论剧场</div>
-        <h2>等待第一幕</h2>
-        <p>激活推荐队伍后，六阶段发言会被抽成可翻页、可追溯的剧场场景。</p>
+        <h2>{canStartDebate ? '推荐队伍已就位，下一步必须开会' : '六阶段会场正在形成第一幕'}</h2>
+        <p>
+          {canStartDebate
+            ? '这里不能再伪装成“提出主张”。只有真正开始六阶段博弈后，方法论提取、反方质询、主持裁决和 PRD 条款才会逐幕写入。'
+            : '系统会先写入启动快照和阶段推进；角色发言返回后，这里会自动变成可翻页、可追溯的真实剧场。'}
+        </p>
+        {canStartDebate && onStartDebate && (
+          <button type="button" className="council-app__primary" onClick={onStartDebate} disabled={startDisabled}>
+            开始六阶段博弈并生成 PRD
+          </button>
+        )}
       </section>
     )
   }

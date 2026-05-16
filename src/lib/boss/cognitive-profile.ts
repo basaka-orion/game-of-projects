@@ -1,5 +1,4 @@
 import { getBossProfile, setBossProfile } from '../db/store'
-import { recordBossCognitionImpact } from './cognition-impact'
 
 export interface CognitiveProfile {
   excitementTriggers: string[]
@@ -24,7 +23,7 @@ export const DEFAULT_COGNITIVE_PROFILE: CognitiveProfile = {
 }
 
 function uniqueClean(values: string[]): string[] {
-  return [...new Set(values.map((v) => v.trim()).filter(Boolean))].slice(0, 12)
+  return [...new Set(values.map(v => v.trim()).filter(Boolean))].slice(0, 12)
 }
 
 function normalizeProfile(input?: Partial<CognitiveProfile> | null): CognitiveProfile {
@@ -50,7 +49,7 @@ export function hasMeaningfulCognitiveProfile(profile?: CognitiveProfile | null)
     profile.addictiveFormats.length ||
     profile.understandingModes.length ||
     profile.antiPatterns.length ||
-    profile.integrationGoals.length,
+    profile.integrationGoals.length
   )
 }
 
@@ -69,47 +68,27 @@ export function loadCognitiveProfile(): CognitiveProfile {
 export function saveCognitiveProfile(profile: CognitiveProfile): CognitiveProfile {
   const current = getBossProfile()
   const normalized = normalizeProfile(profile)
-  let previous = { ...DEFAULT_COGNITIVE_PROFILE }
-  try {
-    previous = normalizeProfile(
-      current.cognitive_profile_json ? (JSON.parse(current.cognitive_profile_json) as Partial<CognitiveProfile>) : null,
-    )
-  } catch {
-    previous = { ...DEFAULT_COGNITIVE_PROFILE }
-  }
   setBossProfile({
     ...current,
     cognitive_profile_json: JSON.stringify(normalized),
   })
-
-  const changedKeys = (Object.keys(normalized) as Array<keyof CognitiveProfile>).filter(
-    (key) => JSON.stringify(normalized[key]) !== JSON.stringify(previous[key]),
-  )
-  if (changedKeys.length > 0) {
-    recordBossCognitionImpact({
-      changedKeys,
-      source: 'manual_edit',
-      confidence: 0.82,
-    }).catch(() => {})
-  }
-
   return normalized
 }
 
-export function renderCognitivePrompt(profile: CognitiveProfile, mode: 'system' | 'context' = 'system'): string {
+export function renderCognitivePrompt(
+  profile: CognitiveProfile,
+  mode: 'system' | 'context' = 'system'
+): string {
   if (!hasMeaningfulCognitiveProfile(profile)) return ''
 
   const lines: string[] = []
   if (profile.mission) lines.push(`- 核心使命: ${profile.mission}`)
   if (profile.excitementTriggers.length > 0) lines.push(`- 容易被激发的入口: ${profile.excitementTriggers.join('、')}`)
   if (profile.resonanceHooks.length > 0) lines.push(`- 容易产生感觉的抓手: ${profile.resonanceHooks.join('、')}`)
-  if (profile.explanationPreferences.length > 0)
-    lines.push(`- 更偏好的讲解方式: ${profile.explanationPreferences.join('、')}`)
+  if (profile.explanationPreferences.length > 0) lines.push(`- 更偏好的讲解方式: ${profile.explanationPreferences.join('、')}`)
   if (profile.addictiveFormats.length > 0) lines.push(`- 更容易上瘾的呈现形式: ${profile.addictiveFormats.join('、')}`)
-  if (profile.understandingModes.length > 0)
-    lines.push(`- 更容易快速理解的吸收路径: ${profile.understandingModes.join('、')}`)
-  if (profile.integrationGoals.length > 0)
-    lines.push(`- 最终要融入的认知框架方向: ${profile.integrationGoals.join('、')}`)
+  if (profile.understandingModes.length > 0) lines.push(`- 更容易快速理解的吸收路径: ${profile.understandingModes.join('、')}`)
+  if (profile.integrationGoals.length > 0) lines.push(`- 最终要融入的认知框架方向: ${profile.integrationGoals.join('、')}`)
   if (profile.antiPatterns.length > 0) lines.push(`- 尽量避免: ${profile.antiPatterns.join('、')}`)
 
   if (mode === 'context') {

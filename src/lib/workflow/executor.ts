@@ -4,8 +4,7 @@
  */
 import { Workflow, WorkflowStep, WorkflowRun } from './types'
 import { getAgentById, AgentDefinition } from '../agents/registry'
-import { chatCompletion, LLMConfig, getDefaultConfig } from '../ai/provider'
-import { getSetting } from '../db/store'
+import { chatCompletion, getLLMConfig } from '../ai/provider'
 import { run as dbRun, query } from '../db/repository'
 import { generateId } from '../db/schema'
 import { executeSkill, SkillInput } from '../skills/executor'
@@ -34,17 +33,6 @@ function topologicalSort(steps: WorkflowStep[]): WorkflowStep[] {
   return sorted
 }
 
-function getLLMConfig(): LLMConfig {
-  const provider = getSetting('llm_provider', 'deepseek')
-  const defaults = getDefaultConfig(provider)
-  return {
-    provider: provider as LLMConfig['provider'],
-    apiKey: getSetting('llm_api_key', ''),
-    baseUrl: getSetting('llm_base_url', defaults.baseUrl),
-    model: getSetting('llm_model', defaults.model),
-  }
-}
-
 /** 执行工作流 */
 export async function executeWorkflow(
   workflow: Workflow,
@@ -55,22 +43,40 @@ export async function executeWorkflow(
   const llmConfig = getLLMConfig()
   const results: Record<string, string> = {}
   const sorted = topologicalSort(workflow.steps)
+  let currentStep: WorkflowStep | null = null
+
+  await dbRun(
+    `INSERT OR IGNORE INTO workflows
+      (id, name, name_en, goal, steps_json, agents_json, status, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))`,
+    [
+      workflow.id,
+      workflow.name,
+      workflow.nameEn,
+      workflow.goal,
+      JSON.stringify(workflow.steps),
+      JSON.stringify(workflow.agents),
+      workflow.status,
+    ],
+  )
 
   // 创建运行记录
   await dbRun(
-    'INSERT INTO workflow_runs (id, workflow_id, results_json, status, created_at) VALUES (?, ?, ?, ?, datetime("now","localtime"))',
+    "INSERT INTO workflow_runs (id, workflow_id, results_json, status, created_at) VALUES (?, ?, ?, ?, datetime('now','localtime'))",
     [runId, workflow.id, '{}', 'running']
   )
 
   try {
     for (const step of sorted) {
+      currentStep = step
       onProgress?.(step.id, 'running')
 
       const agent = await getAgentById(step.agentRole)
       if (!agent) {
-        results[step.outputKey] = `Agent "${step.agentRole}" 未找到`
-        onProgress?.(step.id, 'error', results[step.outputKey])
-        continue
+        const message = `Agent "${step.agentRole}" 未找到，工作流无法真实执行该步骤。`
+        results[step.outputKey] = message
+        onProgress?.(step.id, 'error', message)
+        throw new Error(message)
       }
 
       // 构建上下文：输入 + 前置步骤结果
@@ -112,10 +118,25 @@ export async function executeWorkflow(
 
     return { id: runId, workflowId: workflow.id, results, status: 'completed', createdAt: new Date().toISOString() }
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    const failedStepId = currentStep?.id || ''
+    if (currentStep && !results[currentStep.outputKey]) {
+      results[currentStep.outputKey] = `步骤失败：${message}`
+    }
+    results.__error = message
+    results.__failedStepId = failedStepId
     await dbRun(
       'UPDATE workflow_runs SET results_json = ?, status = ? WHERE id = ?',
       [JSON.stringify(results), 'failed', runId]
     )
-    return { id: runId, workflowId: workflow.id, results, status: 'failed', createdAt: new Date().toISOString() }
+    return {
+      id: runId,
+      workflowId: workflow.id,
+      results,
+      status: 'failed',
+      createdAt: new Date().toISOString(),
+      error: message,
+      failedStepId,
+    }
   }
 }

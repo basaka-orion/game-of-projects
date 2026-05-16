@@ -1,0 +1,54 @@
+{
+  "appId": "com.openbasaka.whiteboard",
+  "productName": "Openbasaka Whiteboard",
+  "extraMetadata": {
+    "name": "openbasaka-whiteboard"
+  },
+  "directories": {
+    "output": "release-whiteboard"
+  },
+  "files": [
+    "dist/**/*",
+    "dist-electron/**/*",
+    "node_modules/better-sqlite3/**/*",
+    "node_modules/bindings/**/*",
+    "node_modules/prebuild-install/**/*",
+    "node_modules/file-uri-to-path/**/*",
+    "node_modules/node-addon-api/**/*",
+    "src/features/profiling-studio/remotion/**/*"
+  ],
+  "asarUnpack": [
+    "node_modules/better-sqlite3/**/*",
+    "**/*.node"
+  ],
+  "npmRebuild": true,
+  "mac": {
+    "category": "public.app-category.productivity",
+    "target": [
+      {
+        "target": "dmg",
+        "arch": [
+          "arm64"
+        ]
+      }
+    ],
+    "darkModeSupport": true,
+    "hardenedRuntime": false,
+    "extendInfo": {
+      "NSMicrophoneUsageDescription": "用于在白板中录入 Boss 语音并本地转写为文本。"
+    },
+    "identity": null
+  },
+  "dmg": {
+    "title": "Openbasaka Whiteboard ${version}",
+    "artifactName": "Openbasaka-Whiteboard-${version}-${arch}.${ext}"
+  },
+  "fileAssociations": [
+    {
+      "ext": "md",
+      "name": "Markdown",
+      "description": "白板导出的 Markdown 文档",
+      "role": "Viewer"
+    }
+  ]
+}

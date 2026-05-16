@@ -27,6 +27,7 @@ export type UiVisualPattern =
   | 'blueprint'
   | 'skeuo'
   | 'atomic'
+  | 'googie'
   | 'solarpunk'
   | 'bento'
   | 'material'
@@ -65,6 +66,32 @@ export interface UiVisualTokens {
   motion: string
 }
 
+export interface UiStyleRestorationScore {
+  identity: number
+  craft: number
+  interaction: number
+  platformFit: number
+  openbasakaUsefulness: number
+}
+
+export interface UiStyleMasterProfile {
+  referenceBrief: string
+  identityRules: string[]
+  visualTokens: string[]
+  componentGrammar: string[]
+  platformRules: {
+    web: string
+    ios: string
+    mac: string
+    android: string
+    mini: string
+  }
+  promptRules: string[]
+  antiPatterns: string[]
+  acceptanceChecklist: string[]
+  restorationScores: UiStyleRestorationScore
+}
+
 export interface UiStyleItem {
   id: string
   title: string
@@ -78,6 +105,7 @@ export interface UiStyleItem {
   mac?: string
   android: string
   mini: string
+  masterProfile: UiStyleMasterProfile
 }
 
 export interface UiFusionResult {

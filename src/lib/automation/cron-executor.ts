@@ -13,7 +13,6 @@
  * - lint: lint.ts（Wiki 体检）
  * - custom: Agent ReAct 循环
  * - agent-task: 完整 Agent 任务（router + Soul）
- * - team-workflow: 群策团队工作流
  */
 
 import { getLLMConfig, resolveAgentConfig, chatCompletion } from '../ai/provider'
@@ -21,11 +20,9 @@ import { runCompileCycle } from '../knowledge/wiki-compiler'
 import { runLint } from '../knowledge/lint'
 import { getUncompiledDrawers } from '../knowledge/drawer'
 import { searchPages } from '../knowledge/wiki'
-import { query, run as dbRun } from '../db/repository'
-import { recordScheduledTaskOutcome } from './task-outcome'
-import { getTeam, listTeams } from '../teams/store'
-import { runTeamSession } from '../teams/engine'
-import type { TeamWorkflowType } from '../teams/types'
+import { query, run } from '../db/repository'
+import { getSetting } from '../db/store'
+import { getDefaultConfig } from '../ai/provider'
 
 // ─── 类型 ───
 
@@ -55,7 +52,7 @@ export function registerCronExecutor(): void {
   window.electronAPI.onCronTask((task: unknown) => {
     const t = task as CronTaskMessage
     console.log(`[CronExecutor] 收到任务: ${t.name} (${t.taskType})`)
-    executeTask(t).catch((err) => {
+    executeTask(t).catch(err => {
       console.error(`[CronExecutor] 任务执行失败: ${t.name}`, err)
       sendResult({ taskId: t.id, status: 'error', error: String(err) })
     })
@@ -95,16 +92,12 @@ async function executeTask(task: CronTaskMessage): Promise<void> {
       case 'agent-task':
         result = await executeAgentTask(task)
         break
-      case 'team-workflow':
-        result = await executeTeamWorkflowTask(task)
-        break
       default:
         result = `未知任务类型: ${task.taskType}`
     }
 
     const duration = Date.now() - startTime
     console.log(`[CronExecutor] 任务 ${task.name} 完成 (${duration}ms)`)
-    await recordScheduledTaskOutcome(task, { status: 'success', message: result, durationMs: duration })
 
     sendResult({
       taskId: task.id,
@@ -112,11 +105,6 @@ async function executeTask(task: CronTaskMessage): Promise<void> {
       result: result.slice(0, 2000),
     })
   } catch (err) {
-    await recordScheduledTaskOutcome(task, {
-      status: 'error',
-      message: String(err),
-      durationMs: Date.now() - startTime,
-    })
     sendResult({
       taskId: task.id,
       status: 'error',
@@ -128,7 +116,7 @@ async function executeTask(task: CronTaskMessage): Promise<void> {
 /** 发送结果到主进程 */
 function sendResult(result: { taskId: string; status: 'success' | 'error'; result?: string; error?: string }): void {
   if (window.electronAPI?.cronTaskResult) {
-    window.electronAPI.cronTaskResult(result).catch((err) => {
+    window.electronAPI.cronTaskResult(result).catch(err => {
       console.error('[CronExecutor] 发送结果失败:', err)
     })
   }
@@ -143,66 +131,6 @@ function getTaskLLMConfig(task: CronTaskMessage) {
   return getLLMConfig()
 }
 
-function getTaskGoal(task: CronTaskMessage): string {
-  const config = task.taskConfig || {}
-  const candidates = [
-    config.goal,
-    config.prompt,
-    config.query,
-    config.topic,
-    config.description,
-    config.objective,
-    task.name,
-  ]
-  for (const candidate of candidates) {
-    if (typeof candidate === 'string' && candidate.trim()) return candidate.trim()
-  }
-  return task.name || '未命名任务'
-}
-
-function extractUrls(text: string, limit = 3): string[] {
-  const urls = text.match(/https?:\/\/[^\s)\]}>，。！？、；；"'`]+/g) || []
-  return Array.from(new Set(urls.map((url) => url.replace(/[.,;:!?]+$/, '')))).slice(0, limit)
-}
-
-function hasSearchEvidence(text: string): boolean {
-  return /https?:\/\//i.test(text) || /"url"\s*:/i.test(text) || /title|description|snippet/i.test(text)
-}
-
-function buildSourceLine(searchContent: string, usedLiveSearch: boolean): string {
-  if (!usedLiveSearch) return '来源: 未接入实时搜索，本条为模型知识合成，需二次核验'
-  const urls = extractUrls(searchContent)
-  if (urls.length === 0) return '来源: 已调用实时搜索，但搜索结果未返回可展示 URL'
-  return `来源: ${urls.join(' | ')}`
-}
-
-function buildResearchTaskJson(task: CronTaskMessage, taskGoal: string): string {
-  return JSON.stringify(
-    {
-      name: task.name,
-      goal: taskGoal,
-      config: task.taskConfig || {},
-    },
-    null,
-    2,
-  )
-}
-
-const TEAM_WORKFLOW_TYPES: TeamWorkflowType[] = [
-  'prd',
-  'research',
-  'build',
-  'xcode-mac-app',
-  'visual-review',
-  'automation',
-  'custom',
-]
-
-function normalizeTeamWorkflowType(value: unknown): TeamWorkflowType | undefined {
-  if (typeof value !== 'string') return undefined
-  return TEAM_WORKFLOW_TYPES.includes(value as TeamWorkflowType) ? (value as TeamWorkflowType) : undefined
-}
-
 async function getBossResearchContext(): Promise<{
   name: string
   interests: string
@@ -211,15 +139,10 @@ async function getBossResearchContext(): Promise<{
   profilingPromptSummary: string
   recommendedTopics: string[]
 }> {
-  const rows = (await query('SELECT key, value FROM boss_profile WHERE key IN (?, ?, ?, ?, ?, ?, ?)', [
-    'name',
-    'interests',
-    'current_focus',
-    'currentFocus',
-    'long_term_vision',
-    'longTermVision',
-    'profiling_summary_json',
-  ])) as Array<{ key: string; value: string }>
+  const rows = await query(
+    'SELECT key, value FROM boss_profile WHERE key IN (?, ?, ?, ?, ?, ?, ?)',
+    ['name', 'interests', 'current_focus', 'currentFocus', 'long_term_vision', 'longTermVision', 'profiling_summary_json']
+  ) as Array<{ key: string; value: string }>
 
   const record: Record<string, string> = {}
   for (const row of rows) record[row.key] = row.value
@@ -237,9 +160,7 @@ async function getBossResearchContext(): Promise<{
         ? summary.recommendedResearchTopics.filter(Boolean)
         : []
     }
-  } catch {
-    /* ignore malformed profiling summary */
-  }
+  } catch { /* ignore malformed profiling summary */ }
 
   return {
     name: record.name || 'Boss',
@@ -265,25 +186,19 @@ async function getAgentSystemPrompt(agentId: string): Promise<string> {
     }
 
     // 尝试读取自定义 Agent
-    const rows = (await query('SELECT system_prompt FROM custom_agents WHERE id = ?', [agentId])) as Array<{
-      system_prompt: string
-    }>
+    const rows = await query('SELECT system_prompt FROM custom_agents WHERE id = ?', [agentId]) as Array<{ system_prompt: string }>
     if (rows.length > 0) return rows[0].system_prompt
 
     // 内置角色
     if (builtInRoles[agentId]) return builtInRoles[agentId]
 
     // 尝试读取 Soul
-    const soulRows = (await query('SELECT soul_json FROM agent_souls WHERE agent_id = ?', [agentId])) as Array<{
-      soul_json: string
-    }>
+    const soulRows = await query('SELECT soul_json FROM agent_souls WHERE agent_id = ?', [agentId]) as Array<{ soul_json: string }>
     if (soulRows.length > 0) {
       try {
         const soul = JSON.parse(soulRows[0].soul_json) as { identity?: string; tone?: string; principles?: string }
         return `${soul.identity || ''}\n语气: ${soul.tone || '专业'}\n原则: ${soul.principles || '准确、有用'}`
-      } catch {
-        /* parse error */
-      }
+      } catch { /* parse error */ }
     }
 
     return builtInRoles.general
@@ -298,66 +213,51 @@ async function getAgentSystemPrompt(agentId: string): Promise<string> {
 async function executeResearch(task: CronTaskMessage): Promise<string> {
   const config = getTaskLLMConfig(task)
   if (!config.apiKey && config.provider !== 'ollama') {
-    throw new Error('LLM API Key 未配置')
+    return 'LLM API Key 未配置'
   }
 
   // 1. 获取 Boss 兴趣和反馈
   const boss = await getBossResearchContext()
   const bossInterests = boss.interests
-  const taskGoal = getTaskGoal(task)
-  const runTime = new Date().toLocaleString('zh-CN')
 
-  const feedbackRows = (await query(
-    "SELECT content, confidence FROM boss_memory WHERE source LIKE 'innovation_%' AND created_at > datetime('now', '-7 days') ORDER BY created_at DESC LIMIT 10",
-  )) as Array<{ content: string; confidence: number }>
+  const feedbackRows = await query(
+    "SELECT content, confidence FROM boss_memory WHERE source LIKE 'innovation_%' AND created_at > datetime('now', '-7 days') ORDER BY created_at DESC LIMIT 10"
+  ) as Array<{ content: string; confidence: number }>
 
-  const positive = feedbackRows
-    .filter((r) => r.confidence >= 0.7)
-    .map((r) => r.content)
-    .join('; ')
-    .slice(0, 200)
-  const negative = feedbackRows
-    .filter((r) => r.confidence <= 0.3)
-    .map((r) => r.content)
-    .join('; ')
-    .slice(0, 200)
+  const positive = feedbackRows.filter(r => r.confidence >= 0.7).map(r => r.content).join('; ').slice(0, 200)
+  const negative = feedbackRows.filter(r => r.confidence <= 0.3).map(r => r.content).join('; ').slice(0, 200)
 
   // 2. 生成搜索查询
-  const systemPrompt = await getAgentSystemPrompt(task.agentId || 'general')
+  const systemPrompt = getAgentSystemPrompt(task.agentId || 'general')
   const queriesResponse = await chatCompletion(config, [
     { role: 'system', content: `${systemPrompt}\n\n你是研究策划引擎。生成高价值搜索查询。` },
     {
       role: 'user',
-      content: `任务名称: ${task.name}
-用户原始需求: ${taskGoal}
-执行时间: ${runTime}
-任务配置: ${buildResearchTaskJson(task, taskGoal)}
-
-Boss兴趣: ${bossInterests || '全领域'}
+      content: `Boss兴趣: ${bossInterests || '全领域'}
 Boss当前焦点: ${boss.currentFocus || '未明确'}
 Boss长期愿景: ${boss.longTermVision || '未明确'}
 画像摘要: ${boss.profilingPromptSummary || '暂无'}
 建议研究方向: ${boss.recommendedTopics.join('、') || '暂无'}
 近期积极反馈: ${positive || '无'}
 近期消极反馈: ${negative || '无'}
+任务: ${JSON.stringify(task.taskConfig)}
 
 生成3个搜索主题。输出 JSON 数组: [{"topic":"主题","query":"关键词"}]
 要求：
-- 必须直接服务“用户原始需求”，不要被画像摘要改写成抽象人格/认知模型主题
-- 如果原始需求要求“AI最新趋势”，query 必须包含 AI、latest/recent/2026/this week/model/agent/research 等能检索到最新材料的词
-- 可结合 Boss 当前焦点做二次筛选，但不能偏离任务名称
+- 优先围绕当前焦点、长期愿景和建议研究方向生成主题
+- 不要只泛泛围绕兴趣
 只输出 JSON。`,
     },
   ])
 
   const jsonMatch = queriesResponse.match(/\[[\s\S]*\]/)
-  if (!jsonMatch) throw new Error('无法生成搜索查询')
+  if (!jsonMatch) return '无法生成搜索查询'
 
   let topics: Array<{ topic: string; query: string }>
   try {
     topics = JSON.parse(jsonMatch[0])
   } catch {
-    throw new Error('搜索查询解析失败')
+    return '搜索查询解析失败'
   }
 
   // 3. 执行搜索和总结
@@ -365,64 +265,25 @@ Boss长期愿景: ${boss.longTermVision || '未明确'}
   for (const topic of topics.slice(0, 3)) {
     // 尝试使用 web_search 工具（如果可用）
     let searchContent = ''
-    let usedLiveSearch = false
 
     // 尝试 MCP Brave Search
     try {
       if (window.electronAPI?.mcpCallTool) {
-        const mcpResult = (await window.electronAPI.mcpCallTool('mcp-brave-search', 'brave_web_search', {
+        const mcpResult = await window.electronAPI.mcpCallTool('mcp-brave-search', 'brave_web_search', {
           query: topic.query,
           count: 5,
-        })) as Record<string, unknown> | null
+        }) as Record<string, unknown> | null
         if (mcpResult && !mcpResult.isError && mcpResult.content) {
           searchContent = typeof mcpResult.content === 'string' ? mcpResult.content : JSON.stringify(mcpResult)
-          usedLiveSearch = hasSearchEvidence(searchContent)
         }
       }
-    } catch {
-      /* MCP failed */
-    }
-
-    // Fallback to the app's built-in Brave proxy. This is usually configured even when the MCP server is not running.
-    try {
-      if (!searchContent && window.electronAPI?.braveSearch) {
-        const braveResult = await window.electronAPI.braveSearch(topic.query, 5, {
-          endpoint: 'web',
-          freshness: 'pw',
-          searchLang: 'zh',
-        })
-        if (braveResult.success && braveResult.data?.length) {
-          searchContent = braveResult.data
-            .map((item, index) =>
-              [
-                `${index + 1}. ${item.title}`,
-                item.description,
-                item.url,
-                item.age ? `时间: ${item.age}` : '',
-              ]
-                .filter(Boolean)
-                .join('\n'),
-            )
-            .join('\n\n')
-          usedLiveSearch = true
-        }
-      }
-    } catch {
-      /* Brave proxy failed */
-    }
+    } catch { /* MCP failed */ }
 
     // Fallback: LLM 知识合成
     if (!searchContent) {
       searchContent = await chatCompletion(config, [
-        { role: 'system', content: '你是研究助理。提供简洁的趋势概述；如果没有实时搜索证据，必须显式说明。' },
-        {
-          role: 'user',
-          content: `用户原始需求: ${taskGoal}
-主题: ${topic.topic}
-搜索词: ${topic.query}
-
-实时搜索不可用。请基于模型知识给出200字以内趋势概述，并在开头标注“未接入实时搜索”。`,
-        },
+        { role: 'system', content: '你是研究助理。提供简洁的趋势概述。' },
+        { role: 'user', content: `简要概述"${topic.topic}"领域的最新趋势（200字以内）。` },
       ])
     }
 
@@ -430,78 +291,58 @@ Boss长期愿景: ${boss.longTermVision || '未明确'}
 
     // 总结为洞察
     const summary = await chatCompletion(config, [
-      { role: 'system', content: '你是知识蒸馏引擎。从原始信息中提炼高价值洞察，并保留可核验来源。' },
+      { role: 'system', content: '你是知识蒸馏引擎。从原始信息中提炼高价值洞察。' },
       {
         role: 'user',
-        content: `用户原始需求: ${taskGoal}
-主题: ${topic.topic}
-搜索词: ${topic.query}
-实时搜索: ${usedLiveSearch ? '是' : '否'}
-
-将以下内容总结为70-120字洞察。要求：
-- 必须直接回答用户原始需求，不要泛化为人格画像或抽象认知特质
-- 如果内容有 URL，保留1-2个可核验来源
-- 如果实时搜索为否，明确标注需要二次核验
-
-内容: ${searchContent.slice(0, 1400)}`,
+        content: `将以下内容总结为50-100字洞察:\n主题: ${topic.topic}\n内容: ${searchContent.slice(0, 800)}`,
       },
     ])
 
     if (summary) {
-      const sourceLine = buildSourceLine(searchContent, usedLiveSearch)
-      const item = `【${topic.topic}】${summary}\n${sourceLine}`
-      results.push(item)
+      results.push(`【${topic.topic}】${summary}`)
 
       // 写入 Innovation Lab
       try {
         const id = `cron_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-        await dbRun(
+        await run(
           `INSERT INTO memory_items (id, room_id, type, content, source, importance, metadata_json, created_at, updated_at)
            VALUES (?, 'room_innovation', 'cron_harvest', ?, ?, 60, ?, datetime('now','localtime'), datetime('now','localtime'))`,
-          [
-            id,
-            item,
-            'cron:research',
-            JSON.stringify({ taskType: 'research', taskName: task.name, taskGoal, query: topic.query, usedLiveSearch }),
-          ],
+          [id, `【${topic.topic}】${summary}`, 'cron:research', JSON.stringify({ taskType: 'research', taskName: task.name })]
         )
-      } catch {
-        /* non-critical */
-      }
+      } catch { /* non-critical */ }
     }
   }
 
-  if (results.length === 0) throw new Error(`无研究结果：${taskGoal}`)
-  return [`任务对齐：${taskGoal}`, `执行时间：${runTime}`, ...results].join('\n\n')
+  return results.length > 0 ? results.join('\n\n') : '无研究结果'
 }
 
 /** Report 任务：生成近期活动摘要 */
 async function executeReport(task: CronTaskMessage): Promise<string> {
   const config = getTaskLLMConfig(task)
-  const systemPrompt = await getAgentSystemPrompt(task.agentId || 'general')
+  const systemPrompt = getAgentSystemPrompt(task.agentId || 'general')
 
-  const recentProjects = (await query(
-    'SELECT title, survival_rate, survival_grade FROM projects ORDER BY created_at DESC LIMIT 5',
-  )) as Array<{ title: string; survival_rate: number; survival_grade: string }>
+  const recentProjects = await query(
+    "SELECT title, survival_rate, survival_grade FROM projects ORDER BY created_at DESC LIMIT 5"
+  ) as Array<{ title: string; survival_rate: number; survival_grade: string }>
 
-  const recentDecisions = (await query(
-    'SELECT decision_type, reasoning FROM boss_decisions ORDER BY created_at DESC LIMIT 5',
-  )) as Array<{ decision_type: string; reasoning: string }>
+  const recentDecisions = await query(
+    "SELECT decision_type, reasoning FROM boss_decisions ORDER BY created_at DESC LIMIT 5"
+  ) as Array<{ decision_type: string; reasoning: string }>
 
-  const memoryGrowth = (await query(
-    "SELECT COUNT(*) as cnt FROM memory_items WHERE created_at > datetime('now', '-7 days')",
-  )) as Array<{ cnt: number }>
+  const memoryGrowth = await query(
+    "SELECT COUNT(*) as cnt FROM memory_items WHERE created_at > datetime('now', '-7 days')"
+  ) as Array<{ cnt: number }>
 
-  const wikiPages = (await query(
-    "SELECT COUNT(*) as cnt FROM wiki_pages WHERE created_at > datetime('now', '-7 days')",
-  )) as Array<{ cnt: number }>
+  const wikiPages = await query(
+    "SELECT COUNT(*) as cnt FROM wiki_pages WHERE created_at > datetime('now', '-7 days')"
+  ) as Array<{ cnt: number }>
 
   const report = await chatCompletion(config, [
     { role: 'system', content: `${systemPrompt}\n\n你是数据分析师。生成简洁有力的活动报告。用中文。` },
     {
       role: 'user',
       content: `近期项目: ${JSON.stringify(recentProjects)}
-近期决策: ${JSON.stringify(recentDecisions.map((d) => ({ type: d.decision_type, reason: d.reasoning?.slice(0, 50) })))}
+近期决策: ${JSON.stringify(recentDecisions.map(d => ({ type: d.decision_type, reason: d.reasoning?.slice(0, 50) })))}
 7天新增记忆: ${memoryGrowth[0]?.cnt || 0}条
 7天新增Wiki: ${wikiPages[0]?.cnt || 0}页
 
@@ -517,29 +358,29 @@ async function executeMemoryScan(task: CronTaskMessage): Promise<string> {
   const config = getTaskLLMConfig(task)
 
   // 扫描近 7 天记忆
-  const recentMemories = (await query(
-    "SELECT content, importance, source, room_id FROM memory_items WHERE created_at > datetime('now', '-7 days') ORDER BY importance DESC LIMIT 30",
-  )) as Array<{ content: string; importance: number; source: string; room_id: string }>
+  const recentMemories = await query(
+    "SELECT content, importance, source, room_id FROM memory_items WHERE created_at > datetime('now', '-7 days') ORDER BY importance DESC LIMIT 30"
+  ) as Array<{ content: string; importance: number; source: string; room_id: string }>
 
   // 知识图谱统计
-  const tripleCount = (await query('SELECT COUNT(*) as cnt FROM knowledge_triples')) as Array<{ cnt: number }>
+  const tripleCount = await query('SELECT COUNT(*) as cnt FROM knowledge_triples') as Array<{ cnt: number }>
 
   // 房间分布
-  const roomCounts = (await query(
-    'SELECT r.name, COUNT(m.id) as cnt FROM memory_rooms r LEFT JOIN memory_items m ON r.id = m.room_id GROUP BY r.id',
-  )) as Array<{ name: string; cnt: number }>
+  const roomCounts = await query(
+    'SELECT r.name, COUNT(m.id) as cnt FROM memory_rooms r LEFT JOIN memory_items m ON r.id = m.room_id GROUP BY r.id'
+  ) as Array<{ name: string; cnt: number }>
 
   // Wiki 统计
-  const wikiStats = (await query(
-    "SELECT COUNT(*) as total, SUM(CASE WHEN created_at > datetime('now', '-7 days') THEN 1 ELSE 0 END) as recent FROM wiki_pages",
-  )) as Array<{ total: number; recent: number }>
+  const wikiStats = await query(
+    "SELECT COUNT(*) as total, SUM(CASE WHEN created_at > datetime('now', '-7 days') THEN 1 ELSE 0 END) as recent FROM wiki_pages"
+  ) as Array<{ total: number; recent: number }>
 
   const findings: string[] = []
 
   // 词频分析
   const wordFreq = new Map<string, number>()
   for (const m of recentMemories) {
-    const words = m.content.split(/[\s,，。.！!？?、；;：:]+/).filter((w) => w.length > 2 && w.length < 15)
+    const words = m.content.split(/[\s,，。.！!？?、；;：:]+/).filter(w => w.length > 2 && w.length < 15)
     for (const w of words) {
       wordFreq.set(w, (wordFreq.get(w) || 0) + 1)
     }
@@ -552,9 +393,9 @@ async function executeMemoryScan(task: CronTaskMessage): Promise<string> {
 
   if (topThemes.length > 0) findings.push(`高频主题: ${topThemes.join('、')}`)
 
-  const sparseRooms = roomCounts.filter((r) => r.cnt < 3)
+  const sparseRooms = roomCounts.filter(r => r.cnt < 3)
   if (sparseRooms.length > 0) {
-    findings.push(`知识缺口: ${sparseRooms.map((r) => `${r.name}(${r.cnt})`).join(', ')}`)
+    findings.push(`知识缺口: ${sparseRooms.map(r => `${r.name}(${r.cnt})`).join(', ')}`)
   }
 
   findings.push(`知识图谱: ${tripleCount[0]?.cnt || 0} 三元组`)
@@ -610,106 +451,38 @@ async function executeLint(task: CronTaskMessage): Promise<string> {
 /** Custom 任务：用户自定义 */
 async function executeCustom(task: CronTaskMessage): Promise<string> {
   const config = getTaskLLMConfig(task)
-  const systemPrompt = await getAgentSystemPrompt(task.agentId || 'general')
+  const systemPrompt = getAgentSystemPrompt(task.agentId || 'general')
   const prompt = (task.taskConfig.prompt as string) || task.name
 
-  return (
-    (await chatCompletion(config, [
-      { role: 'system', content: `${systemPrompt}\n\n执行用户定义的定时任务。` },
-      { role: 'user', content: prompt },
-    ])) || '无结果'
-  )
+  return await chatCompletion(config, [
+    { role: 'system', content: `${systemPrompt}\n\n执行用户定义的定时任务。` },
+    { role: 'user', content: prompt },
+  ]) || '无结果'
 }
 
 /** Agent Task 任务：完整 Agent 栈 */
 async function executeAgentTask(task: CronTaskMessage): Promise<string> {
   const config = getTaskLLMConfig(task)
-  const systemPrompt = await getAgentSystemPrompt(task.agentId || 'general')
+  const systemPrompt = getAgentSystemPrompt(task.agentId || 'general')
   const goal = (task.taskConfig.goal as string) || task.name
 
   // 构建包含知识库上下文的 prompt
   const knowledgeContext = await buildKnowledgeContext(goal)
   const memoryContext = await buildMemoryContext(task.agentId)
 
-  return (
-    (await chatCompletion(config, [
-      {
-        role: 'system',
-        content: `${systemPrompt}
+  return await chatCompletion(config, [
+    {
+      role: 'system',
+      content: `${systemPrompt}
 
 ${knowledgeContext}
 
 ${memoryContext}
 
 执行定时任务。用中文回复。`,
-      },
-      { role: 'user', content: goal },
-    ])) || '无结果'
-  )
-}
-
-/** Team Workflow 任务：调用群策团队，产出完整可留存成果 */
-async function executeTeamWorkflowTask(task: CronTaskMessage): Promise<string> {
-  const config = task.taskConfig || {}
-  const rawGoal = getTaskGoal(task)
-  const steps = typeof config.steps === 'string' ? config.steps : ''
-  const goal =
-    typeof config.promptTemplate === 'string' && config.promptTemplate.trim()
-      ? config.promptTemplate
-          .split('{{goal}}').join(rawGoal)
-          .split('{{input}}').join(rawGoal)
-          .split('{{steps}}').join(steps)
-          .trim()
-      : rawGoal
-  const requestedWorkflowType = normalizeTeamWorkflowType(config.workflowType)
-  const configuredTeamId =
-    typeof config.teamId === 'string' && config.teamId.trim()
-      ? config.teamId.trim()
-      : typeof config.workflowId === 'string' && config.workflowId.startsWith('team_')
-        ? config.workflowId
-        : ''
-
-  let team = configuredTeamId ? await getTeam(configuredTeamId) : null
-  if (!team) {
-    const teams = await listTeams({ status: 'active' })
-    team =
-      teams.find((item) => item.config.workflowType === requestedWorkflowType) ||
-      teams.find((item) => item.config.workflowType === 'automation') ||
-      teams[0] ||
-      null
-  }
-
-  if (!team) {
-    throw new Error('没有找到可执行的群策团队。请先在「群策」里创建或启用一个团队。')
-  }
-
-  const executionTeam = requestedWorkflowType
-    ? { ...team, config: { ...team.config, workflowType: requestedWorkflowType } }
-    : team
-
-  const progress: string[] = []
-  const session = await runTeamSession(executionTeam, goal, (message) => {
-    if (message.kind === 'progress' || message.kind === 'error') {
-      progress.push(`${message.agentName}: ${message.content}`.slice(0, 180))
-    }
-  })
-
-  const artifact = session.messages.filter((message) => message.kind === 'artifact').slice(-1)[0]
-  const artifactText = artifact?.content || session.summary || '群策工作流已完成，但没有生成可读成果。'
-  const workflowLabel = String(config.workflowLabel || requestedWorkflowType || executionTeam.config.workflowType || '群策工作流')
-
-  return [
-    '群策工作流完成',
-    `团队：${executionTeam.name}`,
-    `工作流：${workflowLabel}`,
-    `会话：${session.title || session.id}`,
-    progress.length > 0 ? `过程：${progress.slice(-3).join(' / ')}` : '',
-    '完整成果已保存到「群策」历史，可继续收藏、归档或转入知识＋大佬。',
-    '',
-    artifactText.slice(0, 1800),
-  ]
-    .filter(Boolean)
-    .join('\n')
+    },
+    { role: 'user', content: goal },
+  ]) || '无结果'
 }
 
 // ─── 上下文构建 ───
@@ -720,9 +493,9 @@ async function buildKnowledgeContext(queryText: string): Promise<string> {
     const pages = await searchPages(queryText, 5)
     if (pages.length === 0) return '[知识库] 无相关内容'
 
-    const contexts = pages
-      .slice(0, 3)
-      .map((p) => `## ${p.title}\n${(p.summary || p.content?.slice(0, 300) || '').slice(0, 300)}`)
+    const contexts = pages.slice(0, 3).map(p =>
+      `## ${p.title}\n${(p.summary || p.content?.slice(0, 300) || '').slice(0, 300)}`
+    )
 
     return `[知识库上下文]\n${contexts.join('\n\n')}`
   } catch {
@@ -733,13 +506,15 @@ async function buildKnowledgeContext(queryText: string): Promise<string> {
 /** 构建记忆上下文 */
 async function buildMemoryContext(_agentId: string): Promise<string> {
   try {
-    const recentMemories = (await query(
-      "SELECT content, importance FROM memory_items WHERE created_at > datetime('now', '-30 days') ORDER BY importance DESC LIMIT 10",
-    )) as Array<{ content: string; importance: number }>
+    const recentMemories = await query(
+      "SELECT content, importance FROM memory_items WHERE created_at > datetime('now', '-30 days') ORDER BY importance DESC LIMIT 10"
+    ) as Array<{ content: string; importance: number }>
 
     if (recentMemories.length === 0) return '[记忆] 无近期记忆'
 
-    const memoryText = recentMemories.map((m) => `- ${m.content.slice(0, 100)}`).join('\n')
+    const memoryText = recentMemories
+      .map(m => `- ${m.content.slice(0, 100)}`)
+      .join('\n')
 
     return `[近期记忆]\n${memoryText}`
   } catch {

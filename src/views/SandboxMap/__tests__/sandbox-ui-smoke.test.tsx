@@ -1,18 +1,27 @@
+import { readFileSync } from 'node:fs'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentExecutionReceipt } from '../../../lib/agents/execution-receipt'
-import type { OperatingEventRow } from '../../../lib/db/repository'
+import type { StoredProject } from '../../../lib/db/store'
+import type { OperatingEventRow, SynapseRow } from '../../../lib/db/repository'
+import type { NeuronData } from '../SandboxMap'
 import { UI_STYLE_ITEMS } from '../../../lib/ui-museum/catalog'
+import { buildUiMuseumPrdContext } from '../../../lib/ui-museum/context'
 import type { CouncilLaunchReadinessPack } from '../../../lib/xiaobai-council/action-pack'
 import { selectCouncilTeam } from '../../../lib/xiaobai-council/selector'
 import { OPENBASAKA_SANDBOX_MENU_ITEMS } from '../../Openbasaka/sandbox-menu'
 import { SIDEBAR_ITEMS } from '../sidebar'
+import { isSandboxTabId } from '../navigation'
 import ControlPanelTab from '../tabs/ControlPanelTab'
 import OverviewTab from '../tabs/OverviewTab'
+import NeuronsTab from '../tabs/NeuronsTab'
+import SynapsesTab from '../tabs/SynapsesTab'
+import WarRoomTab from '../tabs/WarRoomTab'
 import UIStyleMuseumMacApp, { getUiMuseumStyleRealizationForTest } from '../tabs/ui-museum/UIStyleMuseumMacApp'
 import BiliHelperMacApp from '../tabs/bili-helper/BiliHelperMacApp'
+import XiaoBaiTab from '../tabs/XiaoBaiTab'
 import { CouncilActionPackView } from '../tabs/xiaobai-council/CouncilActionPackView'
 import CouncilMacApp from '../tabs/xiaobai-council/CouncilMacApp'
 import { CouncilDeliveryModePanel } from '../tabs/xiaobai-council/CouncilDeliveryModeViews'
@@ -44,6 +53,10 @@ const matchGateMock = vi.hoisted(() => ({
   runCouncilMatchGate: vi.fn(),
 }))
 
+const councilWorkflowMock = vi.hoisted(() => ({
+  runCouncilPrdWorkflow: vi.fn(),
+}))
+
 vi.mock('@remotion/player', () => ({
   Player: ({ inputProps }: { inputProps?: { state?: { headline?: string } } }) => (
     <div className="remotion-player-mock">Remotion Guide: {inputProps?.state?.headline || 'waiting'}</div>
@@ -52,6 +65,10 @@ vi.mock('@remotion/player', () => ({
 
 vi.mock('../../../lib/xiaobai-council/match-gate', () => ({
   runCouncilMatchGate: matchGateMock.runCouncilMatchGate,
+}))
+
+vi.mock('../../../lib/xiaobai-council/workflow', () => ({
+  runCouncilPrdWorkflow: councilWorkflowMock.runCouncilPrdWorkflow,
 }))
 
 vi.mock('../../../lib/xiaobai-council/profile', () => ({
@@ -143,7 +160,108 @@ function operatingEvent(): OperatingEventRow {
   }
 }
 
+function projectFixture(overrides: Partial<StoredProject> = {}): StoredProject {
+  return {
+    id: 'project-neuron-1',
+    title: 'OpenBasaka 项目神经元',
+    oneLiner: '把项目、记忆、知识和执行回写成一个可推进的节点。',
+    tags: ['OpenBasaka', '项目网络'],
+    radar: {
+      era_fit: 88,
+      boss_match: 91,
+      monetization: 62,
+      tech_breakthrough: 79,
+      resource_cost: 46,
+      risk_index: 34,
+    },
+    survivalRate: 91,
+    survivalGrade: 'S',
+    summary: '这颗神经元适合作为 OpenBasaka 的主线项目节点。',
+    recommendation: '保持置顶，并优先推进能回写执行证据的下一步。',
+    warLogs: [{ role: '红军', verdict: '保留主线，先补证据闭环。', timestamp: 1777852800000 }],
+    rawContent: '项目原始材料',
+    isPinned: true,
+    isStarred: true,
+    priorityLevel: 'urgent',
+    createdAt: '2026-05-04T00:00:00.000Z',
+    updatedAt: '2026-05-04T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
+function neuronFixture(project: StoredProject = projectFixture()): NeuronData {
+  return {
+    project,
+    taxonomy: {
+      taxonomy: {
+        industry: '智能体操作系统',
+        subIndustry: '个人外脑',
+        techStack: ['Electron', 'SQLite', 'Agent'],
+        businessModel: '个人智能系统',
+        marketSize: 'emerging',
+        stage: 'prototype',
+        innovationType: '组合创新',
+        complexity: 72,
+        timeToMarket: '1-3 months',
+        resourceRequirements: '本地数据、模型路由、执行证据',
+      },
+      analysis: {
+        strengths: ['闭环完整'],
+        weaknesses: ['执行证据还要补强'],
+        opportunities: ['可沉淀为长期工作台'],
+        threats: ['模块过多会分散注意力'],
+        eraRelevance: 88,
+        breakthroughPotential: 84,
+        differentiation: 79,
+      },
+    },
+  }
+}
+
+function synapseFixture(overrides: Partial<SynapseRow> = {}): SynapseRow {
+  return {
+    id: 'synapse-1',
+    source_id: 'project-neuron-1',
+    target_id: 'project-neuron-2',
+    type: 'skill-transfer',
+    strength: 83,
+    reason: '神经元一沉淀的执行证据方法可以迁移给神经元二。',
+    action_items_json: '["整理可复用的执行回执模板"]',
+    created_at: '2026-05-04T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
+function installMockLocalStorage() {
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: vi.fn(() => null),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+      clear: vi.fn(),
+    },
+  })
+}
+
+function installMockElectronAPI(api?: Partial<Window['electronAPI']>) {
+  Object.defineProperty(window, 'electronAPI', {
+    configurable: true,
+    value: api,
+  })
+}
+
+function setNativeInputValue(element: HTMLInputElement | HTMLTextAreaElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(element), 'value')?.set
+  setter?.call(element, value)
+  element.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
 describe('sandbox UI smoke contracts', () => {
+  afterEach(() => {
+    installMockElectronAPI(undefined)
+  })
+
   it('keeps the sandbox as the single entry for Qimeng inbox, profiling, and WarRoom', () => {
     expect(OPENBASAKA_SANDBOX_MENU_ITEMS.map((item) => item.label)).toEqual([
       '沙盘全景',
@@ -161,6 +279,7 @@ describe('sandbox UI smoke contracts', () => {
 
   it('keeps all critical sandbox tabs reachable from the sidebar', () => {
     expect(SIDEBAR_ITEMS.map((item) => item.id)).toEqual([
+      'simplify',
       'overview',
       'neurons',
       'warroom',
@@ -172,10 +291,12 @@ describe('sandbox UI smoke contracts', () => {
       'workflow',
       'control',
       'scheduler',
+      'system-audit',
       'teams',
       'xiaobai',
     ])
     expect(SIDEBAR_ITEMS.map((item) => item.label)).toEqual([
+      '化繁为简',
       '总控',
       '神经元',
       '推演室',
@@ -187,9 +308,31 @@ describe('sandbox UI smoke contracts', () => {
       '工作流',
       '控制',
       '定时',
+      '系统自省',
       '群策',
       '小白',
     ])
+  })
+
+  it('keeps system self-audit registered for Simplify routing and the sidebar', () => {
+    expect(isSandboxTabId('system-audit')).toBe(true)
+    expect(SIDEBAR_ITEMS.find((item) => item.id === 'system-audit')?.label).toBe('系统自省')
+  })
+
+  it('keeps the restored XiaoBai workspaces reachable from the XiaoBai module', () => {
+    const html = renderToStaticMarkup(<XiaoBaiTab />)
+
+    expect(html).toContain('小白诊断')
+    expect(html).toContain('人类基本盘')
+    expect(html).toContain('灵犀一念')
+    expect(html).toContain('创意孵化器')
+    expect(html).toContain('万象学习')
+    expect(html).toContain('小白智囊团')
+    expect(html).toContain('UI 风格馆')
+    expect(html).toContain('广告大片')
+    expect(html).toContain('知识树 / 认知成长')
+    expect(html).toContain('灵感捕捉 / 作品生成')
+    expect(html).toContain('美食视觉 / 提示词')
   })
 
   it('renders the overview with intake, execution receipts, and review learning surfaces', () => {
@@ -225,7 +368,15 @@ describe('sandbox UI smoke contracts', () => {
     expect(html).toContain('项目节点')
     expect(html).toContain('记忆节点')
     expect(html).toContain('知识节点')
-    expect(html).toContain('Agent 行动')
+    expect(html).toContain('执行节点')
+    expect(html).toContain('打开')
+    expect(html).toContain('进入')
+    expect(html).toContain('行动')
+    expect(html).toContain('就绪度')
+    expect(html).not.toContain('OPEN')
+    expect(html).not.toContain('GO')
+    expect(html).not.toContain('AGENT ACTION')
+    expect(html).not.toContain('READY')
   })
 
   it('renders clear loading and empty states instead of silent gaps', () => {
@@ -252,6 +403,185 @@ describe('sandbox UI smoke contracts', () => {
     expect(html).toContain('等待执行收据')
   })
 
+  it('renders the restored neuron management controls and Chinese stage labels', () => {
+    const html = renderToStaticMarkup(
+      <NeuronsTab
+        neurons={[neuronFixture()]}
+        loading={false}
+        selectedId="project-neuron-1"
+        setSelectedId={vi.fn()}
+        onReload={vi.fn()}
+      />,
+    )
+
+    expect(html).toContain('项目神经元')
+    expect(html).toContain('OpenBasaka 项目神经元')
+    expect(html).toContain('已置顶')
+    expect(html).toContain('已星标')
+    expect(html).toContain('优先级')
+    expect(html).toContain('最高')
+    expect(html).toContain('神经元控制台')
+    expect(html).toContain('删除项目')
+    expect(html).toContain('项目身份')
+    expect(html).toContain('主判断')
+    expect(html).toContain('联动房间')
+    expect(html).toContain('打开')
+    expect(html).not.toContain('project neuron')
+    expect(html).not.toContain('focal verdict')
+    expect(html).not.toContain('linked rooms')
+    expect(html).not.toContain('actionLabel=&quot;open&quot;')
+  })
+
+  it('renders the synapse workbench with Chinese relation labels and resilient details', () => {
+    const secondProject = projectFixture({
+      id: 'project-neuron-2',
+      title: '执行证据项目神经元',
+      oneLiner: '把每次电脑任务的证据整理成可复用模板。',
+      isPinned: false,
+      isStarred: false,
+      priorityLevel: 'high',
+    })
+    const synapse = synapseFixture({ action_items_json: '{bad-json' })
+    const html = renderToStaticMarkup(
+      <SynapsesTab
+        neurons={[neuronFixture(), neuronFixture(secondProject)]}
+        synapses={[synapse]}
+        setSynapses={vi.fn()}
+        synapseScanning={false}
+        setSynapseScanning={vi.fn()}
+        synapseProgress=""
+        setSynapseProgress={vi.fn()}
+        hybridIdeas={[]}
+        setHybridIdeas={vi.fn()}
+        selectedSynapse={synapse}
+        setSelectedSynapse={vi.fn()}
+        selectedId={null}
+        setSelectedId={vi.fn()}
+        getLLMConfig={() => ({
+          provider: 'glm',
+          apiKey: '',
+          baseUrl: 'https://api.z.ai/api/coding/paas/v4',
+          model: 'glm-5.1',
+        })}
+      />,
+    )
+
+    expect(html).toContain('搜索项目、关系、原因或行动建议...')
+    expect(html).toContain('能力迁移')
+    expect(html).toContain('一个项目沉淀的方法可以迁移到另一个项目。')
+    expect(html).toContain('行动建议')
+    expect(html).toContain('暂无行动建议，仍可基于这条连接探索混合创新。')
+    expect(html).toContain('探索混合创新')
+    expect(html).not.toContain('skill-transfer')
+  })
+
+  it('filters synapse connections from the search bar and shows a clear no-match state', async () => {
+    const secondProject = projectFixture({
+      id: 'project-neuron-2',
+      title: '执行证据项目神经元',
+      oneLiner: '把每次电脑任务的证据整理成可复用模板。',
+      isPinned: false,
+      isStarred: false,
+      priorityLevel: 'high',
+    })
+    const thirdProject = projectFixture({
+      id: 'project-neuron-3',
+      title: '注意力竞争项目神经元',
+      oneLiner: '识别同一周内互相抢资源的项目。',
+      isPinned: false,
+      isStarred: false,
+      priorityLevel: 'normal',
+    })
+    const synapses = [
+      synapseFixture(),
+      synapseFixture({
+        id: 'synapse-2',
+        source_id: 'project-neuron-2',
+        target_id: 'project-neuron-3',
+        type: 'conflicting',
+        strength: 61,
+        reason: '两个项目争夺同一周的注意力。',
+        action_items_json: '[]',
+      }),
+    ]
+    const container = document.createElement('div')
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <SynapsesTab
+          neurons={[neuronFixture(), neuronFixture(secondProject), neuronFixture(thirdProject)]}
+          synapses={synapses}
+          setSynapses={vi.fn()}
+          synapseScanning={false}
+          setSynapseScanning={vi.fn()}
+          synapseProgress=""
+          setSynapseProgress={vi.fn()}
+          hybridIdeas={[]}
+          setHybridIdeas={vi.fn()}
+          selectedSynapse={null}
+          setSelectedSynapse={vi.fn()}
+          selectedId={null}
+          setSelectedId={vi.fn()}
+          getLLMConfig={() => ({
+            provider: 'glm',
+            apiKey: '',
+            baseUrl: 'https://api.z.ai/api/coding/paas/v4',
+            model: 'glm-5.1',
+          })}
+        />,
+      )
+    })
+
+    expect(container.textContent).toContain('能力迁移')
+    expect(container.textContent).toContain('资源竞争')
+
+    const input = container.querySelector('input')
+    await act(async () => {
+      if (input) {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, '能力迁移')
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+      }
+    })
+
+    expect(container.textContent).toContain('能力迁移')
+    expect(container.textContent).not.toContain('两个项目争夺同一周的注意力。')
+
+    await act(async () => {
+      if (input) {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, '完全不存在的连接')
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+      }
+    })
+
+    expect(container.textContent).toContain('没有匹配的突触')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('keeps WarRoom as a Chinese strategic workbench with action-plan styling restored', () => {
+    const html = renderToStaticMarkup(<WarRoomTab />)
+    const css = readFileSync('src/views/SandboxMap/tabs/WarRoomTab.css', 'utf8')
+
+    expect(html).toContain('推演室应该先给出此刻战局的主判断')
+    expect(html).toContain('当前战局')
+    expect(html).toContain('关键突触')
+    expect(html).toContain('主判断')
+    expect(html).toContain('推演室联动')
+    expect(html).toContain('高压项目')
+    expect(html).toContain('打开')
+    expect(html).not.toContain('war room')
+    expect(html).not.toContain('battle state')
+    expect(html).not.toContain('focal verdict')
+    expect(html).not.toContain('linked rooms')
+    expect(html).not.toContain('actionLabel=&quot;open&quot;')
+    expect(css).toContain('.warroom-tab__action-head')
+    expect(css).toContain('.warroom-tab__action-grid')
+    expect(css).toContain('.warroom-tab__action-control')
+  })
+
   it('keeps database backup and restore controls visible in the control panel', () => {
     const html = renderToStaticMarkup(<ControlPanelTab />)
 
@@ -267,6 +597,40 @@ describe('sandbox UI smoke contracts', () => {
       .filter(([, label]) => label === 'PRODUCT SURFACE')
 
     expect(genericFallbacks).toEqual([])
+  })
+
+  it('requires every UI museum style to carry a complete master restoration profile', () => {
+    expect(UI_STYLE_ITEMS).toHaveLength(78)
+
+    for (const item of UI_STYLE_ITEMS) {
+      expect(item.masterProfile.referenceBrief, item.id).toMatch(/\S{12,}/)
+      expect(item.masterProfile.identityRules, item.id).toHaveLength(3)
+      expect(item.masterProfile.visualTokens, item.id).toHaveLength(4)
+      expect(item.masterProfile.componentGrammar, item.id).toHaveLength(3)
+      expect(item.masterProfile.promptRules, item.id).toHaveLength(3)
+      expect(item.masterProfile.antiPatterns, item.id).toHaveLength(3)
+      expect(item.masterProfile.acceptanceChecklist, item.id).toHaveLength(5)
+      expect(Object.values(item.masterProfile.platformRules).every((rule) => rule.includes(item.title.replace(/^\d+\.\s*/, '').replace(/\(.+?\)/g, '').trim().split(/\s+/)[0]) || rule.length > 80)).toBe(true)
+      expect(Math.min(...Object.values(item.masterProfile.restorationScores))).toBeGreaterThanOrEqual(80)
+    }
+  })
+
+  it('routes new frontier UI styles into downstream PRD context', () => {
+    const context = buildUiMuseumPrdContext('AI Agent 画布 本地隐私 证据透明 可解释审计 多模态 无障碍', [
+      'canvas-ai',
+      'xai-transparency',
+      'local-first-ledger',
+    ])
+
+    expect(context.styleIds).toEqual(['canvas-ai', 'xai-transparency', 'local-first-ledger'])
+    expect(context.promptFragment).toContain('证据链')
+    expect(context.promptFragment).toContain('本地')
+    expect(context.promptFragment).toContain('组件状态清单')
+    expect(context.promptFragment).toContain('来源基准')
+    expect(context.promptFragment).toContain('禁忌项')
+    expect(context.promptFragment).toContain('复原评分')
+    expect(context.styleProfiles.map((profile) => profile.styleId)).toEqual(['canvas-ai', 'xai-transparency', 'local-first-ledger'])
+    expect(context.styleProfiles[0].restorationScores.identity).toBeGreaterThanOrEqual(90)
   })
 
   it('renders every UI museum card as a same-DNA experiential preview before opening the spec', async () => {
@@ -303,6 +667,11 @@ describe('sandbox UI smoke contracts', () => {
     expect(cardByTitle('Anthropic Serif')?.textContent).toContain('Thinking Room')
     expect(cardByTitle('Blueprint CAD')?.textContent).toContain('Interface Plan')
     expect(cardByTitle('Kinetic Type')?.textContent).toContain('Type Engine')
+    expect(cardByTitle('Canvas AI')?.textContent).toContain('Canvas Copilot')
+    expect(cardByTitle('Explainable AI')?.textContent).toContain('Trust Ledger')
+    expect(cardByTitle('Material 3 Expressive')?.textContent).toContain('Expressive Flow')
+    expect(cardByTitle('Adaptive Accessibility')?.textContent).toContain('Access Console')
+    expect(cardByTitle('Local-First Ledger')?.textContent).toContain('Private Ledger')
 
     await act(async () => {
       root.unmount()
@@ -444,6 +813,10 @@ describe('sandbox UI smoke contracts', () => {
     expect(container.textContent).toContain('Remotion Guide')
     expect(container.textContent).toContain('Agentic OS')
     expect(container.textContent).toContain('Anthropic Serif')
+    expect(container.textContent).toContain('识别诊断')
+    expect(container.textContent).toContain('SOURCE ASSET')
+    expect(container.textContent).toContain('万象吸收')
+    expect(container.textContent).toContain('功能真实性巡检')
 
     const loadSampleButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('载入样例'))
     expect(loadSampleButton).toBeTruthy()
@@ -454,11 +827,191 @@ describe('sandbox UI smoke contracts', () => {
 
     expect(container.textContent).toContain('如何把一个 B 站视频变成自己的学习包')
     expect(container.textContent).toContain('ARTIFACT DASHBOARD')
-    expect(container.textContent).toContain('BAOYU 秒懂视觉')
+    expect(container.textContent).not.toContain('BAOYU 秒懂视觉')
     expect(container.textContent).toContain('SOURCE NOTEBOOK')
     expect(container.textContent).toContain('LEARNING PACK')
+    expect(container.textContent).toContain('万象三结果')
     expect(container.textContent).toContain('归档去向')
     expect(container.textContent).toContain('覆盖矩阵')
+    expect(container.textContent).toContain('生成后会出现摘要')
+
+    const tldrButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('金句精华'))
+    await act(async () => {
+      tldrButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(container.textContent).toContain('一句话结论')
+    expect(container.textContent).toContain('已生成')
+    expect(container.textContent).toContain('证据')
+    expect(container.textContent).toContain('真实来源产物')
+
+    const mindmapButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('思维导图'))
+    await act(async () => {
+      mindmapButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(container.textContent).toContain('中心主题')
+    expect(container.textContent).toContain('思维导图')
+
+    const actionableButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('行动清单'))
+    await act(async () => {
+      actionableButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(container.textContent).toContain('今天可做')
+    expect(container.textContent).toContain('完成标准是什么')
+
+    const insightsTab = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === '智能总结')
+    await act(async () => {
+      insightsTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(container.textContent).toContain('BIBIGPT STYLE SUMMARY')
+    expect(container.textContent).toContain('生成智能总结')
+
+    const packTab = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === '学习包')
+    await act(async () => {
+      packTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(container.textContent).toContain('MARKDOWN PACK')
+    expect(container.textContent).toContain('行动化')
+
+    const wanxiangTab = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === '万象吸收')
+    await act(async () => {
+      wanxiangTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(container.textContent).toContain('WANXIANG WAITING')
+    expect(container.textContent).toContain('生成万象三结果')
+
+    const chatTab = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === '来源对话')
+    await act(async () => {
+      chatTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(container.textContent).toContain('SOURCE DIALOG')
+    expect(container.textContent).toContain('提问')
+
+    const coverageTab = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === '覆盖矩阵')
+    await act(async () => {
+      coverageTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(container.textContent).toContain('BIBIGPT PROVIDER')
+    expect(container.textContent).toContain('运行环境体检')
+
+    const downloadsTab = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === '下载导出')
+    await act(async () => {
+      downloadsTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(container.textContent).toContain('EXPORT TARGETS')
+    expect(container.textContent).toContain('可导出 SourceAsset')
+
+    const libraryTab = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === '资料库')
+    await act(async () => {
+      libraryTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(container.textContent).toContain('SOURCE LIBRARY')
+    expect(container.textContent).toContain('ASSET RECEIPTS')
+
+    await act(async () => {
+      root.unmount()
+    })
+    container.remove()
+  })
+
+  it('shows honest blockers instead of fake artifact content when SourceOS lacks real text', async () => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+    installMockLocalStorage()
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(<BiliHelperMacApp />)
+    })
+
+    const loadSampleButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('载入样例'))
+    await act(async () => {
+      loadSampleButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    const sourceNotebook = Array.from(container.querySelectorAll('textarea')).find((textarea) => textarea.placeholder.includes('粘贴字幕')) as HTMLTextAreaElement
+    await act(async () => {
+      setNativeInputValue(sourceNotebook, '')
+    })
+
+    const tldrButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('金句精华'))
+    await act(async () => {
+      tldrButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(container.textContent).toContain('无法生成真实结论')
+    expect(container.textContent).toContain('缺真实字幕、正文、OCR 或转写')
+    expect(container.textContent).toContain('自动取材已尝试')
+    expect(container.textContent).toContain('待补内容诊断')
+    expect(container.textContent).toContain('yt-dlp')
+    expect(container.textContent).not.toContain('一句话结论')
+
+    await act(async () => {
+      root.unmount()
+    })
+    container.remove()
+  })
+
+  it('hydrates a metadata-only video URL through yt-dlp before generating SourceOS artifacts', async () => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+    installMockLocalStorage()
+    const executeCommand = vi.fn(async () => ({
+      success: true,
+      stdout: JSON.stringify({
+        success: true,
+        text: '00:00 真实字幕：先说明主题。\n01:12 真实字幕：展开关键方法。\n03:40 真实字幕：给出行动清单和复盘标准。',
+        method: 'yt-dlp-subtitle',
+        files: ['source.zh-Hans.vtt'],
+        cookieMode: 'plain',
+      }),
+      stderr: '',
+      exitCode: 0,
+    }))
+    installMockElectronAPI({
+      fetchUrl: vi.fn(async (url: string) => ({
+        title: '元信息视频',
+        content: '',
+        author: '测试作者',
+        description: '这里只是简介，不能冒充正文。',
+        url,
+        cover: '',
+        siteName: 'YouTube',
+        canonicalUrl: url,
+        favicon: '',
+      })),
+      executeCommand,
+    } as Partial<Window['electronAPI']>)
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(<BiliHelperMacApp />)
+    })
+
+    const input = container.querySelector('input[aria-label="视频链接"]') as HTMLInputElement
+    setNativeInputValue(input, 'https://www.youtube.com/watch?v=abc123def45')
+    const form = container.querySelector('form.bili-helper-mac__search') as HTMLFormElement
+    await act(async () => {
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    const tldrButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('金句精华'))
+    await act(async () => {
+      tldrButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(executeCommand).toHaveBeenCalled()
+    expect(container.textContent).toContain('一句话结论')
+    expect(container.textContent).toContain('yt-dlp')
+    expect(container.textContent).toContain('真实来源产物')
+    expect(container.textContent).not.toContain('请先补字幕、正文、OCR 或转写')
 
     await act(async () => {
       root.unmount()
@@ -467,16 +1020,17 @@ describe('sandbox UI smoke contracts', () => {
   })
 
   it('renders XiaoBai council as a parallel PRD loop surface', () => {
+    installMockLocalStorage()
     const html = renderToStaticMarkup(<CouncilMacApp />)
 
     expect(html).toContain('95+ 指挥舱')
     expect(html).toContain('首屏给判断，3 分钟给行动，证据链不自欺')
-    expect(html).toContain('让 36 个灵魂开始挑队')
-    expect(html).toContain('导出可转发决策简报')
+    expect(html).toContain('点击开始后自动完成匹配、编队、博弈、成稿和工作流投递')
+    expect(html).toContain('完成后会自动发一份给工作流模块')
     expect(html).toContain('小白智囊团 · PRD 闭环')
     expect(html).toContain('隐藏思想原型')
-    expect(html).toContain('生成推荐编队')
-    expect(html).toContain('确认激活')
+    expect(html).toContain('自动编队')
+    expect(html).toContain('自动激活')
     expect(html).toContain('隐藏角色库')
     expect(html).toContain('Creative DNA')
     expect(html).toContain('UI风格馆')
@@ -635,6 +1189,10 @@ describe('sandbox UI smoke contracts', () => {
       actionTaskCount: 10,
       baoyuPlanCount: 5,
       localSvgCardCount: 1,
+      internetResearchRequired: false,
+      internetResearchGrounded: false,
+      internetSourceCount: 0,
+      internetQueries: [],
       deepRunCertification: {
         status: 'proved',
         label: '2-5 分钟深度长跑已认证',
@@ -734,6 +1292,10 @@ describe('sandbox UI smoke contracts', () => {
             actionTaskCount: 12,
             baoyuPlanCount: 5,
             localSvgCardCount: 1,
+            internetResearchRequired: false,
+            internetResearchGrounded: false,
+            internetSourceCount: 0,
+            internetQueries: [],
             deepRunCertification: {
               status: 'proved',
               label: '2-5 分钟深度长跑已认证',
@@ -1140,9 +1702,11 @@ describe('sandbox UI smoke contracts', () => {
     expect(artifactHtml).toContain('愿意用于真实规划')
   })
 
-  it('shows XiaoBai deep matching progress before starting the council debate', async () => {
+  it('starts XiaoBai matching and council debate from one button', async () => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+    installMockLocalStorage()
     matchGateMock.runCouncilMatchGate.mockReset()
+    councilWorkflowMock.runCouncilPrdWorkflow.mockReset()
     matchGateMock.runCouncilMatchGate.mockImplementation(async (input: any, options: any) => {
       options?.onProgress?.({
         phaseId: 'problem-profile',
@@ -1176,6 +1740,18 @@ describe('sandbox UI smoke contracts', () => {
         },
       }
     })
+    councilWorkflowMock.runCouncilPrdWorkflow.mockImplementation(async (input: any) => {
+      input.onSnapshot?.({
+        id: 'snapshot-one-key',
+        status: 'team-ready',
+        headline: '一键开始后已经进入六阶段会场',
+        detail: '系统没有停在推荐编队，正在进入博弈。',
+        sceneCount: 0,
+        briefCount: 0,
+        relationCount: 0,
+      })
+      return await new Promise(() => {})
+    })
     const container = document.createElement('div')
     document.body.appendChild(container)
     const root = createRoot(container)
@@ -1192,24 +1768,26 @@ describe('sandbox UI smoke contracts', () => {
       textarea?.dispatchEvent(new Event('input', { bubbles: true }))
       textarea?.dispatchEvent(new Event('change', { bubbles: true }))
     })
+    const startButton = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.trim() === '开始',
+    )
+    expect(startButton).toBeTruthy()
+    expect(container.textContent).not.toContain('只生成推荐编队')
     await act(async () => {
-      container.querySelector('.council-app__primary')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      startButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
       await new Promise((resolve) => window.setTimeout(resolve, 0))
     })
 
     expect(matchGateMock.runCouncilMatchGate).toHaveBeenCalled()
+    expect(councilWorkflowMock.runCouncilPrdWorkflow).toHaveBeenCalled()
     expect(container.textContent).toContain('CouncilMatchGate · 深度匹配过程')
     expect(container.textContent).toContain('模型裁判已完成深度匹配')
     expect(container.textContent).toContain('认知导演台')
     expect(container.textContent).toContain('当前张力')
     expect(container.textContent).toContain('实时剧本流')
-    expect(container.textContent).toContain('激活后每个阶段会逐步显影')
+    expect(container.textContent).toContain('一键开始后已经进入六阶段会场')
     expect(container.textContent).toContain('六阶段博弈')
-    expect(container.textContent).toContain('推荐编队 · 待激活')
-    expect(container.textContent).toContain('激活推荐队伍')
-    expect(container.textContent).toContain('神之一手辩论剧场')
-    expect(container.textContent).toContain('关系地图')
-    expect(container.textContent).toContain('裁决账本')
+    expect(container.textContent).toContain('正在博弈')
     expect(container.textContent).not.toContain('智囊团博弈中...')
 
     await act(async () => {
@@ -1217,6 +1795,312 @@ describe('sandbox UI smoke contracts', () => {
     })
     container.remove()
     matchGateMock.runCouncilMatchGate.mockReset()
+    councilWorkflowMock.runCouncilPrdWorkflow.mockReset()
+  })
+
+  it('lets Boss continue a non-master PRD through a real rematched council round', async () => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+    installMockLocalStorage()
+    matchGateMock.runCouncilMatchGate.mockReset()
+    councilWorkflowMock.runCouncilPrdWorkflow.mockReset()
+    matchGateMock.runCouncilMatchGate.mockImplementation(async (input: any) => {
+      const problem = typeof input === 'string' ? input : input.problem
+      return {
+        ...selectCouncilTeam(problem),
+        matchGate: {
+          ...selectCouncilTeam(problem).matchGate,
+          decisionSource: 'deep-model',
+          judgeSummary: '模型裁判已重新匹配大师组合。',
+          stageTrace: [],
+          creativeDnaUsed: true,
+          styleContextUsed: true,
+        },
+      }
+    })
+    const selection = selectCouncilTeam('做一个星际番茄钟 iOS App')
+    const weakPrd = [
+      '## 产品定位与北极星',
+      '目标用户是深度工作者，痛点是倒计时焦虑，成功标准是完成率。',
+      '## P0/P1/P2 与不做清单',
+      'P0 App 内启动；页面包括今日跃迁；组件有空态、加载态、失败态。',
+    ].join('\n')
+    const weakResult = {
+      selection,
+      matchGate: selection.matchGate,
+      activatedAgents: [],
+      preferredStyleIds: [],
+      agentDreamStates: [],
+      team: { id: 'team-test', name: '小白智囊团', agents: [] },
+      session: { id: 'session-weak', topic: '星际番茄钟', summary: weakPrd, tags: [], messages: [] },
+      baoyuVisualPlans: [],
+      qualityGate: {
+        gateId: 'gate-weak',
+        status: 'approved',
+        finalGateStatus: 'approved',
+        score: 100,
+        prdCompletenessScore: 100,
+        launchReadinessScore: 100,
+        summary: '质量闸门结构通过，但大师级开工判定仍需补市场、UI、工程闭环。',
+        checks: [{ id: 'structure', label: '结构完整度', status: 'pass', score: 100, evidence: ['结构覆盖'], requiredFixes: [] }],
+        typedDeliberation: [],
+      },
+      debateScenes: [],
+      debateMap: { nodes: [], edges: [], summary: '暂无关系' },
+      verdictLedger: { kept: [], cut: [], revised: [], evidenceGaps: [], prdImpacts: [], openDisagreements: [], summary: '裁决账本' },
+      qualityRevisionHistory: [],
+      runtimeEvidence: {
+        runId: 'run-weak',
+        startedAt: '2026-05-15T00:00:00.000Z',
+        completedAt: '2026-05-15T00:02:00.000Z',
+        durationMs: 120000,
+        decisionSource: 'deep-model',
+        modelJudgeUsed: true,
+        fallbackUsed: false,
+        stageTrace: [],
+        messageCount: 6,
+        briefCount: 6,
+        sceneCount: 6,
+        relationCount: 0,
+        verdictLedgerCount: 0,
+        qualityStatus: 'approved',
+        qualityScore: 100,
+        actionTaskCount: 0,
+        baoyuPlanCount: 0,
+        localSvgCardCount: 0,
+        internetResearchRequired: false,
+        internetResearchGrounded: false,
+        internetSourceCount: 0,
+        internetQueries: [],
+        deepRunCertification: {
+          status: 'proved',
+          label: '测试长跑已认证',
+          requiredDurationMs: 120000,
+          actualDurationMs: 120000,
+          modelJudgeUsed: true,
+          modelJudgeTraceVerified: true,
+          fullStageTrace: true,
+          stageTraceVerified: true,
+          temporalTraceVerified: true,
+          enoughDebate: true,
+          enoughQuality: true,
+          proofSummary: '测试证据完整。',
+          blockers: [],
+        },
+        replayFrames: [],
+        evidenceItems: [],
+        exportProof: [],
+        nextProofNeeded: [],
+      },
+      runtimeWisdomContext: undefined,
+      runtimeCalibrationPlan: undefined,
+      nuwaEvidenceRegistry: buildCouncilNuwaEvidenceRegistry(selection.seats.map((seat) => seat.persona)),
+      excellenceAudit: undefined,
+      masterPrdValidation: undefined,
+      consensusTrace: undefined,
+    }
+    councilWorkflowMock.runCouncilPrdWorkflow
+      .mockResolvedValueOnce(weakResult)
+      .mockImplementationOnce(async () => await new Promise(() => {}))
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(<CouncilMacApp />)
+    })
+    const textarea = container.querySelector('textarea')
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
+      setter?.call(textarea, '做一个星际穿越主题番茄时间 iOS App')
+      textarea?.dispatchEvent(new Event('input', { bubbles: true }))
+      textarea?.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    await act(async () => {
+      container.querySelector('.council-app__primary')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+
+    expect(container.textContent).toContain('PRD 候选稿已生成，需按大师级缺口返修')
+    const continueButton = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('继续探讨到大师级候选'),
+    )
+    expect(continueButton).toBeTruthy()
+
+    await act(async () => {
+      continueButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+
+    expect(matchGateMock.runCouncilMatchGate).toHaveBeenCalledTimes(2)
+    expect(councilWorkflowMock.runCouncilPrdWorkflow).toHaveBeenCalledTimes(2)
+    const secondInput = councilWorkflowMock.runCouncilPrdWorkflow.mock.calls[1][0]
+    expect(secondInput.problem).toContain('继续探讨直到大师级候选 PRD')
+    expect(secondInput.problem).toContain('不允许把上一轮结果简单润色后冒充新结论')
+    expect(secondInput.problem).toContain('上一轮评分')
+    expect(container.textContent).toContain('Boss 要继续探讨直到大师级候选')
+
+    await act(async () => {
+      root.unmount()
+    })
+    container.remove()
+    matchGateMock.runCouncilMatchGate.mockReset()
+    councilWorkflowMock.runCouncilPrdWorkflow.mockReset()
+  })
+
+  it('opens the XiaoBai council replay modal when real-time debate starts', async () => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+    installMockLocalStorage()
+    matchGateMock.runCouncilMatchGate.mockReset()
+    councilWorkflowMock.runCouncilPrdWorkflow.mockReset()
+    matchGateMock.runCouncilMatchGate.mockImplementation(async (input: any, options: any) => {
+      options?.onProgress?.({
+        phaseId: 'problem-profile',
+        label: '问题画像',
+        status: 'completed',
+        detail: '识别到 product / strategy。',
+        candidatePersonaIds: [],
+        startedAt: 1,
+        endedAt: 2,
+      })
+      options?.onProgress?.({
+        phaseId: 'model-judge',
+        label: '模型裁判',
+        status: 'completed',
+        detail: '模型裁判已完成编队取舍。',
+        candidatePersonaIds: ['jobs-product-director'],
+        startedAt: 3,
+        endedAt: 4,
+        decisionSource: 'deep-model',
+      })
+      const problem = typeof input === 'string' ? input : input.problem
+      return {
+        ...selectCouncilTeam(problem),
+        matchGate: {
+          ...selectCouncilTeam(problem).matchGate,
+          decisionSource: 'deep-model',
+          judgeSummary: '模型裁判已完成深度匹配。',
+          stageTrace: [],
+          creativeDnaUsed: true,
+          styleContextUsed: true,
+        },
+      }
+    })
+    councilWorkflowMock.runCouncilPrdWorkflow.mockImplementation(async (input: any) => {
+      input.onSnapshot?.({
+        id: 'snapshot-replay-test',
+        status: 'phase-start',
+        phaseId: 'clarify',
+        phaseLabel: '追问',
+        headline: '追问开始：先逼出真正问题',
+        detail: '主持人要求先确认目标、边界和验收。',
+        agentName: '主持席',
+        sceneCount: 1,
+        briefCount: 0,
+        relationCount: 0,
+        latestClaim: '先问清楚再写 PRD。',
+        latestObjection: '',
+      })
+      return await new Promise(() => {})
+    })
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(<CouncilMacApp />)
+    })
+
+    const textarea = container.querySelector('textarea')
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
+      setter?.call(textarea, '做一个女性天气包包 iOS App，需要产品、技术、审美、风险和增长一起裁判')
+      textarea?.dispatchEvent(new Event('input', { bubbles: true }))
+      textarea?.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    await act(async () => {
+      container.querySelector('.council-app__primary')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+
+    expect(matchGateMock.runCouncilMatchGate).toHaveBeenCalled()
+    expect(councilWorkflowMock.runCouncilPrdWorkflow).toHaveBeenCalled()
+    expect(container.querySelector('.council-replay-modal')).toBeFalsy()
+    const replayButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('过程回看'))
+    expect(replayButton).toBeTruthy()
+    await act(async () => {
+      replayButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(container.textContent).toContain('实时博弈 · 过程回看')
+    expect(container.textContent).toContain('追问开始：先逼出真正问题')
+    expect(container.textContent).toContain('上一页')
+    expect(container.textContent).toContain('下一页')
+    expect(container.querySelector('.council-replay-modal__filmstrip')).toBeTruthy()
+
+    await act(async () => {
+      root.unmount()
+    })
+    container.remove()
+    matchGateMock.runCouncilMatchGate.mockReset()
+    councilWorkflowMock.runCouncilPrdWorkflow.mockReset()
+  })
+
+  it('shows a replay start frame in the main page without auto-opening the process viewer', async () => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+    installMockLocalStorage()
+    matchGateMock.runCouncilMatchGate.mockReset()
+    councilWorkflowMock.runCouncilPrdWorkflow.mockReset()
+    matchGateMock.runCouncilMatchGate.mockImplementation(async (input: any) => {
+      const problem = typeof input === 'string' ? input : input.problem
+      return {
+        ...selectCouncilTeam(problem),
+        matchGate: {
+          ...selectCouncilTeam(problem).matchGate,
+          decisionSource: 'deep-model',
+          judgeSummary: '模型裁判已完成深度匹配。',
+          stageTrace: [],
+          creativeDnaUsed: true,
+          styleContextUsed: true,
+        },
+      }
+    })
+    councilWorkflowMock.runCouncilPrdWorkflow.mockImplementation(async () => await new Promise(() => {}))
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(<CouncilMacApp />)
+    })
+
+    const textarea = container.querySelector('textarea')
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
+      setter?.call(textarea, '做一个女性天气包包 iOS App，需要产品、技术、审美、风险和增长一起裁判')
+      textarea?.dispatchEvent(new Event('input', { bubbles: true }))
+      textarea?.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    await act(async () => {
+      container.querySelector('.council-app__primary')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+
+    expect(councilWorkflowMock.runCouncilPrdWorkflow).toHaveBeenCalled()
+    expect(container.querySelector('.council-replay-modal')).toBeFalsy()
+    expect(container.textContent).toContain('过程回看')
+    expect(container.textContent).toContain('Boss 已点击开始，六阶段博弈已激活')
+    expect(container.textContent).toContain('开始不是停在等待页')
+    expect(container.textContent).toContain('正在博弈')
+    expect(container.textContent).not.toContain('等待大师发言形成第一幕')
+
+    await act(async () => {
+      root.unmount()
+    })
+    container.remove()
+    matchGateMock.runCouncilMatchGate.mockReset()
+    councilWorkflowMock.runCouncilPrdWorkflow.mockReset()
   })
 
   it('opens a XiaoBai council persona dossier with dynamic dream and local profile summaries', async () => {

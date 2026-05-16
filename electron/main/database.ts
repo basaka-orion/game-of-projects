@@ -6,11 +6,6 @@ import Database from 'better-sqlite3'
 import { app } from 'electron'
 import path from 'node:path'
 import { getSchema, getMigrations, getComplexMigrations } from '../../src/lib/db/schema'
-import {
-  createDatabaseBackupEnvelope,
-  parseDatabaseBackupJson,
-  quoteSqlIdentifier,
-} from '../../src/lib/db/backup-format'
 
 let db: Database.Database | null = null
 
@@ -26,36 +21,18 @@ export function getDatabase(): Database.Database {
   db.pragma('synchronous = NORMAL')
   db.pragma('foreign_keys = ON')
 
-  // 初始化所有表。旧库可能缺少新列，而 schema 里的新索引会先引用这些列；
-  // 所以这里允许第一次 schema 部分失败，随后先跑列迁移，再做一次完整收口。
-  try {
-    db.exec(getSchema())
-  } catch (err) {
-    console.warn('[database] Schema initialization deferred until migrations finish:', err)
-  }
+  // 初始化所有表
+  db.exec(getSchema())
 
   // 安全迁移（幂等）
   for (const sql of getMigrations()) {
-    try {
-      db.exec(sql)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      if (!message.includes('duplicate column name') && !message.includes('already exists')) {
-        console.warn('[database] Migration skipped:', sql, err)
-      }
-    }
-  }
-
-  try {
-    db.exec(getSchema())
-  } catch (err) {
-    console.warn('[database] Schema finalization skipped:', err)
+    try { db.exec(sql) } catch { /* 列已存在，忽略 */ }
   }
 
   // 复杂迁移（重建表等，仅在标记文件不存在时执行）
-  const complexMigrationsDone = db.prepare("SELECT value FROM settings WHERE key = 'complex_migrations_done'").get() as
-    | { value: string }
-    | undefined
+  const complexMigrationsDone = db.prepare(
+    "SELECT value FROM settings WHERE key = 'complex_migrations_done'"
+  ).get() as { value: string } | undefined
   if (!complexMigrationsDone) {
     for (const migration of getComplexMigrations()) {
       try {
@@ -70,11 +47,9 @@ export function getDatabase(): Database.Database {
 
   // 诊断：验证关键表存在（scheduled_tasks, cron_execution_log）
   try {
-    const tables = db
-      .prepare(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('scheduled_tasks', 'cron_execution_log')",
-      )
-      .all() as { name: string }[]
+    const tables = db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('scheduled_tasks', 'cron_execution_log')"
+    ).all() as { name: string }[]
     if (tables.length < 2) {
       console.warn('[database] Missing critical tables, re-running schema...')
       db.exec(getSchema())
@@ -114,98 +89,47 @@ export function run(sql: string, params: unknown[] = []): { changes: number; las
 /** 导出整个数据库为 JSON（用于备份） */
 export function exportDatabase(): string {
   const database = getDatabase()
-  const tableNames = getUserTableNames(database)
+  const tables = database
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+    .all() as { name: string }[]
 
-  const tables: Record<string, unknown[]> = {}
-  for (const name of tableNames) {
-    tables[name] = database.prepare(`SELECT * FROM ${quoteSqlIdentifier(name)}`).all() as unknown[]
+  const data: Record<string, unknown[]> = {}
+  for (const { name } of tables) {
+    data[name] = database.prepare(`SELECT * FROM "${name}"`).all() as unknown[]
   }
-  return JSON.stringify(createDatabaseBackupEnvelope(tables), null, 2)
+  return JSON.stringify(data, null, 2)
 }
 
 /** 导入数据库（从 JSON 备份恢复） */
 export function importDatabase(jsonStr: string): boolean {
   try {
-    const data = parseDatabaseBackupJson(jsonStr)
+    const data = JSON.parse(jsonStr) as Record<string, unknown[]>
     const database = getDatabase()
-    const tableNames = getUserTableNames(database)
-    const tableNameSet = new Set(tableNames)
-    const unknownTables = Object.keys(data).filter((table) => !tableNameSet.has(table))
 
-    if (unknownTables.length > 0) {
-      throw new Error(`Backup contains unknown tables: ${unknownTables.join(', ')}`)
-    }
-
-    const tableColumns = new Map(tableNames.map((tableName) => [tableName, getTableColumns(database, tableName)]))
-    validateBackupRows(data, tableColumns)
-
+    // 在事务中执行
     const transaction = database.transaction(() => {
-      for (const tableName of tableNames) {
-        database.exec(`DELETE FROM ${quoteSqlIdentifier(tableName)}`)
-      }
+      for (const [table, rows] of Object.entries(data)) {
+        if (!Array.isArray(rows) || rows.length === 0) continue
 
-      for (const [tableName, rows] of Object.entries(data)) {
-        if (rows.length === 0) continue
+        // 清空目标表
+        database.exec(`DELETE FROM "${table}"`)
 
-        const tableColumnSet = new Set(tableColumns.get(tableName) ?? [])
-        const cols = Array.from(new Set(rows.flatMap((row) => Object.keys(row as Record<string, unknown>)))).filter(
-          (col) => tableColumnSet.has(col),
-        )
-        if (cols.length === 0) continue
-
-        const quotedTable = quoteSqlIdentifier(tableName)
-        const quotedCols = cols.map(quoteSqlIdentifier).join(', ')
+        // 获取列名
+        const cols = Object.keys(rows[0] as Record<string, unknown>)
         const placeholders = cols.map(() => '?').join(', ')
-        const insertSql = `INSERT INTO ${quotedTable} (${quotedCols}) VALUES (${placeholders})`
+        const insertSql = `INSERT INTO "${table}" (${cols.join(', ')}) VALUES (${placeholders})`
         const stmt = database.prepare(insertSql)
 
         for (const row of rows) {
-          const values = cols.map((c) => (row as Record<string, unknown>)[c] ?? null)
+          const values = cols.map(c => (row as Record<string, unknown>)[c])
           stmt.run(...values)
         }
       }
     })
 
-    const previousForeignKeys = Number(database.pragma('foreign_keys', { simple: true })) === 1
-    database.pragma('foreign_keys = OFF')
-    try {
-      transaction()
-    } finally {
-      database.pragma(`foreign_keys = ${previousForeignKeys ? 'ON' : 'OFF'}`)
-    }
+    transaction()
     return true
-  } catch (error) {
-    console.warn('[database] Import failed:', error)
+  } catch {
     return false
-  }
-}
-
-function getUserTableNames(database: Database.Database): string[] {
-  const tables = database
-    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
-    .all() as { name: string }[]
-
-  return tables.map((table) => table.name)
-}
-
-function getTableColumns(database: Database.Database, tableName: string): string[] {
-  const columns = database.prepare(`PRAGMA table_info(${quoteSqlIdentifier(tableName)})`).all() as { name: string }[]
-  return columns.map((column) => column.name)
-}
-
-function validateBackupRows(data: Record<string, unknown[]>, tableColumns: Map<string, string[]>) {
-  for (const [tableName, rows] of Object.entries(data)) {
-    const tableColumnSet = new Set(tableColumns.get(tableName) ?? [])
-
-    for (const row of rows) {
-      if (!row || typeof row !== 'object' || Array.isArray(row)) {
-        throw new Error(`Backup table "${tableName}" contains a non-object row.`)
-      }
-
-      const invalidColumns = Object.keys(row as Record<string, unknown>).filter((column) => !tableColumnSet.has(column))
-      if (invalidColumns.length > 0) {
-        throw new Error(`Backup table "${tableName}" contains unknown columns: ${invalidColumns.join(', ')}`)
-      }
-    }
   }
 }

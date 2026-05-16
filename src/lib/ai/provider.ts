@@ -53,6 +53,26 @@ const ZAI_LEGACY_BASE_URLS = new Set(['https://api.z.ai/api/paas/v4', 'https://a
 
 const ZAI_CODING_BASE_URL = 'https://api.z.ai/api/coding/paas/v4'
 
+function readViteEnv(key: string): string {
+  return String((import.meta.env as Record<string, unknown> | undefined)?.[key] || '').trim()
+}
+
+function readEnvLlmProvider(): string {
+  return readViteEnv('VITE_OPENBASAKA_LLM_PROVIDER') || readViteEnv('VITE_PROFILING_LLM_PROVIDER')
+}
+
+function readEnvLlmApiKey(): string {
+  return readViteEnv('VITE_OPENBASAKA_LLM_API_KEY') || readViteEnv('VITE_PROFILING_LLM_API_KEY')
+}
+
+function readEnvLlmBaseUrl(): string {
+  return readViteEnv('VITE_OPENBASAKA_LLM_BASE_URL') || readViteEnv('VITE_PROFILING_LLM_BASE_URL')
+}
+
+function readEnvLlmModel(): string {
+  return readViteEnv('VITE_OPENBASAKA_LLM_MODEL') || readViteEnv('VITE_PROFILING_LLM_MODEL')
+}
+
 export function normalizeProviderBaseUrl(provider: string, baseUrl: string): string {
   const trimmed = baseUrl.trim().replace(/\/+$/, '')
   if (provider === 'glm' && ZAI_LEGACY_BASE_URLS.has(baseUrl.trim())) {
@@ -78,13 +98,14 @@ export function getDefaultConfig(provider: string): Omit<LLMConfig, 'apiKey'> {
  */
 export function getLLMConfig(): LLMConfig {
   // 延迟导入避免循环依赖
-  const provider = getSetting('llm_provider', 'deepseek')
+  const envProvider = readEnvLlmProvider()
+  const provider = getSetting('llm_provider', envProvider || 'deepseek')
   const defaults = getDefaultConfig(provider)
   return {
     provider: provider as LLMConfig['provider'],
-    apiKey: getSetting('llm_api_key', ''),
-    baseUrl: normalizeProviderBaseUrl(provider, getSetting('llm_base_url', defaults.baseUrl)),
-    model: getSetting('llm_model', defaults.model),
+    apiKey: getSetting('llm_api_key', readEnvLlmApiKey()),
+    baseUrl: normalizeProviderBaseUrl(provider, getSetting('llm_base_url', readEnvLlmBaseUrl() || defaults.baseUrl)),
+    model: getSetting('llm_model', readEnvLlmModel() || defaults.model),
   }
 }
 
@@ -150,7 +171,7 @@ export async function verifyLLMConfig(config: LLMConfig): Promise<{ ok: boolean;
             if (!gotResponse) resolve({ ok: false, message: '✗ 连接超时' })
           }, 15000)
 
-          const configJson = JSON.stringify(config)
+          const configJson = buildElectronConfigOverride(config)
           electronAPI.dbQuery('SELECT 1').then(() => {
             // 通过 IPC invoke 验证
             const listener = (_event: any, chunk: string) => {
@@ -270,12 +291,20 @@ function openaiHeaders(apiKey: string): Record<string, string> {
 }
 
 function shouldDisableThinking(config: LLMConfig, maxTokens: number): boolean {
-  return (config.provider === 'glm' || /^glm-5/i.test(config.model)) && maxTokens <= 2048
+  return (config.provider === 'glm' || /^glm-5/i.test(config.model)) && maxTokens <= 4096
 }
 
 function getElectronAPI(): any {
   if (typeof window === 'undefined') return undefined
   return (window as any).electronAPI
+}
+
+const SAFE_STORAGE_REF_PREFIX = 'safe-storage:'
+
+export function buildElectronConfigOverride(config: LLMConfig): string | undefined {
+  if (config.provider === 'ollama') return JSON.stringify(config)
+  if (!config.apiKey || config.apiKey.startsWith(SAFE_STORAGE_REF_PREFIX)) return undefined
+  return JSON.stringify(config)
 }
 
 /** 发送聊天请求（非流式）— Electron 环境走 IPC 绕过 CORS */
@@ -292,7 +321,7 @@ export async function chatCompletion(
     const userMsgs = messages.filter((m) => m.role !== 'system')
     const prompt = userMsgs.map((m) => m.content).join('\n')
     const systemPrompt = systemMsg?.content || ''
-    const result = await electronAPI.sendToAI(prompt, systemPrompt, JSON.stringify(config), temperature, maxTokens)
+    const result = await electronAPI.sendToAI(prompt, systemPrompt, buildElectronConfigOverride(config), temperature, maxTokens)
     if (typeof result === 'string') return result
     if (result?.error) throw new Error(result.error)
     return ''
@@ -422,7 +451,7 @@ async function electronStreamChat(
         content: m.content,
       })),
     )
-    const configOverrideJson = JSON.stringify(config)
+    const configOverrideJson = buildElectronConfigOverride(config)
 
     let fullText = ''
     try {
@@ -461,7 +490,7 @@ async function electronStreamChat(
   const systemPrompt = typeof systemMsg?.content === 'string' ? systemMsg.content : ''
 
   // 将配置序列化传给 main process（支持角色专属配置覆盖全局）
-  const configOverrideJson = JSON.stringify(config)
+  const configOverrideJson = buildElectronConfigOverride(config)
 
   let fullText = ''
   try {

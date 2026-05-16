@@ -1,6 +1,18 @@
 import type { AgentExecutionReceipt } from '../agents/execution-receipt'
 
-export type OperatingLoopStageId = 'capture' | 'understand' | 'remember' | 'compile' | 'simulate' | 'execute' | 'review'
+export type OperatingLoopStageId =
+  | 'capture'
+  | 'understand'
+  | 'remember'
+  | 'compile'
+  | 'explore'
+  | 'simulate'
+  | 'execute'
+  | 'review'
+
+export type OperatingLoopExplorationMode = 'aligned' | 'adjacent' | 'contrarian' | 'serendipity'
+
+export type OperatingLoopBossProfileImpact = 'none' | 'low' | 'medium' | 'high'
 
 export type OperatingLoopTarget =
   | 'memory'
@@ -31,6 +43,9 @@ export interface OperatingLoopBaseRecord {
   confidence?: number
   entities?: string[]
   projectIds?: string[]
+  explorationMode?: OperatingLoopExplorationMode
+  bossProfileImpact?: OperatingLoopBossProfileImpact
+  reviewRequired?: boolean
 }
 
 export interface InputEvent extends OperatingLoopBaseRecord {
@@ -53,6 +68,8 @@ export interface BossSignal extends OperatingLoopBaseRecord {
   signalKind: 'preference' | 'cognitive_style' | 'communication_style' | 'decision_pattern' | 'avoidance'
   summary: string
   profileImpact: 'low' | 'medium' | 'high'
+  snapshotId?: string
+  previousSnapshotId?: string
 }
 
 export interface KnowledgeSourceRecord extends OperatingLoopBaseRecord {

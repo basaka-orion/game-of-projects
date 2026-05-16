@@ -11,12 +11,54 @@ import { generateHybridIdeas, HybridIdea } from '../../../lib/synapse/innovator'
 import { LLMConfig } from '../../../lib/ai/provider'
 import { findStructuralHoles, innovateOnStructuralHoles, StructuralHole, InnovationResult } from '../../../lib/memory/structural-holes'
 
-function getTypeColor(type: string): string {
-  const colors: Record<string, string> = {
-    complementary: '#00d4aa', sequential: '#6366f1', synergistic: '#f59e0b',
-    conflicting: '#ef4444', inspiration: '#a78bfa', 'skill-transfer': '#06b6d4',
+const SYNAPSE_TYPE_META: Record<SynapseType, { label: string; description: string; color: string }> = {
+  complementary: {
+    label: '资源互补',
+    description: '两个项目可以共享能力、渠道或资产。',
+    color: '#00d4aa',
+  },
+  sequential: {
+    label: '前后接力',
+    description: '一个项目的结果可以启用另一个项目。',
+    color: '#6366f1',
+  },
+  synergistic: {
+    label: '协同放大',
+    description: '合并推进可能产生 1+1>2 的效果。',
+    color: '#f59e0b',
+  },
+  conflicting: {
+    label: '资源竞争',
+    description: '两个项目会争夺同一类注意力、时间或资源。',
+    color: '#ef4444',
+  },
+  inspiration: {
+    label: '跨界灵感',
+    description: '一个项目能为另一个项目提供结构或表达启发。',
+    color: '#a78bfa',
+  },
+  'skill-transfer': {
+    label: '能力迁移',
+    description: '一个项目沉淀的方法可以迁移到另一个项目。',
+    color: '#06b6d4',
+  },
+}
+
+function getTypeMeta(type: string): { label: string; description: string; color: string } {
+  return SYNAPSE_TYPE_META[type as SynapseType] ?? {
+    label: type || '未知连接',
+    description: '尚未归类的项目关系。',
+    color: '#666',
   }
-  return colors[type] || '#666'
+}
+
+function parseActionItems(raw: string): string[] {
+  try {
+    const parsed = JSON.parse(raw || '[]')
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string' && item.trim().length > 0) : []
+  } catch {
+    return []
+  }
 }
 
 interface SynapsesTabProps {
@@ -45,23 +87,47 @@ export default function SynapsesTab({
   selectedId, setSelectedId,
   getLLMConfig,
 }: SynapsesTabProps) {
+  const [searchQuery, setSearchQuery] = useState('')
+
   const typeBreakdown = synapses.reduce<Record<string, number>>((acc, s) => {
     acc[s.type] = (acc[s.type] || 0) + 1
     return acc
   }, {})
+  const projectTitleById = new Map(neurons.map(n => [n.project.id, n.project.title]))
+  const normalizedSearch = searchQuery.trim().toLowerCase()
+  const filteredSynapses = normalizedSearch.length === 0
+    ? synapses
+    : synapses.filter(s => {
+      const sourceName = projectTitleById.get(s.source_id) || s.source_id
+      const targetName = projectTitleById.get(s.target_id) || s.target_id
+      const actionItems = parseActionItems(s.action_items_json)
+      const typeMeta = getTypeMeta(s.type)
+      return [
+        sourceName,
+        targetName,
+        s.source_id,
+        s.target_id,
+        s.type,
+        typeMeta.label,
+        typeMeta.description,
+        s.reason,
+        ...actionItems,
+      ].some(part => part.toLowerCase().includes(normalizedSearch))
+    })
 
   return (
     <div className="sandbox-map__synapse-view">
       <SearchStatsBar
-        searchValue=""
-        onSearchChange={() => {}}
-        placeholder=""
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
+        placeholder="搜索项目、关系、原因或行动建议..."
         stats={[
           { label: '突触', value: synapses.length },
+          ...(normalizedSearch ? [{ label: '匹配', value: filteredSynapses.length, color: 'var(--hd-accent-cyan)' }] : []),
           ...Object.entries(typeBreakdown).map(([type, count]) => ({
-            label: type,
+            label: getTypeMeta(type).label,
             value: count,
-            color: getTypeColor(type),
+            color: getTypeMeta(type).color,
           })),
         ]}
         actions={
@@ -146,11 +212,15 @@ export default function SynapsesTab({
       <CollapsibleSection title="突触连接" defaultOpen={true} count={synapses.length}>
         {synapses.length === 0 ? (
           <EmptyState icon="🔗" title="尚未发现突触" description="点击扫描按钮发现项目间的连接" />
+        ) : filteredSynapses.length === 0 ? (
+          <EmptyState icon="🔗" title="没有匹配的突触" description="换一个项目名、关系类型、原因或行动建议再试" />
         ) : (
           <div className="sandbox-map__synapse-list" style={{ marginTop: 'var(--hd-space-sm)' }}>
-            {synapses.map((s, i) => {
-              const sourceName = neurons.find(n => n.project.id === s.source_id)?.project.title || s.source_id
-              const targetName = neurons.find(n => n.project.id === s.target_id)?.project.title || s.target_id
+            {filteredSynapses.map((s, i) => {
+              const sourceName = projectTitleById.get(s.source_id) || s.source_id
+              const targetName = projectTitleById.get(s.target_id) || s.target_id
+              const typeMeta = getTypeMeta(s.type)
+              const actionItems = parseActionItems(s.action_items_json)
               return (
                 <div
                   key={i}
@@ -158,50 +228,52 @@ export default function SynapsesTab({
                   onClick={() => setSelectedSynapse(s === selectedSynapse ? null : s)}
                 >
                   <div className="sandbox-map__synapse-header">
-                    <span className="sandbox-map__synapse-type" style={{ borderColor: getTypeColor(s.type), color: getTypeColor(s.type) }}>
-                      {s.type}
+                    <span className="sandbox-map__synapse-type" style={{ borderColor: typeMeta.color, color: typeMeta.color }}>
+                      {typeMeta.label}
                     </span>
                     <span className="sandbox-map__synapse-strength">{Math.round(s.strength)}%</span>
                   </div>
                   <div className="sandbox-map__synapse-pair">
                     {sourceName} ↔ {targetName}
                   </div>
+                  <div className="sandbox-map__synapse-reason">{typeMeta.description}</div>
                   {s.reason && (
                     <div className="sandbox-map__synapse-reason">{s.reason}</div>
                   )}
                   {selectedSynapse === s && (
                     <div className="sandbox-map__synapse-detail">
-                      {(() => {
-                        const items = JSON.parse(s.action_items_json || '[]') as string[]
-                        return items.length > 0 ? (
-                          <div>
-                            <div className="hd-label" style={{ marginBottom: 4 }}>行动建议</div>
-                            {items.map((item, j) => (
-                              <div key={j} style={{ fontSize: '0.8rem', color: 'var(--hd-text-secondary)', paddingLeft: 8 }}>
+                      <div>
+                        <div className="hd-label" style={{ marginBottom: 4 }}>行动建议</div>
+                        {actionItems.length > 0 ? (
+                          actionItems.map((item, j) => (
+                            <div key={j} style={{ fontSize: '0.8rem', color: 'var(--hd-text-secondary)', paddingLeft: 8 }}>
                               * {item}
-                              </div>
-                            ))}
-                            <button
-                              className="sandbox-map__hybrid-btn"
-                              onClick={async (e) => {
-                                e.stopPropagation()
-                                const src = neurons.find(n => n.project.id === s.source_id)
-                                const tgt = neurons.find(n => n.project.id === s.target_id)
-                                if (!src?.taxonomy || !tgt?.taxonomy) return
-                                const ideas = await generateHybridIdeas(
-                                  getLLMConfig(),
-                                  { id: src.project.id, title: src.project.title, oneLiner: src.project.oneLiner, taxonomy: src.taxonomy.taxonomy, analysis: src.taxonomy.analysis },
-                                  { id: tgt.project.id, title: tgt.project.title, oneLiner: tgt.project.oneLiner, taxonomy: tgt.taxonomy.taxonomy, analysis: tgt.taxonomy.analysis },
-                                  s.type
-                                )
-                                setHybridIdeas(ideas)
-                              }}
-                            >
-                              探索混合创新
-                            </button>
+                            </div>
+                          ))
+                        ) : (
+                          <div style={{ fontSize: '0.8rem', color: 'var(--hd-text-muted)' }}>
+                            暂无行动建议，仍可基于这条连接探索混合创新。
                           </div>
-                        ) : null
-                      })()}
+                        )}
+                        <button
+                          className="sandbox-map__hybrid-btn"
+                          onClick={async (e) => {
+                            e.stopPropagation()
+                            const src = neurons.find(n => n.project.id === s.source_id)
+                            const tgt = neurons.find(n => n.project.id === s.target_id)
+                            if (!src?.taxonomy || !tgt?.taxonomy) return
+                            const ideas = await generateHybridIdeas(
+                              getLLMConfig(),
+                              { id: src.project.id, title: src.project.title, oneLiner: src.project.oneLiner, taxonomy: src.taxonomy.taxonomy, analysis: src.taxonomy.analysis },
+                              { id: tgt.project.id, title: tgt.project.title, oneLiner: tgt.project.oneLiner, taxonomy: tgt.taxonomy.taxonomy, analysis: tgt.taxonomy.analysis },
+                              s.type
+                            )
+                            setHybridIdeas(ideas)
+                          }}
+                        >
+                          探索混合创新
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>

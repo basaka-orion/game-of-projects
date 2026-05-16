@@ -39,4 +39,6 @@ export interface WorkflowRun {
   results: Record<string, string>
   status: 'running' | 'completed' | 'failed'
   createdAt: string
+  error?: string
+  failedStepId?: string
 }

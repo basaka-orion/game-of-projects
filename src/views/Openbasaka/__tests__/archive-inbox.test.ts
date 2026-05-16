@@ -20,22 +20,6 @@ function makeCandidate(overrides: Partial<ArchiveCandidate> = {}): ArchiveCandid
     content: '我想把自己的世界模型和系统方法整理进启蒙。',
     sourceSurface: 'openbasaka',
     agentRole: 'general',
-    targetKind: 'qimeng',
-    targetLabel: '归入启蒙',
-    targetSection: 'personal',
-    suggestedTargets: [
-      {
-        kind: 'qimeng',
-        label: '归入启蒙',
-        section: 'personal',
-        sectionLabel: '过往经历与思考',
-        title: '属于你的经历、想法、愿望、创作与关键对话。',
-        path: '启蒙/worldview/consciousness/方法论-系统归纳',
-        reason: '保留为你的个人经历、思考、创意或关键对话。',
-        confidence: 0.82,
-        recommended: true,
-      },
-    ],
     status: 'pending',
     archivedDrawerId: '',
     archivedSourceId: '',
@@ -49,6 +33,22 @@ function makeCandidate(overrides: Partial<ArchiveCandidate> = {}): ArchiveCandid
     hall: 'consciousness',
     hallLabel: '世界观',
     room: '方法论-系统归纳',
+    targetKind: 'qimeng',
+    targetLabel: '归入启蒙',
+    targetSection: 'personal',
+    suggestedTargets: [
+      {
+        kind: 'qimeng',
+        label: '归入启蒙',
+        section: 'personal',
+        sectionLabel: '过往经历与思考',
+        title: '方法论-系统归纳',
+        path: '世界模型/世界观/方法论-系统归纳',
+        reason: '属于 Boss 自己的长期思考。',
+        confidence: 0.84,
+        recommended: true,
+      },
+    ],
     tags: ['启蒙', '方法'],
     facets: ['decision'],
     rationale: '命中世界模型与方法论语义',
@@ -130,7 +130,7 @@ describe('archive inbox helpers', () => {
       sort: 'duplicates',
     })
 
-    expect(filtered.map((candidate) => candidate.id)).toEqual(['cand-a'])
+    expect(filtered.map(candidate => candidate.id)).toEqual(['cand-a'])
     expect(hasArchiveInboxBulkPatch(createEmptyArchiveInboxBulkDraft())).toBe(false)
   })
 
@@ -175,6 +175,6 @@ describe('archive inbox helpers', () => {
       sort: 'latest',
     })
 
-    expect(filtered.map((candidate) => candidate.id)).toEqual(['cand-b1', 'cand-b2'])
+    expect(filtered.map(candidate => candidate.id)).toEqual(['cand-b1', 'cand-b2'])
   })
 })

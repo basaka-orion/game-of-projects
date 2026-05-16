@@ -1,12 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from 'react'
-import { answerBiliQuestion, generateBiliLearningPack, resolveBiliVideoInfo } from '../../../../lib/bili-helper/ai'
-import {
-  BAOYU_VISUAL_FILTERS,
-  BAOYU_VISUAL_KIND_LABELS,
-  buildBaoyuVisualPlan,
-  renderBaoyuCardDeck,
-  topRecommendedVisual,
-} from '../../../../lib/bili-helper/baoyu-visuals'
+import { answerBiliQuestion, generateBiliLearningPack, generateWanxiangLearningResult, resolveBiliVideoInfo } from '../../../../lib/bili-helper/ai'
+import { absorbIntoOpenbasaka, archiveWanxiangResult } from '../../../../lib/bili-helper/absorption'
 import {
   BILI_ARTIFACT_MODES,
   BILI_DEFAULT_TRANSCRIPT,
@@ -21,8 +15,20 @@ import {
   loadBiliHelperState,
   saveBiliHelperState,
 } from '../../../../lib/bili-helper/state'
+import { getBiliUsableSourceText } from '../../../../lib/bili-helper/source-content'
+import { checkBibiGptProvider, saveBibiGptApiKey } from '../../../../lib/bili-helper/bibigpt'
+import { buildSourceHydrationBlockedMessage, hydrateBiliWorkspaceSource } from '../../../../lib/bili-helper/source-hydration'
+import {
+  appendArtifactRecord,
+  appendExportReceipt,
+  artifactRecord,
+  refreshSourceAsset,
+  setLibraryReceipt,
+  sourceAssetToExportJson,
+} from '../../../../lib/bili-helper/source-asset'
 import { BIBI_PLATFORM_CAPABILITIES, platformStatusLabel } from '../../../../lib/bili-helper/platforms'
-import { buildSourceOsGuideState, type SourceOsGuideState } from '../../../../lib/bili-helper/source-os-guide'
+import { buildSourceOsGuideState, type SourceOsGuideState, type SourceOsProcessingState } from '../../../../lib/bili-helper/source-os-guide'
+import { buildSourceIntakeDiagnostics, intakeStatusLabel, type SourceIntakeDiagnostics } from '../../../../lib/bili-helper/intake-diagnostics'
 import { createSource } from '../../../../lib/knowledge/wiki'
 import {
   buildKnowledgeFolderOptions,
@@ -32,29 +38,30 @@ import {
   type KnowledgeFolderOption,
 } from '../../../../lib/knowledge/folders'
 import type {
-  BaoyuVisualArtifact,
-  BaoyuVisualArtifactKind,
   BiliArchiveTarget,
   BiliArtifactMode,
   BiliDownloadFormat,
   BiliHelperState,
   BiliHelperView,
   BiliVideoWorkspace,
+  SourceAssetStage,
+  WanxiangLearningResult,
 } from '../../../../lib/bili-helper/types'
 import { buildUiMuseumPrdContext } from '../../../../lib/ui-museum/context'
 import SourceOsGuidePlayer from './SourceOsGuide'
 import './BiliHelperMacApp.css'
 
-type ProcessingState = 'idle' | 'resolving' | 'generating' | 'chatting'
+type ProcessingState = 'idle' | 'resolving' | 'hydrating' | 'generating' | 'wanxiang' | 'chatting' | 'archiving' | 'absorbing' | 'full' | 'testing'
 
 const featureChips = ['视频/网页/文件/图片', '封面简介自动卡片', 'AI 产物 + 对话']
 
-type BaoyuVisualFilter = 'recommended' | BaoyuVisualArtifactKind
+const MISSING_SOURCE_MESSAGE = '无法生成真实结论：缺真实字幕、正文、OCR 或转写。'
 
 const viewTabs: Array<[BiliHelperView, string]> = [
   ['workspace', '工作台'],
   ['insights', '智能总结'],
   ['tutorial', '学习包'],
+  ['wanxiang', '万象吸收'],
   ['chat', '来源对话'],
   ['downloads', '下载导出'],
   ['coverage', '覆盖矩阵'],
@@ -64,9 +71,12 @@ const viewTabs: Array<[BiliHelperView, string]> = [
 const exportOptions: Array<[BiliDownloadFormat, string, string]> = [
   ['video', '视频文件', '保留原视频任务入口'],
   ['audio', '音频提取', '适合转写和复听'],
-  ['subtitle', '字幕/转写', '优先进入知识库'],
+  ['subtitle', '字幕 SRT', '优先进入知识库'],
+  ['vtt', '字幕 VTT', '网页播放器/笔记工具可用'],
   ['cover', '封面图', '用于资料卡片'],
   ['markdown', '学习包 Markdown', '直接归档或复制'],
+  ['mindmap', '导图 Markdown', '导出结构化导图'],
+  ['json', 'SourceAsset JSON', '完整状态、证据和回执'],
 ]
 
 const ytDlpUserAgent =
@@ -118,20 +128,16 @@ function shellDoubleQuote(value: string): string {
   return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\$/g, '\\$').replace(/`/g, '\\`')}"`
 }
 
-function visualPromptFileName(workspace: BiliVideoWorkspace, artifact: BaoyuVisualArtifact): string {
-  return `${safeFileName(workspace.video.title)}-${artifact.kind}-${artifact.id.slice(-10)}.md`
-}
-
 function buildArchiveMarkdown(workspace: BiliVideoWorkspace): string {
-  const visualMarkdown = (workspace.visualArtifacts || [])
-    .slice(0, 4)
-    .map((artifact) => `### ${artifact.label} · ${artifact.title}\n\n${artifact.previewMarkdown}\n\nPrompt:\n\n${artifact.prompt}`)
-    .join('\n\n')
+  const asset = refreshSourceAsset(workspace).sourceAsset
   return `${workspace.pack?.markdown || `# ${workspace.video.title}\n\n${workspace.video.description}`}
 
-## Baoyu 秒懂视觉
+## SourceAsset 证据与回执
 
-${visualMarkdown || '暂无视觉产物。'}
+- 状态：${asset?.status || 'unknown'}
+- 证据数：${asset?.evidenceRefs.length || 0}
+- Provider runs：${asset?.providerRuns.length || 0}
+- 导出回执：${asset?.exportReceipts.length || 0}
 
 ## 原始来源正文
 
@@ -142,7 +148,6 @@ function defaultArchiveTags(workspace: BiliVideoWorkspace, target: BiliArchiveTa
   const base = [
     '万象学习',
     'SourceOS',
-    'Baoyu秒懂',
     workspace.video.platformName,
     workspace.video.sourceKind,
     target === 'knowledge-master' ? '知识+大佬' : target === 'backup' ? '后备知识' : '知识文件夹',
@@ -161,6 +166,25 @@ function getDownloadableUrl(workspace: BiliVideoWorkspace): string | null {
   if (/^https?:\/\//i.test(workspace.video.url)) return workspace.video.url
   if (/^BV[0-9A-Za-z]{8,14}$/.test(workspace.video.bvid)) return `https://www.bilibili.com/video/${workspace.video.bvid}/`
   return null
+}
+
+function downloadReadiness(workspace: BiliVideoWorkspace | null, format: BiliDownloadFormat): { ready: boolean; detail: string } {
+  if (!workspace) return { ready: false, detail: '等待来源' }
+  const sourceText = getBiliUsableSourceText(workspace.video, workspace.transcript)
+  if (format === 'markdown') return workspace.pack ? { ready: true, detail: '可导出学习包' } : { ready: false, detail: '先生成学习包' }
+  if (format === 'subtitle' || format === 'vtt') return sourceText ? { ready: true, detail: '可导出真实文本' } : { ready: false, detail: '缺字幕/正文/OCR/转写' }
+  if (format === 'mindmap') return workspace.wanxiang?.mindMap || workspace.pack ? { ready: true, detail: '可导出导图' } : { ready: false, detail: '先生成导图或三结果' }
+  if (format === 'cover') return workspace.video.cover ? { ready: true, detail: '可导出封面' } : { ready: false, detail: '缺封面 URL' }
+  if (format === 'json') return { ready: true, detail: '可导出 SourceAsset' }
+  return getDownloadableUrl(workspace) ? { ready: true, detail: '需要 Electron/yt-dlp' } : { ready: false, detail: '缺可下载 URL' }
+}
+
+function latestProviderRunSummary(workspace: BiliVideoWorkspace | null, limit = 3): string {
+  const runs = workspace ? refreshSourceAsset(workspace).sourceAsset?.providerRuns || [] : []
+  return runs
+    .slice(0, limit)
+    .map((run) => `${run.provider}/${run.capability}: ${run.status === 'done' ? run.detail : run.error || run.detail}`)
+    .join('；')
 }
 
 function buildYtDlpCommand({
@@ -207,10 +231,25 @@ function transcriptToSrt(transcript: string): string {
     .join('\n')
 }
 
+function transcriptToVtt(transcript: string): string {
+  const rows = parseTranscriptRows(transcript)
+  if (rows.length === 0) return 'WEBVTT\n\n00:00:00.000 --> 00:00:05.000\n暂无字幕，请先补充转写。\n'
+  return `WEBVTT\n\n${rows
+    .map((row, index) => {
+      const next = rows[index + 1]?.time || offsetTime(row.time, 8)
+      return `${toVttTime(row.time)} --> ${toVttTime(next)}\n${row.text}\n`
+    })
+    .join('\n')}`
+}
+
 function toSrtTime(time: string): string {
   const parts = time.split(':').map((part) => Number(part))
   const [hours, minutes, seconds] = parts.length === 3 ? parts : [0, parts[0] || 0, parts[1] || 0]
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')},000`
+}
+
+function toVttTime(time: string): string {
+  return toSrtTime(time).replace(',', '.')
 }
 
 function offsetTime(time: string, offsetSeconds: number): string {
@@ -241,8 +280,8 @@ export default function BiliHelperMacApp() {
   const [question, setQuestion] = useState('这个来源最值得我马上执行的动作是什么？')
   const [artifactMode, setArtifactMode] = useState<BiliArtifactMode>('tutorial')
   const [artifactDepth, setArtifactDepth] = useState(70)
-  const [visualFilter, setVisualFilter] = useState<BaoyuVisualFilter>('recommended')
   const [folderInput, setFolderInput] = useState('万象学习')
+  const [libraryQuery, setLibraryQuery] = useState('')
   const [folderOptions, setFolderOptions] = useState<KnowledgeFolderOption[]>([])
   const [toast, setToast] = useState('')
 
@@ -251,6 +290,15 @@ export default function BiliHelperMacApp() {
     () => [...state.workspaces].sort((a, b) => b.video.createdAt - a.video.createdAt),
     [state.workspaces],
   )
+  const visibleLibraryWorkspaces = useMemo(() => {
+    const query = libraryQuery.trim().toLowerCase()
+    if (!query) return sortedWorkspaces
+    return sortedWorkspaces.filter((item) =>
+      [item.video.title, item.video.owner, item.video.platformName, item.pack?.summary, item.sourceAsset?.status]
+        .map((value) => String(value || '').toLowerCase())
+        .some((value) => value.includes(query)),
+    )
+  }, [libraryQuery, sortedWorkspaces])
   const hasVideo = Boolean(workspace)
   const uiMuseumContext = useMemo(
     () =>
@@ -276,15 +324,21 @@ export default function BiliHelperMacApp() {
       '--bili-texture': uiMuseumContext.visual.texture || 'glass editorial grid',
     } as CSSProperties
   }, [uiMuseumContext])
+  const guideProcessing = useMemo<SourceOsProcessingState>(() => {
+    if (processing === 'resolving' || processing === 'generating' || processing === 'chatting') return processing
+    if (processing === 'hydrating') return 'resolving'
+    if (processing === 'wanxiang' || processing === 'archiving' || processing === 'absorbing' || processing === 'full' || processing === 'testing') return 'generating'
+    return 'idle'
+  }, [processing])
   const guideState = useMemo(
     () =>
       buildSourceOsGuideState({
-        processing,
+        processing: guideProcessing,
         workspace,
         view,
         artifactMode,
       }),
-    [artifactMode, processing, view, workspace],
+    [artifactMode, guideProcessing, view, workspace],
   )
 
   useEffect(() => {
@@ -312,202 +366,52 @@ export default function BiliHelperMacApp() {
     }
   }, [workspace?.video.id, workspace?.archive?.folderPath])
 
-  useEffect(() => {
-    if (!workspace || (workspace.visualArtifacts || []).length > 0) return
-    const visualArtifacts = buildBaoyuVisualPlan({
-      video: workspace.video,
-      transcript: workspace.transcript || workspace.video.contentText,
-      pack: workspace.pack,
-      goal,
-    })
-    setState((prev) =>
-      patchWorkspace(prev, workspace.video.id, (item) => ({
-        ...item,
-        pack: item.pack ? { ...item.pack, visualArtifacts } : item.pack,
-        visualArtifacts,
-        archive: item.archive || {
-          target: 'knowledge-master',
-          folderPath: '知识+大佬/万象学习',
-          knowledgeTags: defaultArchiveTags(item, 'knowledge-master'),
-          status: 'idle',
-        },
-      })),
-    )
-  }, [goal, workspace?.video.id, workspace?.visualArtifacts?.length])
-
-  useEffect(() => {
-    const electronAPI = (window as any)?.electronAPI
-    if (!workspace || !electronAPI?.generateGeminiImages) return
-    const topVisual = topRecommendedVisual(workspace.visualArtifacts || [])
-    if (!topVisual || topVisual.status !== 'ready') return
-    void handleGenerateVisual(topVisual, true)
-  }, [workspace?.video.id, workspace?.visualArtifacts?.[0]?.id])
-
   function flash(message: string) {
     setToast(message)
     window.setTimeout(() => setToast(''), 1800)
   }
 
   function enhanceWorkspace(nextWorkspace: BiliVideoWorkspace, pack = nextWorkspace.pack): BiliVideoWorkspace {
-    const visualArtifacts = buildBaoyuVisualPlan({
-      video: nextWorkspace.video,
-      transcript: nextWorkspace.transcript || nextWorkspace.video.contentText,
-      pack,
-      goal,
-    })
-    return {
+    return refreshSourceAsset({
       ...nextWorkspace,
-      pack: pack ? { ...pack, visualArtifacts } : pack,
-      visualArtifacts,
+      pack,
+      modePacks: nextWorkspace.modePacks,
+      wanxiang: nextWorkspace.wanxiang,
       archive: nextWorkspace.archive || {
         target: 'knowledge-master',
         folderPath: '知识+大佬/万象学习',
         knowledgeTags: defaultArchiveTags(nextWorkspace, 'knowledge-master'),
         status: 'idle',
       },
-    }
-  }
-
-  async function writeVisualPromptRecord(workspace: BiliVideoWorkspace, artifact: BaoyuVisualArtifact) {
-    const electronAPI = (window as any)?.electronAPI
-    if (!electronAPI?.getAppData || !electronAPI?.writeFile) return
-    const appData = await electronAPI.getAppData()
-    const promptDir = `${appData}/BaoyuVisualPrompts`
-    if (electronAPI?.executeCommand) {
-      await electronAPI.executeCommand(`mkdir -p ${shellDoubleQuote(promptDir)}`, 10000)
-    }
-    await electronAPI.writeFile(`${promptDir}/${visualPromptFileName(workspace, artifact)}`, artifact.prompt)
-  }
-
-  async function handleGenerateVisual(artifact: BaoyuVisualArtifact, automatic = false) {
-    if (!workspace) return
-    if (artifact.structuredCards?.length) {
-      const imageDataUrls = artifact.imageDataUrls?.length ? artifact.imageDataUrls : renderBaoyuCardDeck(artifact.structuredCards)
-      setState((prev) =>
-        patchWorkspace(prev, workspace.video.id, (item) => ({
-          ...item,
-          visualArtifacts: (item.visualArtifacts || []).map((visual) =>
-            visual.id === artifact.id
-              ? { ...visual, status: 'generated', imageDataUrls, generatedBy: 'local', textRenderMode: 'local-svg', error: undefined }
-              : visual,
-          ),
-          pack: item.pack
-            ? {
-                ...item.pack,
-                visualArtifacts: (item.visualArtifacts || []).map((visual) =>
-                  visual.id === artifact.id
-                    ? { ...visual, status: 'generated', imageDataUrls, generatedBy: 'local', textRenderMode: 'local-svg', error: undefined }
-                    : visual,
-                ),
-              }
-            : item.pack,
-        })),
-      )
-      if (!automatic) flash('本地中文图文卡已生成')
-      return
-    }
-    const electronAPI = (window as any)?.electronAPI
-    if (!electronAPI?.generateGeminiImages) {
-      setState((prev) =>
-        patchWorkspace(prev, workspace.video.id, (item) => ({
-          ...item,
-          visualArtifacts: (item.visualArtifacts || []).map((visual) =>
-            visual.id === artifact.id ? { ...visual, status: 'needs-config', error: '当前环境没有图片生成代理，已保留 Baoyu 提示词。' } : visual,
-          ),
-          pack: item.pack
-            ? {
-                ...item.pack,
-                visualArtifacts: (item.visualArtifacts || []).map((visual) =>
-                  visual.id === artifact.id ? { ...visual, status: 'needs-config', error: '当前环境没有图片生成代理，已保留 Baoyu 提示词。' } : visual,
-                ),
-              }
-            : item.pack,
-        })),
-      )
-      if (!automatic) flash('已保留提示词，当前环境没有图片生成代理')
-      return
-    }
-
-    setState((prev) =>
-      patchWorkspace(prev, workspace.video.id, (item) => ({
-        ...item,
-        visualArtifacts: (item.visualArtifacts || []).map((visual) => (visual.id === artifact.id ? { ...visual, status: 'generating', error: undefined } : visual)),
-        pack: item.pack
-          ? {
-              ...item.pack,
-              visualArtifacts: (item.visualArtifacts || []).map((visual) =>
-                visual.id === artifact.id ? { ...visual, status: 'generating', error: undefined } : visual,
-              ),
-            }
-          : item.pack,
-      })),
-    )
-
-    try {
-      await writeVisualPromptRecord(workspace, artifact)
-      const result = await electronAPI.generateGeminiImages({ prompt: artifact.prompt, count: 1 })
-      if (result?.error) throw new Error(result.error)
-      const imageDataUrls = Array.isArray(result?.images) ? result.images.filter(Boolean) : []
-      if (imageDataUrls.length === 0) throw new Error(result?.warnings?.[0] || '图片模型没有返回图片')
-      setState((prev) =>
-        patchWorkspace(prev, workspace.video.id, (item) => ({
-          ...item,
-          visualArtifacts: (item.visualArtifacts || []).map((visual) =>
-            visual.id === artifact.id
-              ? { ...visual, status: 'generated', imageDataUrls, generatedBy: 'gemini', error: undefined }
-              : visual,
-          ),
-          pack: item.pack
-            ? {
-                ...item.pack,
-                visualArtifacts: (item.visualArtifacts || []).map((visual) =>
-                  visual.id === artifact.id
-                    ? { ...visual, status: 'generated', imageDataUrls, generatedBy: 'gemini', error: undefined }
-                    : visual,
-                ),
-              }
-            : item.pack,
-        })),
-      )
-      if (!automatic) flash('Baoyu 视觉图已生成')
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      setState((prev) =>
-        patchWorkspace(prev, workspace.video.id, (item) => ({
-          ...item,
-          visualArtifacts: (item.visualArtifacts || []).map((visual) =>
-            visual.id === artifact.id
-              ? {
-                  ...visual,
-                  status: /api key|key 未配置|未配置|credential/i.test(message) ? 'needs-config' : 'failed',
-                  error: message,
-                }
-              : visual,
-          ),
-          pack: item.pack
-            ? {
-                ...item.pack,
-                visualArtifacts: (item.visualArtifacts || []).map((visual) =>
-                  visual.id === artifact.id
-                    ? {
-                        ...visual,
-                        status: /api key|key 未配置|未配置|credential/i.test(message) ? 'needs-config' : 'failed',
-                        error: message,
-                      }
-                    : visual,
-                ),
-              }
-            : item.pack,
-        })),
-      )
-      if (!automatic) flash(/未配置|api key/i.test(message) ? '图片模型未配置，已保留提示词' : 'Baoyu 视觉生成失败')
-    }
+    })
   }
 
   async function handleArchive(target: BiliArchiveTarget) {
     if (!workspace) return
     const folderPath = defaultArchiveFolder(target, folderInput)
     const knowledgeTags = defaultArchiveTags(workspace, target)
+    const sourceText = getBiliUsableSourceText(workspace.video, workspace.transcript)
+    if (!sourceText || !workspace.pack) {
+      setState((prev) =>
+        patchWorkspace(prev, workspace.video.id, (item) =>
+          appendArtifactRecord(
+            refreshSourceAsset({
+              ...item,
+              archive: {
+                target,
+                folderPath,
+                knowledgeTags,
+                status: 'failed',
+                error: '缺真实学习包，不能归档。',
+              },
+            }),
+            artifactRecord('archive', '知识归档', '缺真实学习包，不能归档。', 'local', 'blocked', '缺真实学习包，不能归档。'),
+          ),
+        ),
+      )
+      flash('缺真实学习包，不能归档')
+      return
+    }
     setState((prev) =>
       patchWorkspace(prev, workspace.video.id, (item) => ({
         ...item,
@@ -541,13 +445,6 @@ export default function BiliHelperMacApp() {
           sourceKind: workspace.video.sourceKind,
           cover: workspace.video.cover,
           favicon: workspace.video.favicon,
-          baoyuVisuals: (workspace.visualArtifacts || []).map((visual) => ({
-            kind: visual.kind,
-            title: visual.title,
-            status: visual.status,
-            style: visual.style,
-            layout: visual.layout,
-          })),
         },
       })
       const electronAPI = (window as any)?.electronAPI
@@ -555,17 +452,27 @@ export default function BiliHelperMacApp() {
         electronAPI.triggerWikiCompile().catch(() => undefined)
       }
       setState((prev) =>
-        patchWorkspace(prev, workspace.video.id, (item) => ({
-          ...item,
-          archive: {
-            target,
-            folderPath,
-            knowledgeTags,
-            status: 'saved',
-            sourceId,
-            savedAt: Date.now(),
-          },
-        })),
+        patchWorkspace(prev, workspace.video.id, (item) =>
+          setLibraryReceipt(
+            refreshSourceAsset({
+              ...item,
+              archive: {
+                target,
+                folderPath,
+                knowledgeTags,
+                status: 'saved',
+                sourceId,
+                savedAt: Date.now(),
+              },
+            }),
+            {
+              sourceId,
+              folderPath,
+              archivedAt: Date.now(),
+              mode: 'general',
+            },
+          ),
+        ),
       )
       loadKnowledgeSourceScopeEntries()
         .then((sourceEntries) => setFolderOptions(buildKnowledgeFolderOptions({ sourceEntries, pages: [], sourceFolderMap: new Map() })))
@@ -592,8 +499,10 @@ export default function BiliHelperMacApp() {
   function handleLoadSample() {
     const sample = enhanceWorkspace(createSampleBiliWorkspace())
     setState((prev) => {
-      const exists = prev.workspaces.some((item) => item.video.bvid === sample.video.bvid)
-      const nextWorkspaces = exists ? prev.workspaces : [sample, ...prev.workspaces]
+      const nextWorkspaces = [
+        sample,
+        ...prev.workspaces.filter((item) => item.video.bvid !== sample.video.bvid && item.video.url !== sample.video.url),
+      ]
       return {
         ...prev,
         workspaces: nextWorkspaces,
@@ -618,7 +527,7 @@ export default function BiliHelperMacApp() {
       const newWorkspace: BiliVideoWorkspace = enhanceWorkspace({
         video,
         transcript: video.contentText || '',
-        chat: [createBiliChatMessage('assistant', `${video.platformName} 来源已解析。下一步可以补正文/字幕/OCR，或直接生成 ${BILI_ARTIFACT_MODES.find((item) => item.id === artifactMode)?.label || '学习包'}。`)],
+        chat: [createBiliChatMessage('assistant', `${video.platformName} 来源已解析。点击任一产物时，我会先自动尝试 BibiGPT、网页正文、yt-dlp 字幕或本地转写；拿不到真实内容才会阻塞。`)],
       })
       setState((prev) => ({
         ...prev,
@@ -629,6 +538,96 @@ export default function BiliHelperMacApp() {
       flash(video.resolvedBy === 'api' ? '来源信息已解析' : '已进入本地优先解析')
     } catch (error) {
       flash(error instanceof Error ? error.message : '来源解析失败')
+    } finally {
+      setProcessing('idle')
+    }
+  }
+
+  function upsertWorkspace(nextWorkspace: BiliVideoWorkspace) {
+    const refreshed = refreshSourceAsset(nextWorkspace)
+    setState((prev) => ({
+      ...prev,
+      workspaces: [refreshed, ...prev.workspaces.filter((item) => item.video.id !== refreshed.video.id && item.video.bvid !== refreshed.video.bvid && item.video.url !== refreshed.video.url)],
+      activeVideoId: refreshed.video.id,
+    }))
+    return refreshed
+  }
+
+  async function ensureHydratedWorkspace(nextWorkspace: BiliVideoWorkspace) {
+    const hydration = await hydrateBiliWorkspaceSource(nextWorkspace)
+    if (hydration.hydrated || hydration.attempts.length > 0) {
+      upsertWorkspace(hydration.workspace)
+    }
+    return hydration
+  }
+
+  async function handleFullProcess() {
+    setProcessing('full')
+    try {
+      let current = workspace
+      if (!current) {
+        const url = urlInput.trim()
+        if (!url) {
+          flash('先粘贴链接或选择本地文件')
+          setProcessing('idle')
+          return
+        }
+        const video = await resolveBiliVideoInfo(url)
+        current = enhanceWorkspace({
+          video,
+          transcript: video.contentText || '',
+          chat: [createBiliChatMessage('assistant', `${video.platformName} 来源已解析。现在开始完整处理流水线。`)],
+        })
+        upsertWorkspace(current)
+      }
+
+      const hydration = await ensureHydratedWorkspace(current)
+      current = hydration.workspace
+      const sourceText = hydration.sourceText
+      if (!sourceText) {
+        const blockedMessage = hydration.blockedMessage || buildSourceHydrationBlockedMessage(hydration.attempts)
+        current = appendArtifactRecord(
+          appendArtifactRecord(
+            refreshSourceAsset(current),
+            artifactRecord('learning-pack', BILI_ARTIFACT_MODES.find((entry) => entry.id === artifactMode)?.label || '学习包', blockedMessage, 'local', 'blocked', blockedMessage),
+          ),
+          artifactRecord('wanxiang', '万象三结果', blockedMessage, 'local', 'blocked', blockedMessage),
+        )
+        upsertWorkspace(current)
+        setView('workspace')
+        flash('自动取材后仍缺真实字幕、正文、OCR 或转写')
+        return
+      }
+      const pack = await generateBiliLearningPack({
+        video: current.video,
+        transcript: sourceText,
+        goal,
+        mode: artifactMode,
+        depth: artifactDepth,
+      })
+      const wanxiang = await generateWanxiangLearningResult({
+        video: current.video,
+        transcript: sourceText,
+        goal,
+      })
+      const modePacks = { ...(current.modePacks || {}), [artifactMode]: pack }
+      current = appendArtifactRecord(
+        appendArtifactRecord(
+          refreshSourceAsset({
+            ...current,
+            pack,
+            modePacks,
+            wanxiang,
+          }),
+          artifactRecord('learning-pack', BILI_ARTIFACT_MODES.find((entry) => entry.id === artifactMode)?.label || '学习包', pack.summary, pack.generatedBy === 'ai' ? 'ai' : 'local'),
+        ),
+        artifactRecord('wanxiang', '万象三结果', wanxiang.openbasakaFusion.absorptionVerdict, wanxiang.generatedBy === 'ai' ? 'ai' : 'local'),
+      )
+      upsertWorkspace(current)
+      setView('insights')
+      flash('完整处理完成：总结、学习包、万象和证据索引已更新')
+    } catch (error) {
+      flash(error instanceof Error ? error.message : '完整处理失败')
     } finally {
       setProcessing('idle')
     }
@@ -696,44 +695,234 @@ export default function BiliHelperMacApp() {
   function updateTranscript(value: string) {
     if (!workspace) return
     setState((prev) =>
-      patchWorkspace(prev, workspace.video.id, (item) => ({
-        ...item,
-        transcript: value,
-      })),
+      patchWorkspace(prev, workspace.video.id, (item) =>
+        refreshSourceAsset({
+          ...item,
+          transcript: value,
+          video: {
+            ...item.video,
+            subtitleStatus: value.trim() ? 'manual' : item.video.subtitleStatus,
+          },
+        }),
+      ),
     )
   }
 
-  async function handleGeneratePack() {
+  async function generatePackForMode(modeToUse: BiliArtifactMode, nextView: BiliHelperView | null = 'tutorial') {
     if (!workspace) {
       flash('先解析或载入一个视频')
       return
     }
-    setProcessing('generating')
-    const pack = await generateBiliLearningPack({
-      video: workspace.video,
-      transcript: workspace.transcript || BILI_DEFAULT_TRANSCRIPT,
+    setProcessing('hydrating')
+    try {
+      const hydration = await ensureHydratedWorkspace(workspace)
+      const current = hydration.workspace
+      const sourceText = hydration.sourceText
+      const modeLabel = BILI_ARTIFACT_MODES.find((entry) => entry.id === modeToUse)?.label || '学习包'
+      if (!sourceText) {
+        const blockedMessage = hydration.blockedMessage || buildSourceHydrationBlockedMessage(hydration.attempts)
+        upsertWorkspace(
+          appendArtifactRecord(
+            refreshSourceAsset(current),
+            artifactRecord('learning-pack', modeLabel, blockedMessage, 'local', 'blocked', blockedMessage),
+          ),
+        )
+        if (nextView) setView(nextView)
+        flash('自动取材后仍缺真实字幕、正文、OCR 或转写')
+        return
+      }
+      setProcessing('generating')
+      const pack = await generateBiliLearningPack({
+        video: current.video,
+        transcript: sourceText,
+        goal,
+        mode: modeToUse,
+        depth: artifactDepth,
+      })
+      const modePacks = { ...(current.modePacks || {}), [modeToUse]: pack }
+      let nextWorkspace = appendArtifactRecord(
+        refreshSourceAsset({
+          ...current,
+          transcript: sourceText,
+          pack,
+          modePacks,
+        }),
+        artifactRecord('learning-pack', modeLabel, pack.summary, pack.generatedBy === 'ai' ? 'ai' : 'local'),
+      )
+      if (modeToUse === 'tldr') {
+        nextWorkspace = appendArtifactRecord(
+          nextWorkspace,
+          artifactRecord('summary', '智能总结', pack.summary, pack.generatedBy === 'ai' ? 'ai' : 'local'),
+        )
+      }
+      if (modeToUse === 'mindmap') {
+        nextWorkspace = appendArtifactRecord(
+          nextWorkspace,
+          artifactRecord('mindmap', '思维导图', pack.outline.join(' / '), pack.generatedBy === 'ai' ? 'ai' : 'local'),
+        )
+      }
+      upsertWorkspace(nextWorkspace)
+      if (nextView) setView(nextView)
+      flash(hydration.hydrated ? `自动取材已完成，${modeLabel}已生成` : pack.generatedBy === 'ai' ? `${modeLabel}已由 AI 生成` : `${modeLabel}已由本地规则生成`)
+    } catch (error) {
+      flash(error instanceof Error ? error.message : '学习包生成失败')
+    } finally {
+      setProcessing('idle')
+    }
+  }
+
+  function handleGeneratePack() {
+    void generatePackForMode(artifactMode, 'tutorial')
+  }
+
+  function handleGenerateArtifactMode(modeToUse: BiliArtifactMode) {
+    setArtifactMode(modeToUse)
+    if (!workspace) {
+      flash('先放进一个来源，再生成对应产物')
+      return
+    }
+    void generatePackForMode(modeToUse, 'workspace')
+  }
+
+  async function generateWanxiangFor(workspaceToUse: BiliVideoWorkspace): Promise<WanxiangLearningResult> {
+    const hydration = await ensureHydratedWorkspace(workspaceToUse)
+    const current = hydration.workspace
+    const transcript = hydration.sourceText
+    if (!transcript) {
+      const blockedMessage = hydration.blockedMessage || buildSourceHydrationBlockedMessage(hydration.attempts)
+      upsertWorkspace(
+        appendArtifactRecord(
+          refreshSourceAsset(current),
+          artifactRecord('wanxiang', '万象三结果', blockedMessage, 'local', 'blocked', blockedMessage),
+        ),
+      )
+      throw new Error(blockedMessage)
+    }
+    const result = await generateWanxiangLearningResult({
+      video: current.video,
+      transcript,
       goal,
-      mode: artifactMode,
-      depth: artifactDepth,
     })
-    const visualArtifacts = buildBaoyuVisualPlan({
-      video: workspace.video,
-      transcript: workspace.transcript || BILI_DEFAULT_TRANSCRIPT,
-      pack,
-      goal,
-    })
-    const packWithVisuals = { ...pack, visualArtifacts }
-    setState((prev) =>
-      patchWorkspace(prev, workspace.video.id, (item) => ({
-        ...item,
-        transcript: item.transcript || BILI_DEFAULT_TRANSCRIPT,
-        pack: packWithVisuals,
-        visualArtifacts,
-      })),
+    upsertWorkspace(
+      appendArtifactRecord(
+        refreshSourceAsset({
+          ...current,
+          transcript,
+          wanxiang: result,
+        }),
+        artifactRecord('wanxiang', '万象三结果', result.openbasakaFusion.absorptionVerdict, result.generatedBy === 'ai' ? 'ai' : 'local'),
+      ),
     )
-    setProcessing('idle')
-    setView('tutorial')
-    flash(pack.generatedBy === 'ai' ? '学习包已由 AI 生成' : '学习包已由本地规则生成')
+    return result
+  }
+
+  async function handleGenerateWanxiang() {
+    if (!workspace) {
+      flash('先解析或选择一个来源')
+      return
+    }
+    setProcessing('wanxiang')
+    try {
+      await generateWanxiangFor(workspace)
+      setView('wanxiang')
+      flash('万象三结果已生成')
+    } catch (error) {
+      flash(error instanceof Error ? error.message : '万象三结果生成失败')
+    } finally {
+      setProcessing('idle')
+    }
+  }
+
+  async function handleArchiveWanxiang() {
+    if (!workspace) {
+      flash('先解析或选择一个来源')
+      return
+    }
+    setProcessing('archiving')
+    try {
+      const hydration = await ensureHydratedWorkspace(workspace)
+      const current = hydration.workspace
+      const sourceText = hydration.sourceText
+      if (!sourceText) {
+        const blockedMessage = hydration.blockedMessage || buildSourceHydrationBlockedMessage(hydration.attempts)
+        upsertWorkspace(
+          appendArtifactRecord(
+            refreshSourceAsset(current),
+            artifactRecord('archive', '万象归档', blockedMessage, 'local', 'blocked', blockedMessage),
+          ),
+        )
+        flash('归档停止：自动取材后仍缺真实内容')
+        return
+      }
+      const result = current.wanxiang || (await generateWanxiangFor(current))
+      const archived = await archiveWanxiangResult(result, { ...current, transcript: sourceText, wanxiang: result })
+      setState((prev) =>
+        patchWorkspace(prev, current.video.id, (item) =>
+          setLibraryReceipt(item, {
+            sourceId: archived.sourceId,
+            drawerId: archived.drawerId,
+            queueEventId: archived.queueEventId,
+            folderPath: result.openbasakaFusion.folderPath || '知识+大佬/万象学习',
+            archivedAt: Date.now(),
+            mode: 'archive',
+          }),
+        ),
+      )
+      flash(`三结果已归档 · ${archived.sourceId}`)
+      setView('wanxiang')
+    } catch (error) {
+      flash(error instanceof Error ? error.message : '三结果归档失败')
+    } finally {
+      setProcessing('idle')
+    }
+  }
+
+  async function handleAbsorbWanxiang() {
+    if (!workspace) {
+      flash('先解析或选择一个来源')
+      return
+    }
+    setProcessing('absorbing')
+    try {
+      const hydration = await ensureHydratedWorkspace(workspace)
+      const current = hydration.workspace
+      const sourceText = hydration.sourceText
+      if (!sourceText) {
+        const blockedMessage = hydration.blockedMessage || buildSourceHydrationBlockedMessage(hydration.attempts)
+        upsertWorkspace(
+          appendArtifactRecord(
+            refreshSourceAsset(current),
+            artifactRecord('archive', '系统吸收', blockedMessage, 'local', 'blocked', blockedMessage),
+          ),
+        )
+        flash('吸收停止：自动取材后仍缺真实内容')
+        return
+      }
+      const result = current.wanxiang || (await generateWanxiangFor(current))
+      const diagnostics = buildSourceIntakeDiagnostics({ ...current, transcript: sourceText, wanxiang: result })
+      if (!result.openbasakaFusion.applicable || diagnostics.contentLength < 180 || result.openbasakaFusion.absorptionScore < 60) {
+        throw new Error('当前来源没有达到吸收门槛：需要真实内容、60+ 吸收分，并且融合判定为适用。')
+      }
+      const absorbed = await absorbIntoOpenbasaka(result, { ...current, transcript: sourceText, wanxiang: result })
+      setState((prev) =>
+        patchWorkspace(prev, current.video.id, (item) =>
+          setLibraryReceipt(item, {
+            sourceId: absorbed.sourceId,
+            drawerId: absorbed.drawerId,
+            queueEventId: absorbed.queueEventId,
+            folderPath: result.openbasakaFusion.folderPath || '知识+大佬/万象学习',
+            archivedAt: Date.now(),
+            mode: 'absorption',
+          }),
+        ),
+      )
+      flash(`已吸收为系统能力补丁 · ${absorbed.promptPatchCount} 个 Prompt`)
+      setView('wanxiang')
+    } catch (error) {
+      flash(error instanceof Error ? error.message : '系统吸收失败')
+    } finally {
+      setProcessing('idle')
+    }
   }
 
   async function handleAsk() {
@@ -748,18 +937,44 @@ export default function BiliHelperMacApp() {
     )
     setQuestion('')
     setProcessing('chatting')
+    const hydration = await ensureHydratedWorkspace({ ...workspace, chat: nextHistory })
+    const current = hydration.workspace
+    const sourceText = hydration.sourceText
+    if (!sourceText) {
+      const blockedMessage = hydration.blockedMessage || buildSourceHydrationBlockedMessage(hydration.attempts)
+      const answer = createBiliChatMessage('assistant', `${blockedMessage} 我不会把标题或简介伪装成答案。`)
+      setState((prev) =>
+        patchWorkspace(prev, current.video.id, (item) =>
+          appendArtifactRecord(
+            refreshSourceAsset({
+              ...item,
+              chat: [...nextHistory, answer],
+            }),
+            artifactRecord('chat-index', '来源对话', blockedMessage, 'local', 'blocked', blockedMessage),
+          ),
+        ),
+      )
+      setProcessing('idle')
+      return
+    }
     const answer = await answerBiliQuestion({
-      video: workspace.video,
-      transcript: workspace.transcript,
-      pack: workspace.pack,
+      video: current.video,
+      transcript: sourceText,
+      pack: current.pack,
       history: nextHistory,
       question: userMessage.content,
     })
     setState((prev) =>
-      patchWorkspace(prev, workspace.video.id, (item) => ({
-        ...item,
-        chat: [...nextHistory, answer],
-      })),
+      patchWorkspace(prev, current.video.id, (item) =>
+        appendArtifactRecord(
+          refreshSourceAsset({
+            ...item,
+            transcript: sourceText,
+            chat: [...nextHistory, answer],
+          }),
+          artifactRecord('chat-index', '来源对话', answer.content.slice(0, 140), 'local'),
+        ),
+      ),
     )
     setProcessing('idle')
   }
@@ -787,19 +1002,64 @@ export default function BiliHelperMacApp() {
         downloads: prev.downloads.map((item) => (item.id === task.id ? { ...item, ...patch } : item)),
       }))
     }
+    const recordExport = (status: 'done' | 'failed', error?: string, outputPath?: string) => {
+      setState((prev) =>
+        patchWorkspace(prev, workspace.video.id, (item) =>
+          appendExportReceipt(item, {
+            format,
+            outputName: task.outputName,
+            status,
+            outputPath,
+            error,
+          }),
+        ),
+      )
+    }
 
     try {
+      const sourceText = getBiliUsableSourceText(workspace.video, workspace.transcript)
       if (format === 'markdown') {
+        if (!workspace.pack) throw new Error('还没有真实学习包，请先生成学习包。')
         downloadBlob(task.outputName, workspace.pack?.markdown || workspace.video.description, 'text/markdown;charset=utf-8')
         completeTask({ status: 'done', progress: 100 })
+        recordExport('done')
         flash('Markdown 已导出')
         return
       }
 
       if (format === 'subtitle') {
-        downloadBlob(task.outputName, transcriptToSrt(workspace.transcript || BILI_DEFAULT_TRANSCRIPT), 'text/plain;charset=utf-8')
+        if (!sourceText) throw new Error('缺真实字幕、正文、OCR 或转写，不能导出字幕。')
+        downloadBlob(task.outputName, transcriptToSrt(sourceText), 'text/plain;charset=utf-8')
         completeTask({ status: 'done', progress: 100 })
+        recordExport('done')
         flash('字幕 SRT 已导出')
+        return
+      }
+
+      if (format === 'vtt') {
+        if (!sourceText) throw new Error('缺真实字幕、正文、OCR 或转写，不能导出 VTT。')
+        downloadBlob(task.outputName, transcriptToVtt(sourceText), 'text/vtt;charset=utf-8')
+        completeTask({ status: 'done', progress: 100 })
+        recordExport('done')
+        flash('字幕 VTT 已导出')
+        return
+      }
+
+      if (format === 'json') {
+        downloadBlob(task.outputName, sourceAssetToExportJson(workspace), 'application/json;charset=utf-8')
+        completeTask({ status: 'done', progress: 100 })
+        recordExport('done')
+        flash('SourceAsset JSON 已导出')
+        return
+      }
+
+      if (format === 'mindmap') {
+        const mindmap = workspace.wanxiang?.mindMap.markdown || workspace.pack?.outline.map((item) => `- ${item}`).join('\n')
+        if (!mindmap) throw new Error('暂无真实导图，请先生成思维导图或万象三结果。')
+        downloadBlob(task.outputName, `# ${workspace.video.title}\n\n${mindmap}`, 'text/markdown;charset=utf-8')
+        completeTask({ status: 'done', progress: 100 })
+        recordExport('done')
+        flash('导图 Markdown 已导出')
         return
       }
 
@@ -810,6 +1070,7 @@ export default function BiliHelperMacApp() {
         const blob = await response.blob()
         downloadBlob(task.outputName, blob, blob.type || 'image/jpeg')
         completeTask({ status: 'done', progress: 100 })
+        recordExport('done')
         flash('封面已导出')
         return
       }
@@ -842,6 +1103,7 @@ export default function BiliHelperMacApp() {
             outputPath: `~/Downloads/BiliHelper/${outputTemplate.replace('%(ext)s', format === 'audio' ? 'mp3' : 'mp4')}`,
             error: undefined,
           })
+          recordExport('done', undefined, `~/Downloads/BiliHelper/${outputTemplate.replace('%(ext)s', format === 'audio' ? 'mp3' : 'mp4')}`)
           flash(`${task.label} 已下载到 Downloads/BiliHelper`)
           return
         }
@@ -849,7 +1111,9 @@ export default function BiliHelperMacApp() {
       }
       throw new Error(`${lastError}\n如果仍是 HTTP 412，请先在 Chrome 或 Safari 登录 B站后重试。`)
     } catch (error) {
-      completeTask({ status: 'failed', progress: 100, error: error instanceof Error ? error.message : String(error) })
+      const message = error instanceof Error ? error.message : String(error)
+      completeTask({ status: 'failed', progress: 100, error: message })
+      recordExport('failed', message)
       flash(`${task.label} 下载失败`)
     }
   }
@@ -912,11 +1176,17 @@ export default function BiliHelperMacApp() {
             <button type="button" onClick={handleLoadSample}>
               载入样例
             </button>
-            <button type="button" onClick={handleChooseFiles} disabled={processing === 'resolving'}>
+            <button type="button" onClick={handleChooseFiles} disabled={processing !== 'idle'}>
               选择文件/图片
             </button>
-            <button type="button" onClick={handleGeneratePack} disabled={!workspace || processing === 'generating'}>
-              {processing === 'generating' ? '生成中' : '直接生成学习包'}
+            <button type="button" onClick={handleGeneratePack} disabled={!workspace || processing !== 'idle'}>
+              {processing === 'hydrating' ? '补材中' : processing === 'generating' ? '生成中' : '补材并生成学习包'}
+            </button>
+            <button type="button" onClick={handleGenerateWanxiang} disabled={!workspace || processing !== 'idle'}>
+              {processing === 'hydrating' ? '补材中' : processing === 'wanxiang' ? '分析中' : '补材后三结果'}
+            </button>
+            <button type="button" className="bili-helper-mac__primary" onClick={handleFullProcess} disabled={processing !== 'idle'}>
+              {processing === 'full' ? '全链路处理中' : '一键完整处理'}
             </button>
           </div>
 
@@ -955,8 +1225,10 @@ export default function BiliHelperMacApp() {
           <div className="bili-helper-mac__workbench-actions">
             <button onClick={() => setView('downloads')}>下载队列</button>
             <button onClick={() => setView('coverage')}>平台覆盖</button>
-            <button className="bili-helper-mac__primary" onClick={handleGeneratePack} disabled={!workspace || processing === 'generating'}>
-              {processing === 'generating' ? '生成中' : '生成学习包'}
+            <button onClick={() => setView('wanxiang')}>万象吸收</button>
+            <button onClick={handleFullProcess} disabled={processing !== 'idle'}>一键完整处理</button>
+            <button className="bili-helper-mac__primary" onClick={handleGeneratePack} disabled={!workspace || processing !== 'idle'}>
+              {processing === 'hydrating' ? '补材中' : processing === 'generating' ? '生成中' : '补材并生成学习包'}
             </button>
           </div>
         </div>
@@ -969,12 +1241,24 @@ export default function BiliHelperMacApp() {
           onOpenDownloads={() => setView('downloads')}
           onLoadSample={handleLoadSample}
           onChooseFiles={handleChooseFiles}
-          isGenerating={processing === 'generating'}
+          isGenerating={processing === 'generating' || processing === 'hydrating'}
         />
 
         <div className="bili-helper-mac__stage">
           <aside className="bili-helper-mac__side-stack">
             <GuidePipeline guide={guideState} />
+
+            <SourceIntakePanel
+              workspace={workspace}
+              onChooseFiles={handleChooseFiles}
+              onGeneratePack={handleGeneratePack}
+              onGenerateWanxiang={handleGenerateWanxiang}
+              isBusy={processing !== 'idle'}
+            />
+
+            <SourceAssetPipeline workspace={workspace} />
+
+            <FeatureTruthPanel workspace={workspace} processing={processing} />
 
             <StyleBridge context={uiMuseumContext} />
 
@@ -1034,17 +1318,13 @@ export default function BiliHelperMacApp() {
                 </section>
 
                 <ArtifactControls
+                  workspace={workspace}
                   mode={artifactMode}
                   depth={artifactDepth}
+                  processing={processing}
                   onModeChange={setArtifactMode}
                   onDepthChange={setArtifactDepth}
-                />
-
-                <BaoyuVisualWorkbench
-                  workspace={workspace}
-                  filter={visualFilter}
-                  onFilterChange={setVisualFilter}
-                  onGenerateVisual={handleGenerateVisual}
+                  onModeGenerate={handleGenerateArtifactMode}
                 />
 
                 <section className="bili-helper-panel bili-helper-panel--transcript sourceos-notebook">
@@ -1060,7 +1340,7 @@ export default function BiliHelperMacApp() {
                   />
                 </section>
 
-                <PackPreview workspace={workspace} onCopy={() => handleCopyPack()} onOpenTutorial={() => setView('tutorial')} />
+                <PackPreview workspace={workspace} mode={artifactMode} onCopy={() => handleCopyPack()} onOpenTutorial={() => setView('tutorial')} />
 
                 <ArchiveRouter
                   workspace={workspace}
@@ -1075,7 +1355,7 @@ export default function BiliHelperMacApp() {
             {view === 'insights' && (
               <BibiInsights
                 workspace={workspace}
-                onGenerate={handleGeneratePack}
+                onGenerate={() => generatePackForMode('tldr', 'insights')}
                 onAsk={() => setView('chat')}
                 onExport={() => handleCopyPack()}
                 isGenerating={processing === 'generating'}
@@ -1084,12 +1364,24 @@ export default function BiliHelperMacApp() {
 
             {view === 'tutorial' && (
               <div className="bili-helper-mac__tutorial">
-                <PackPreview workspace={workspace} onCopy={() => handleCopyPack()} onOpenTutorial={() => setView('tutorial')} wide />
+                <PackPreview workspace={workspace} mode={artifactMode} onCopy={() => handleCopyPack()} onOpenTutorial={() => setView('tutorial')} wide />
                 <section className="bili-helper-panel bili-helper-panel--markdown">
                   <PanelHead label="MARKDOWN PACK" value={workspace?.pack?.generatedBy || 'NONE'} />
                   <pre>{workspace?.pack?.markdown || '先生成学习包。'}</pre>
                 </section>
               </div>
+            )}
+
+            {view === 'wanxiang' && (
+              <WanxiangWorkbench
+                workspace={workspace}
+                diagnostics={buildSourceIntakeDiagnostics(workspace)}
+                processing={processing}
+                onGenerate={handleGenerateWanxiang}
+                onArchive={handleArchiveWanxiang}
+                onAbsorb={handleAbsorbWanxiang}
+                onCopy={(value) => copyText(value).then((ok) => flash(ok ? '已复制' : '复制失败'))}
+              />
             )}
 
             {view === 'chat' && (
@@ -1123,12 +1415,16 @@ export default function BiliHelperMacApp() {
                     视频/音频会写入 ~/Downloads/BiliHelper；网页、图片、文档等来源可导出 Markdown、字幕/OCR 文本和封面/缩略图。
                   </p>
                   <div className="bili-helper-mac__download-grid">
-                    {exportOptions.map(([format, title, note]) => (
-                      <button key={format} onClick={() => handleQueueDownload(format)} disabled={!workspace}>
-                        <strong>{title}</strong>
-                        <span>{note}</span>
-                      </button>
-                    ))}
+                    {exportOptions.map(([format, title, note]) => {
+                      const readiness = downloadReadiness(workspace, format)
+                      return (
+                        <button key={format} onClick={() => handleQueueDownload(format)} disabled={!workspace || !readiness.ready}>
+                          <strong>{title}</strong>
+                          <span>{note}</span>
+                          <em>{readiness.detail}</em>
+                        </button>
+                      )
+                    })}
                   </div>
                 </section>
 
@@ -1162,14 +1458,20 @@ export default function BiliHelperMacApp() {
 
             {view === 'library' && (
               <div className="bili-helper-mac__library-view">
-                {sortedWorkspaces.length === 0 ? (
+                <section className="bili-helper-panel sourceos-library-toolbar">
+                  <PanelHead label="SOURCE LIBRARY" value={`${visibleLibraryWorkspaces.length}/${sortedWorkspaces.length}`} />
+                  <input value={libraryQuery} onChange={(event) => setLibraryQuery(event.target.value)} placeholder="搜索标题、来源、摘要、状态..." />
+                </section>
+                {visibleLibraryWorkspaces.length === 0 ? (
                   <section className="bili-helper-panel bili-helper-panel--empty">还没有资料来源。</section>
                 ) : (
-                  sortedWorkspaces.map((item) => (
+                  visibleLibraryWorkspaces.map((item) => (
                     <article key={item.video.id} className="bili-helper-mac__library-card">
                       <VideoCard workspace={item} compact />
+                      <SourceAssetLibraryCard workspace={item} />
                       <PackPreview
                         workspace={item}
+                        mode={item.pack?.mode || 'tutorial'}
                         onCopy={() => handleCopyPack(item.pack?.markdown)}
                         onOpenTutorial={() => selectWorkspace(item.video.id, 'tutorial')}
                       />
@@ -1299,6 +1601,51 @@ function GuidePipeline({ guide }: { guide: SourceOsGuideState }) {
   )
 }
 
+function SourceAssetPipeline({ workspace }: { workspace: BiliVideoWorkspace | null }) {
+  const asset = workspace ? refreshSourceAsset(workspace).sourceAsset : undefined
+  const stages = asset?.pipeline || []
+  return (
+    <section className="bili-helper-panel sourceos-asset-pipeline">
+      <PanelHead label="SOURCE ASSET" value={asset ? asset.status.toUpperCase() : 'WAITING'} />
+      {!asset ? (
+        <div className="bili-helper-mac__empty-note">来源进入后，这里会显示真实流水线状态。</div>
+      ) : (
+        <>
+          <div className="sourceos-asset-score">
+            <strong>{asset.intakeRun.evidenceCount}</strong>
+            <span>证据片段 · {asset.intakeRun.contentLength} 字符 · {asset.intakeRun.method}</span>
+          </div>
+          <div className="sourceos-asset-stages">
+            {stages.map((item: SourceAssetStage) => (
+              <article key={item.id} data-status={item.status}>
+                <strong>{item.label}</strong>
+                <span>{item.status}</span>
+                <p>{item.detail}</p>
+              </article>
+            ))}
+          </div>
+          <div className="sourceos-asset-receipts">
+            <span>{asset.providerRuns.length} provider runs</span>
+            <span>{asset.artifacts.length} artifacts</span>
+            <span>{asset.exportReceipts.length} exports</span>
+          </div>
+          {asset.providerRuns.length > 0 && (
+            <div className="sourceos-provider-runs">
+              {asset.providerRuns.slice(0, 4).map((run) => (
+                <article key={run.id} data-status={run.status}>
+                  <strong>{run.provider} · {run.capability}</strong>
+                  <span>{run.status}</span>
+                  <p>{run.status === 'done' ? run.detail : run.error || run.detail}</p>
+                </article>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  )
+}
+
 function StyleBridge({ context }: { context: ReturnType<typeof buildUiMuseumPrdContext> }) {
   return (
     <section className="bili-helper-panel bili-helper-panel--style-bridge">
@@ -1315,36 +1662,246 @@ function StyleBridge({ context }: { context: ReturnType<typeof buildUiMuseumPrdC
   )
 }
 
+type TruthStatus = 'generated' | 'ready' | 'pending' | 'partial' | 'blocked'
+
+function truthStatusLabel(status: TruthStatus): string {
+  if (status === 'generated') return '已生成'
+  if (status === 'ready') return '可用'
+  if (status === 'partial') return '弱可用'
+  if (status === 'blocked') return '缺内容'
+  return '可生成'
+}
+
+function FeatureTruthPanel({
+  workspace,
+  processing,
+}: {
+  workspace: BiliVideoWorkspace | null
+  processing: ProcessingState
+}) {
+  const diagnostics = buildSourceIntakeDiagnostics(workspace)
+  const sourceText = workspace ? getBiliUsableSourceText(workspace.video, workspace.transcript) : ''
+  const asset = workspace ? refreshSourceAsset(workspace).sourceAsset : undefined
+  const hasSource = Boolean(workspace)
+  const hasAnyText = sourceText.trim().length > 0
+  const hasStrongText = diagnostics.contentLength >= 180
+  const exportDone = Boolean(asset?.exportReceipts.some((receipt) => receipt.status === 'done'))
+  const archiveDone = workspace?.archive?.status === 'saved' || Boolean(asset?.libraryReceipt)
+  const modePackCount = Object.values(workspace?.modePacks || {}).filter(Boolean).length
+  const rows: Array<{ id: string; label: string; status: TruthStatus; detail: string }> = [
+    {
+      id: 'pack',
+      label: '学习包',
+      status: !hasSource ? 'pending' : modePackCount && hasAnyText ? 'generated' : hasAnyText ? 'pending' : 'blocked',
+      detail: !hasSource ? '等待来源进入工作台' : modePackCount ? `${modePackCount} 个模式产物已生成` : hasAnyText ? '有正文，可生成真实学习包' : '缺真实字幕/正文/OCR/转写',
+    },
+    {
+      id: 'wanxiang',
+      label: '万象三结果',
+      status: !hasSource ? 'pending' : workspace?.wanxiang && hasAnyText ? 'generated' : workspace?.wanxiang ? 'blocked' : hasAnyText ? 'pending' : 'blocked',
+      detail: !hasSource ? '等待来源进入工作台' : workspace?.wanxiang ? workspace.wanxiang.openbasakaFusion.absorptionVerdict : hasAnyText ? '可分析教学/融合/导图' : '只能生成待补内容诊断',
+    },
+    {
+      id: 'chat',
+      label: '来源对话',
+      status: !hasSource ? 'pending' : asset?.evidenceRefs.length ? (hasStrongText ? 'ready' : 'partial') : 'blocked',
+      detail: !hasSource ? '等待来源进入工作台' : asset?.evidenceRefs.length ? `${asset.evidenceRefs.length} 条证据可引用` : '没有证据，问答只能提示补内容',
+    },
+    {
+      id: 'export',
+      label: '导出',
+      status: !hasSource ? 'pending' : exportDone ? 'generated' : workspace?.pack || hasAnyText ? 'ready' : 'blocked',
+      detail: !hasSource ? '等待来源进入工作台' : exportDone ? '已有导出回执' : workspace?.pack || hasAnyText ? '可导出 Markdown / JSON / 导图' : '缺内容，导出没有价值',
+    },
+    {
+      id: 'archive',
+      label: '归档',
+      status: !hasSource ? 'pending' : archiveDone ? 'generated' : workspace?.pack && hasAnyText ? 'ready' : 'blocked',
+      detail: !hasSource ? '等待来源进入工作台' : archiveDone ? workspace?.archive?.sourceId || asset?.libraryReceipt?.sourceId || '已归档' : workspace?.pack && hasAnyText ? '可归档到知识+大佬' : '产物不足',
+    },
+    {
+      id: 'coverage',
+      label: '覆盖矩阵',
+      status: 'ready',
+      detail: hasSource ? '可检查平台、解析器、下载器、转写和 OCR 环境' : '可先看支持哪些来源和环境能力',
+    },
+  ]
+  const realCount = rows.filter((row) => row.status === 'generated' || row.status === 'ready').length
+  return (
+    <section className="bili-helper-panel sourceos-truth-panel">
+      <PanelHead label="功能真实性巡检" value={processing !== 'idle' ? 'RUNNING' : `${realCount}/${rows.length} REAL`} />
+      <div className="sourceos-truth-grid">
+        {rows.map((row) => (
+          <article key={row.id} data-status={row.status}>
+            <div>
+              <strong>{row.label}</strong>
+              <span>{truthStatusLabel(row.status)}</span>
+            </div>
+            <p>{row.detail}</p>
+          </article>
+        ))}
+      </div>
+      {hasSource && !hasAnyText && (
+        <p className="sourceos-truth-warning">
+          无法生成真实结论：当前没有真实字幕、正文、OCR 或转写。系统只能保存来源卡片和待补诊断，不会把模板冒充为理解。
+        </p>
+      )}
+    </section>
+  )
+}
+
+function SourceIntakePanel({
+  workspace,
+  onChooseFiles,
+  onGeneratePack,
+  onGenerateWanxiang,
+  isBusy,
+}: {
+  workspace: BiliVideoWorkspace | null
+  onChooseFiles: () => void
+  onGeneratePack: () => void
+  onGenerateWanxiang: () => void
+  isBusy: boolean
+}) {
+  const diagnostics = buildSourceIntakeDiagnostics(workspace)
+  const sourceText = workspace ? getBiliUsableSourceText(workspace.video, workspace.transcript) : ''
+  const hasAnyText = sourceText.trim().length > 0
+  const hasStrongText = diagnostics.contentLength >= 180
+  const providerSummary = latestProviderRunSummary(workspace)
+  const blockReason = workspace && !hasAnyText
+    ? providerSummary
+      ? `无法生成真实结论：缺真实字幕、正文、OCR 或转写。自动取材已尝试：${providerSummary}`
+      : '当前缺真实字幕、正文、OCR 或转写。点击生成会先自动尝试 BibiGPT、网页正文、yt-dlp 字幕和本地转写。'
+    : workspace && !hasStrongText
+      ? '当前可学习文本偏短：可以弱处理，但关键判断需要继续补证据。'
+      : ''
+  return (
+    <section className="bili-helper-panel bili-helper-panel--intake-diagnostics" data-guide-target="source-card">
+      <PanelHead label="识别诊断" value={workspace ? `${diagnostics.score}/100` : 'WAITING'} />
+      <div className="sourceos-intake-meter">
+        <div>
+          <strong>{diagnostics.recognitionLabel}</strong>
+          <span>{diagnostics.sourceKindLabel} · {diagnostics.method}</span>
+        </div>
+        <i style={{ width: `${diagnostics.score}%` }} />
+      </div>
+      <div className="sourceos-intake-stats" aria-label="来源解析统计">
+        <span>{diagnostics.label}</span>
+        <span>{diagnostics.contentLength} 字符</span>
+        <span>{diagnostics.wordCount} 词/字</span>
+      </div>
+      <div className="sourceos-intake-steps">
+        {diagnostics.steps.map((step) => (
+          <article key={step.id} data-status={step.status}>
+            <strong>{step.label}</strong>
+            <span>{intakeStatusLabel(step.status)}</span>
+            <p>{step.detail}</p>
+          </article>
+        ))}
+      </div>
+      <div className="sourceos-intake-actions">
+        <button onClick={onChooseFiles} disabled={isBusy}>
+          选择文件
+        </button>
+        <button onClick={onGeneratePack} disabled={!workspace || isBusy}>
+          {workspace && !hasAnyText ? '自动补材并生成' : '学习包'}
+        </button>
+        <button className="bili-helper-mac__primary" onClick={onGenerateWanxiang} disabled={!workspace || isBusy}>
+          {workspace && !hasAnyText ? '补材后三结果' : '三结果'}
+        </button>
+      </div>
+      {blockReason && <p className="sourceos-intake-blocker">{blockReason}</p>}
+      <div className="sourceos-intake-next">
+        {diagnostics.nextActions.slice(0, 3).map((action) => (
+          <span key={action}>{action}</span>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 function ArtifactControls({
+  workspace,
   mode,
   depth,
+  processing,
   onModeChange,
   onDepthChange,
+  onModeGenerate,
 }: {
+  workspace: BiliVideoWorkspace | null
   mode: BiliArtifactMode
   depth: number
+  processing: ProcessingState
   onModeChange: (mode: BiliArtifactMode) => void
   onDepthChange: (depth: number) => void
+  onModeGenerate: (mode: BiliArtifactMode) => void
 }) {
   const activeMode = BILI_ARTIFACT_MODES.find((item) => item.id === mode) || BILI_ARTIFACT_MODES[0]
+  const diagnostics = buildSourceIntakeDiagnostics(workspace)
+  const sourceText = workspace ? getBiliUsableSourceText(workspace.video, workspace.transcript) : ''
+  const asset = workspace ? refreshSourceAsset(workspace).sourceAsset : undefined
+  const currentPack = workspace?.modePacks?.[mode] || (workspace?.pack?.mode === mode ? workspace.pack : undefined)
+  const hasAnyText = sourceText.trim().length > 0
+  const isGenerating = processing === 'generating' || processing === 'hydrating'
+  const activeStatus: TruthStatus = !workspace ? 'pending' : isGenerating ? 'pending' : !hasAnyText ? 'blocked' : currentPack ? 'generated' : 'ready'
+  const providerSummary = latestProviderRunSummary(workspace)
+  const sourcePreview = sourceText.trim()
+    ? sourceText.replace(/\s+/g, ' ').slice(0, 220)
+    : providerSummary
+      ? `自动取材已尝试：${providerSummary}`
+      : '还没有真实字幕、正文、OCR 或转写。点击产物会先自动取材；补同名字幕/转写效果最好。'
+  const statusForMode = (itemMode: BiliArtifactMode): string => {
+    if (!workspace) return '待来源'
+    if (processing === 'hydrating' && itemMode === mode) return '补材中'
+    if (isGenerating && itemMode === mode) return '生成中'
+    if (!hasAnyText) return providerSummary ? '缺内容' : '自动补材'
+    if (workspace.modePacks?.[itemMode] || workspace.pack?.mode === itemMode) return '已生成'
+    return '点击生成'
+  }
   return (
     <section className="bili-helper-panel bili-helper-panel--artifact-controls" data-guide-target="artifact-dashboard">
       <PanelHead label="ARTIFACT DASHBOARD" value={activeMode.label} />
-      <div className="sourceos-artifact-active" style={{ '--mode-accent': activeMode.accent } as CSSProperties}>
+      <div className="sourceos-artifact-active" data-status={activeStatus} style={{ '--mode-accent': activeMode.accent } as CSSProperties}>
         <span>当前产物</span>
         <strong>{activeMode.label}</strong>
         <p>{activeMode.desc}</p>
+        <div className="sourceos-artifact-state">
+          <i>{truthStatusLabel(activeStatus)}</i>
+          <i>{currentPack?.generatedBy || (hasAnyText ? '待生成' : 'blocked')}</i>
+          <i>{asset?.evidenceRefs.length || 0} 证据</i>
+          <i>{diagnostics.contentLength} 字符</i>
+        </div>
+        <div className="sourceos-artifact-output">
+          <article>
+            <strong>产物摘要</strong>
+            <p>{currentPack?.summary || (hasAnyText ? `点击「${activeMode.label}」生成这个模式的真实产物。` : providerSummary ? `自动取材未拿到正文：${providerSummary}` : '点功能后会先补字幕/正文/OCR/转写，补不到才阻塞。')}</p>
+          </article>
+          <article>
+            <strong>正文预览</strong>
+            <p>{sourcePreview}</p>
+          </article>
+          <article>
+            <strong>下一步</strong>
+            <p>{diagnostics.nextActions[0] || '放入来源后再生成产物。'}</p>
+          </article>
+        </div>
       </div>
       <div className="bili-helper-mac__mode-grid">
         {BILI_ARTIFACT_MODES.map((item) => (
           <button
             key={item.id}
             className={mode === item.id ? 'bili-helper-mac__mode-card bili-helper-mac__mode-card--active' : 'bili-helper-mac__mode-card'}
-            onClick={() => onModeChange(item.id)}
+            onClick={() => {
+              onModeChange(item.id)
+              onModeGenerate(item.id)
+            }}
+            disabled={isGenerating}
             style={{ '--mode-accent': item.accent } as CSSProperties}
           >
             <strong>{item.label}</strong>
             <span>{item.desc}</span>
+            <em>{statusForMode(item.id)}</em>
           </button>
         ))}
       </div>
@@ -1355,87 +1912,6 @@ function ArtifactControls({
         </div>
         <input type="range" min={10} max={100} step={5} value={depth} onChange={(event) => onDepthChange(Number(event.target.value))} />
       </div>
-    </section>
-  )
-}
-
-function BaoyuVisualWorkbench({
-  workspace,
-  filter,
-  onFilterChange,
-  onGenerateVisual,
-}: {
-  workspace: BiliVideoWorkspace | null
-  filter: BaoyuVisualFilter
-  onFilterChange: (filter: BaoyuVisualFilter) => void
-  onGenerateVisual: (artifact: BaoyuVisualArtifact, automatic?: boolean) => void
-}) {
-  const artifacts = workspace?.visualArtifacts || []
-  const filteredArtifacts =
-    filter === 'recommended' ? artifacts.filter((artifact) => artifact.isRecommended) : artifacts.filter((artifact) => artifact.kind === filter)
-  const visibleArtifacts = filteredArtifacts.length > 0 ? filteredArtifacts : artifacts.slice(0, 3)
-  const generatedCount = artifacts.filter((artifact) => artifact.status === 'generated').length
-
-  return (
-    <section className="bili-helper-panel bili-helper-panel--baoyu-visuals" data-guide-target="baoyu-visuals">
-      <PanelHead label="BAOYU 秒懂视觉" value={workspace ? `${generatedCount}/${artifacts.length || 0} READY` : 'WAITING'} />
-      {!workspace ? (
-        <div className="bili-helper-mac__empty-note">解析来源后，会自动出现契合内容气质的图文卡、漫画、信息图、图解和封面方案。</div>
-      ) : (
-        <>
-          <div className="baoyu-visuals__hero">
-            <div>
-              <span>智能自动 + 可控</span>
-              <h3>{workspace.video.title}</h3>
-              <p>{topRecommendedVisual(artifacts)?.rationale || '正在准备 Baoyu 视觉方案。'}</p>
-            </div>
-            <aside>
-              <strong>{BAOYU_VISUAL_KIND_LABELS[topRecommendedVisual(artifacts)?.kind || 'image-cards']}</strong>
-              <small>{topRecommendedVisual(artifacts)?.style || 'notion'} · {topRecommendedVisual(artifacts)?.layout || 'dense'}</small>
-            </aside>
-          </div>
-
-          <div className="baoyu-visuals__filters" aria-label="Baoyu 视觉类型">
-            {BAOYU_VISUAL_FILTERS.map((item) => (
-              <button key={item} className={filter === item ? 'baoyu-visuals__filter--active' : ''} onClick={() => onFilterChange(item)}>
-                {item === 'recommended' ? '推荐' : BAOYU_VISUAL_KIND_LABELS[item]}
-              </button>
-            ))}
-          </div>
-
-          <div className="baoyu-visuals__grid">
-            {visibleArtifacts.map((artifact) => (
-              <article key={artifact.id} className="baoyu-visual-card" data-status={artifact.status}>
-                <header>
-                  <span>{artifact.label}</span>
-                  <strong>{artifact.title}</strong>
-                </header>
-                <div className="baoyu-visual-card__preview">
-                  {artifact.imageDataUrls?.[0] ? (
-                    <img src={artifact.imageDataUrls[0]} alt="" />
-                  ) : (
-                    <pre>{artifact.previewMarkdown}</pre>
-                  )}
-                </div>
-                <p>{artifact.rationale}</p>
-                <div className="baoyu-visual-card__meta">
-                  <i>{artifact.style}</i>
-                  <i>{artifact.layout}</i>
-                  <i>{artifact.palette}</i>
-                  <i>{artifact.status}</i>
-                </div>
-                {artifact.error && <small>{artifact.error.slice(0, 120)}</small>}
-                <footer>
-                  <button onClick={() => onGenerateVisual(artifact)} disabled={artifact.status === 'generating'}>
-                    {artifact.status === 'generating' ? '生成中' : artifact.status === 'generated' ? '重新生成' : '生成图'}
-                  </button>
-                  <button onClick={() => copyText(artifact.prompt)}>复制提示词</button>
-                </footer>
-              </article>
-            ))}
-          </div>
-        </>
-      )}
     </section>
   )
 }
@@ -1483,7 +1959,7 @@ function ArchiveRouter({
         </datalist>
       </div>
       <div className="archive-router__chips">
-        {(archive?.knowledgeTags || ['万象学习', 'SourceOS', 'Baoyu秒懂', workspace?.video.sourceKind || 'source']).slice(0, 8).map((tag) => (
+        {(archive?.knowledgeTags || ['万象学习', 'SourceOS', workspace?.video.sourceKind || 'source']).slice(0, 8).map((tag) => (
           <span key={tag}>{tag}</span>
         ))}
       </div>
@@ -1497,10 +1973,61 @@ function ArchiveRouter({
   )
 }
 
+type EnvironmentCheck = {
+  id: string
+  label: string
+  status: 'waiting' | 'ok' | 'failed' | 'partial'
+  detail: string
+}
+
 function CoverageMatrix({ onChooseFiles, onLoadSample }: { onChooseFiles: () => void; onLoadSample: () => void }) {
   const directCount = BIBI_PLATFORM_CAPABILITIES.filter((item) => item.status === 'direct').length
   const metadataCount = BIBI_PLATFORM_CAPABILITIES.filter((item) => item.status === 'metadata').length
   const localCount = BIBI_PLATFORM_CAPABILITIES.filter((item) => item.status === 'local-first').length
+  const [checks, setChecks] = useState<EnvironmentCheck[]>([])
+  const [checking, setChecking] = useState(false)
+
+  async function runEnvironmentChecks() {
+    setChecking(true)
+    const electronAPI = window.electronAPI
+    const next: EnvironmentCheck[] = []
+    const bibi = await checkBibiGptProvider()
+    next.push({ id: 'bibigpt', label: 'BibiGPT OpenAPI', status: bibi.ok ? 'ok' : bibi.configured ? 'partial' : 'failed', detail: bibi.detail })
+    const commandChecks: Array<[string, string, string]> = [
+      ['yt-dlp', 'yt-dlp 下载器', 'python3 -m yt_dlp --version'],
+      ['ffmpeg', 'ffmpeg 合并/转码', 'which ffmpeg'],
+      ['whisper', 'Whisper 本地转写', 'which whisper'],
+    ]
+    for (const [id, label, command] of commandChecks) {
+      if (!electronAPI?.executeCommand) {
+        next.push({ id, label, status: 'failed', detail: 'Electron executeCommand 不可用' })
+        continue
+      }
+      const result = await electronAPI.executeCommand(command, 12000)
+      next.push({
+        id,
+        label,
+        status: result?.success || result?.stdout ? 'ok' : 'failed',
+        detail: (result?.stdout || result?.stderr || '未检测到').trim().slice(0, 160),
+      })
+    }
+    if (electronAPI?.fetchUrl) {
+      const fetched = await electronAPI.fetchUrl('https://example.com')
+      next.push({ id: 'web', label: '网页正文抓取', status: fetched?.error ? 'failed' : 'ok', detail: fetched?.error || fetched?.title || 'fetch-url ok' })
+    } else {
+      next.push({ id: 'web', label: '网页正文抓取', status: 'failed', detail: 'fetchUrl IPC 不可用' })
+    }
+    const systemInfo = electronAPI?.getSystemInfo ? await electronAPI.getSystemInfo() : null
+    next.push({
+      id: 'vision',
+      label: 'Apple Vision OCR',
+      status: systemInfo?.platform === 'darwin' ? 'ok' : 'partial',
+      detail: systemInfo?.platform === 'darwin' ? 'macOS Vision/Spotlight OCR 可用于本地图片' : '非 macOS 环境仅保留图片来源',
+    })
+    setChecks(next)
+    setChecking(false)
+  }
+
   return (
     <div className="bili-helper-mac__coverage-view">
       <section className="bili-helper-panel bili-helper-panel--coverage-hero">
@@ -1539,9 +2066,59 @@ function CoverageMatrix({ onChooseFiles, onLoadSample }: { onChooseFiles: () => 
             选择本地文件/图片
           </button>
           <button onClick={onLoadSample}>载入样例来源</button>
+          <button onClick={runEnvironmentChecks} disabled={checking}>
+            {checking ? '检测中' : '运行环境体检'}
+          </button>
+        </div>
+      </section>
+
+      <BibiGptKeyPanel />
+
+      <section className="bili-helper-panel sourceos-env-checks">
+        <PanelHead label="环境体检" value={checks.length ? `${checks.filter((item) => item.status === 'ok').length}/${checks.length}` : 'NOT RUN'} />
+        <div className="sourceos-env-checks__grid">
+          {checks.length === 0 ? (
+            <div className="bili-helper-mac__empty-note">点击“运行环境体检”后，会检测 BibiGPT、yt-dlp、ffmpeg、Whisper、OCR 和网页抓取。</div>
+          ) : (
+            checks.map((item) => (
+              <article key={item.id} data-status={item.status}>
+                <strong>{item.label}</strong>
+                <span>{item.status}</span>
+                <p>{item.detail}</p>
+              </article>
+            ))
+          )}
         </div>
       </section>
     </div>
+  )
+}
+
+function BibiGptKeyPanel() {
+  const [value, setValue] = useState('')
+  const [status, setStatus] = useState('未检测')
+  async function saveKey() {
+    const result = await saveBibiGptApiKey(value)
+    setValue('')
+    setStatus(result.success ? '已安全保存到 Electron safeStorage' : result.error || '保存失败')
+  }
+  async function testKey() {
+    const result = await checkBibiGptProvider()
+    setStatus(result.detail)
+  }
+  return (
+    <section className="bili-helper-panel sourceos-bibigpt-key">
+      <PanelHead label="BIBIGPT PROVIDER" value="SAFE STORAGE" />
+      <p>可选增强通道。Key 只写入 Electron safeStorage，不进入代码、导出 JSON 或学习包。</p>
+      <div className="sourceos-bibigpt-key__row">
+        <input value={value} onChange={(event) => setValue(event.target.value)} type="password" placeholder="粘贴 BibiGPT API Key" />
+        <button className="bili-helper-mac__primary" onClick={saveKey} disabled={!value.trim()}>
+          安全保存
+        </button>
+        <button onClick={testKey}>测试连接</button>
+      </div>
+      <span>{status}</span>
+    </section>
   )
 }
 
@@ -1558,8 +2135,9 @@ function BibiInsights({
   onExport: () => void
   isGenerating: boolean
 }) {
-  const pack = workspace?.pack
-  const transcriptRows = parseTranscriptRows(workspace?.transcript || BILI_DEFAULT_TRANSCRIPT)
+  const pack = workspace?.modePacks?.tldr || workspace?.pack
+  const transcriptRows = parseTranscriptRows(workspace ? getBiliUsableSourceText(workspace.video, workspace.transcript) : '')
+  const hasSourceText = Boolean(workspace && getBiliUsableSourceText(workspace.video, workspace.transcript))
   const summary = pack?.summary || '先解析来源并生成学习包，这里会显示类似 BibiGPT 的总览、章节、逐句转写/OCR、思维导图和文章视图。'
   const chapterRows = pack?.timeline.length ? pack.timeline : transcriptRows.slice(0, 6).map((row) => ({ time: row.time, title: row.text.slice(0, 18), note: row.text }))
   const mindMapRoots = [
@@ -1576,7 +2154,7 @@ function BibiInsights({
           <div>
             <span>{workspace?.video.platformName || 'NO SOURCE'} · {workspace?.video.bvid || 'WAITING'}</span>
             <h3>{workspace?.video.title || '等待来源'}</h3>
-            <p>{summary}</p>
+            <p>{hasSourceText ? summary : `${MISSING_SOURCE_MESSAGE} 智能总结不会把标题或简介冒充成正文理解。`}</p>
           </div>
           <aside>
             <button className="bili-helper-mac__primary" onClick={onGenerate} disabled={!workspace || isGenerating}>
@@ -1595,15 +2173,17 @@ function BibiInsights({
       <section className="bili-helper-panel">
         <PanelHead label="CHAPTER SUMMARY" value={`${chapterRows.length} CHAPTERS`} />
         <div className="bili-helper-mac__chapter-list">
-          {chapterRows.slice(0, 8).map((item) => (
-            <article key={`${item.time}-${item.title}`}>
-              <strong>{item.time}</strong>
-              <div>
-                <span>{item.title}</span>
-                <p>{item.note}</p>
-              </div>
-            </article>
-          ))}
+          {chapterRows.length
+            ? chapterRows.slice(0, 8).map((item) => (
+                <article key={`${item.time}-${item.title}`}>
+                  <strong>{item.time}</strong>
+                  <div>
+                    <span>{item.title}</span>
+                    <p>{item.note}</p>
+                  </div>
+                </article>
+              ))
+            : <div className="bili-helper-mac__empty-note">暂无真实章节。请先补充字幕、OCR、转写或正文。</div>}
         </div>
       </section>
 
@@ -1627,12 +2207,14 @@ function BibiInsights({
       <section className="bili-helper-panel bili-helper-panel--transcript-reader">
         <PanelHead label="TRANSCRIPT READER" value={`${transcriptRows.length} LINES`} />
         <div className="bili-helper-mac__transcript-reader">
-          {transcriptRows.slice(0, 12).map((row, index) => (
-            <article key={`${row.time}-${index}`}>
-              <strong>{row.time}</strong>
-              <p>{row.text}</p>
-            </article>
-          ))}
+          {transcriptRows.length
+            ? transcriptRows.slice(0, 12).map((row, index) => (
+                <article key={`${row.time}-${index}`}>
+                  <strong>{row.time}</strong>
+                  <p>{row.text}</p>
+                </article>
+              ))
+            : <div className="bili-helper-mac__empty-note">暂无真实转写。不会显示示例字幕。</div>}
         </div>
       </section>
 
@@ -1640,8 +2222,194 @@ function BibiInsights({
         <PanelHead label="ARTICLE VIEW" value={pack ? 'READY' : 'WAITING'} />
         <article className="bili-helper-mac__article-reader">
           <h3>{workspace?.video.title || '来源文章'}</h3>
-          <p>{pack?.tutorial || '生成后会把来源整理成一篇可阅读、可归档、可继续改写的教程文章。'}</p>
+          <p>{hasSourceText ? pack?.tutorial || '生成后会把来源整理成一篇可阅读、可归档、可继续改写的教程文章。' : `${MISSING_SOURCE_MESSAGE} 请先补充可学习文本。`}</p>
         </article>
+      </section>
+    </div>
+  )
+}
+
+function WanxiangWorkbench({
+  workspace,
+  diagnostics,
+  processing,
+  onGenerate,
+  onArchive,
+  onAbsorb,
+  onCopy,
+}: {
+  workspace: BiliVideoWorkspace | null
+  diagnostics: SourceIntakeDiagnostics
+  processing: ProcessingState
+  onGenerate: () => void
+  onArchive: () => void
+  onAbsorb: () => void
+  onCopy: (value: string) => void
+}) {
+  const result = workspace?.wanxiang
+  const isBusy = processing === 'wanxiang' || processing === 'archiving' || processing === 'absorbing'
+  if (!workspace) {
+    return (
+      <section className="wanxiang-empty">
+        <span>SOURCE REQUIRED</span>
+        <h2>先放进一个来源，再做万象吸收。</h2>
+        <p>粘贴公开链接，或选择视频、音频、图片、PDF、文档。系统会先做识别诊断，再生成教程、导图、Prompt 补丁和知识归档包。</p>
+      </section>
+    )
+  }
+
+  const sourceText = getBiliUsableSourceText(workspace.video, workspace.transcript)
+  if (!sourceText) {
+    return (
+      <section className="wanxiang-empty">
+        <span>WANXIANG BLOCKED</span>
+        <h2>{workspace.video.title}</h2>
+        <p>{MISSING_SOURCE_MESSAGE} 万象吸收不会把标题、封面或简介伪装成教程、导图和系统吸收建议。</p>
+        <div className="wanxiang-panel__actions">
+          <button className="bili-helper-mac__primary" onClick={onGenerate} disabled={isBusy}>
+            生成待补诊断
+          </button>
+        </div>
+      </section>
+    )
+  }
+
+  if (!result) {
+    return (
+      <section className="wanxiang-empty">
+        <span>WANXIANG WAITING</span>
+        <h2>{workspace.video.title}</h2>
+        <p>当前来源已经进入工作台，但还没有生成万象三结果。先跑一次分析，系统会判断它是否是教学资料，并给出 Openbasaka 吸收路径。</p>
+        <div className="wanxiang-panel__actions">
+          <button className="bili-helper-mac__primary" onClick={onGenerate} disabled={isBusy}>
+            {processing === 'wanxiang' ? '分析中' : '生成万象三结果'}
+          </button>
+        </div>
+      </section>
+    )
+  }
+
+  const teaching = result.teaching
+  const fusion = result.openbasakaFusion
+  const canAbsorb = fusion.applicable && diagnostics.contentLength >= 180 && fusion.absorptionScore >= 60
+  return (
+    <div className="wanxiang-results">
+      <section className="wanxiang-panel wanxiang-result-card">
+        <div className="wanxiang-panel__head">
+          <span>WANXIANG THREE RESULTS</span>
+          <strong>{result.generatedBy.toUpperCase()} · {diagnostics.score}/100</strong>
+        </div>
+        <div className="wanxiang-verdict">
+          <span>{teaching.isTeaching ? '教学资料' : '资料理解'}</span>
+          <strong>{result.sourceTitle}</strong>
+          <p>{teaching.isTeaching ? `置信度 ${Math.round(teaching.confidence * 100)}%，可以生成小白教程和机器执行教程。` : teaching.nonTeachingDigest}</p>
+        </div>
+        <div className="wanxiang-reasons">
+          {teaching.reasons.slice(0, 6).map((reason) => (
+            <span key={reason}>{reason}</span>
+          ))}
+        </div>
+        <div className="wanxiang-panel__actions">
+          <button className="bili-helper-mac__primary" onClick={onGenerate} disabled={isBusy}>
+            {processing === 'wanxiang' ? '分析中' : '重新分析'}
+          </button>
+          <button onClick={onArchive} disabled={isBusy}>
+            {processing === 'archiving' ? '归档中' : '归档三结果'}
+          </button>
+          <button onClick={onAbsorb} disabled={isBusy || !canAbsorb}>
+            {processing === 'absorbing' ? '吸收中' : '吸收为能力'}
+          </button>
+          <button onClick={() => onCopy(result.markdown)}>复制全量 Markdown</button>
+        </div>
+      </section>
+
+      <section className="wanxiang-panel">
+        <div className="wanxiang-panel__head">
+          <span>OPENBASAKA ABSORPTION</span>
+          <strong>{fusion.applicable ? 'APPLICABLE' : 'HOLD'}</strong>
+        </div>
+        <div className="wanxiang-absorption-meter">
+          <strong>{Math.round(fusion.absorptionScore)} / 100</strong>
+          <span>{fusion.absorptionVerdict}</span>
+          <i>{fusion.rationale}</i>
+        </div>
+        <div className="wanxiang-subsystems">
+          {fusion.targetSubsystems.map((target) => (
+            <span key={target}>{target}</span>
+          ))}
+        </div>
+        <div className="wanxiang-risks">
+          {!canAbsorb && <span>吸收门槛：需要真实内容、60+ 吸收分，并且融合判定为适用。</span>}
+          {fusion.risks.map((risk) => (
+            <span key={risk}>{risk}</span>
+          ))}
+        </div>
+      </section>
+
+      <section className="wanxiang-panel">
+        <div className="wanxiang-panel__head">
+          <span>EVIDENCE</span>
+          <strong>{teaching.evidenceRefs.length} REFS</strong>
+        </div>
+        <div className="wanxiang-evidence-list">
+          {teaching.evidenceRefs.slice(0, 6).map((ref) => (
+            <article key={ref.id}>
+              <strong>{ref.time || ref.label}</strong>
+              <p>{ref.quote}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      {teaching.isTeaching ? (
+        <section className="wanxiang-panel">
+          <div className="wanxiang-panel__head">
+            <span>DOUBLE TUTORIAL</span>
+            <strong>HUMAN / MODEL</strong>
+          </div>
+          <div className="wanxiang-tutorial-grid">
+            <article>
+              <h3>给小白看的教程</h3>
+              <pre>{teaching.beginnerTutorial || '等待生成。'}</pre>
+            </article>
+            <article>
+              <h3>给模型执行的教程</h3>
+              <pre>{teaching.modelTutorial || '等待生成。'}</pre>
+            </article>
+          </div>
+        </section>
+      ) : (
+        <section className="wanxiang-panel wanxiang-digest">
+          <div className="wanxiang-panel__head">
+            <span>NON-TEACHING DIGEST</span>
+            <strong>NO FAKE TUTORIAL</strong>
+          </div>
+          <p>{teaching.nonTeachingDigest}</p>
+        </section>
+      )}
+
+      <section className="wanxiang-panel">
+        <div className="wanxiang-panel__head">
+          <span>PROMPT PATCHES</span>
+          <strong>{fusion.promptPatches.length} PATCHES</strong>
+        </div>
+        <div className="wanxiang-patch-grid">
+          {fusion.promptPatches.map((patch) => (
+            <article key={`${patch.target}-${patch.title}`}>
+              <span>{patch.target}</span>
+              <h3>{patch.title}</h3>
+              <p>{patch.prompt}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="wanxiang-panel">
+        <div className="wanxiang-panel__head">
+          <span>MIND MAP</span>
+          <strong>{result.mindMap.layout.toUpperCase()}</strong>
+        </div>
+        <pre className="wanxiang-master-prompt">{result.mindMap.markdown}</pre>
       </section>
     </div>
   )
@@ -1719,18 +2487,47 @@ function VideoCard({ workspace, compact = false }: { workspace: BiliVideoWorkspa
   )
 }
 
+function SourceAssetLibraryCard({ workspace }: { workspace: BiliVideoWorkspace }) {
+  const asset = refreshSourceAsset(workspace).sourceAsset
+  if (!asset) return null
+  return (
+    <section className="bili-helper-panel sourceos-library-asset">
+      <PanelHead label="ASSET RECEIPTS" value={asset.status.toUpperCase()} />
+      <div className="sourceos-library-asset__stats">
+        <span>{asset.evidenceRefs.length} 证据</span>
+        <span>{asset.artifacts.length} 产物</span>
+        <span>{asset.providerRuns.length} Provider</span>
+        <span>{asset.exportReceipts.length} 导出</span>
+      </div>
+      <div className="sourceos-library-asset__latest">
+        {(asset.libraryReceipt ? [`归档：${asset.libraryReceipt.sourceId}`] : [])
+          .concat(asset.providerRuns.slice(0, 2).map((run) => `${run.provider}: ${run.status} · ${run.detail}`))
+          .concat(asset.exportReceipts.slice(0, 2).map((receipt) => `${receipt.format}: ${receipt.status} · ${receipt.outputName}`))
+          .slice(0, 4)
+          .map((line) => (
+            <span key={line}>{line}</span>
+          ))}
+      </div>
+    </section>
+  )
+}
+
 function PackPreview({
   workspace,
+  mode,
   onCopy,
   onOpenTutorial,
   wide = false,
 }: {
   workspace: BiliVideoWorkspace | null
+  mode?: BiliArtifactMode
   onCopy: () => void
   onOpenTutorial: () => void
   wide?: boolean
 }) {
-  const pack = workspace?.pack
+  const pack = mode ? workspace?.modePacks?.[mode] || (workspace?.pack?.mode === mode ? workspace.pack : undefined) : workspace?.pack
+  const sourceText = workspace ? getBiliUsableSourceText(workspace.video, workspace.transcript) : ''
+  const asset = workspace ? refreshSourceAsset(workspace).sourceAsset : undefined
   if (!pack) {
     return (
       <section
@@ -1748,6 +2545,11 @@ function PackPreview({
       data-guide-target="learning-pack"
     >
       <PanelHead label="LEARNING PACK" value={`${pack.generatedBy} · ${pack.mode} · ${pack.depth}%`} />
+      <div className="sourceos-pack-truth" data-status={sourceText ? 'generated' : 'blocked'}>
+        <span>{sourceText ? '真实来源产物' : '待补内容诊断'}</span>
+        <strong>{asset?.evidenceRefs.length || 0} 证据 · {sourceText.length} 字符</strong>
+        <p>{sourceText ? sourceText.replace(/\s+/g, ' ').slice(0, 180) : '缺真实字幕、正文、OCR 或转写。当前学习包只说明缺什么，不会伪造来源观点。'}</p>
+      </div>
       <div className="bili-helper-mac__pack-summary">
         <h3>{workspace?.video.title}</h3>
         <p>{pack.summary}</p>
@@ -1773,13 +2575,21 @@ function PackPreview({
         </section>
       </div>
       <div className="bili-helper-mac__timeline sourceos-pack-timeline">
-        {pack.timeline.slice(0, wide ? 8 : 4).map((item) => (
-          <article key={`${item.time}-${item.title}`}>
-            <strong>{item.time}</strong>
-            <span>{item.title}</span>
-            <p>{item.note}</p>
+        {pack.timeline.length > 0 ? (
+          pack.timeline.slice(0, wide ? 8 : 4).map((item) => (
+            <article key={`${item.time}-${item.title}`}>
+              <strong>{item.time}</strong>
+              <span>{item.title}</span>
+              <p>{item.note}</p>
+            </article>
+          ))
+        ) : (
+          <article data-empty="true">
+            <strong>无时间线</strong>
+            <span>等待真实内容</span>
+            <p>补充字幕、OCR、转写或正文后，这里才会显示可引用片段。</p>
           </article>
-        ))}
+        )}
       </div>
       <footer>
         <button onClick={onOpenTutorial}>打开学习包</button>

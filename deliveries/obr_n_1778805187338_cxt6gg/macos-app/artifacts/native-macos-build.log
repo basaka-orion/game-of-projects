@@ -1,0 +1,68 @@
+$ swift test
+Building for debugging...
+[0/11] Write sources
+[2/11] Write WormholeLandlord-entitlement.plist
+[3/11] /Users/apple/Desktop/【项目的游戏】/deliveries/obr_n_1778805187338_cxt6gg/macos-app/.build/arm64-apple-macosx/debug/WormholeLandlordPackageTests.derived/runner.swift
+[4/11] Write sources
+[5/11] Write swift-version--58304C5D6DBC2206.txt
+[7/20] Compiling WormholeLandlord InspectorView.swift
+[8/20] Compiling WormholeLandlord GameStore.swift
+[9/20] Compiling WormholeLandlord CardModels.swift
+/Users/apple/Desktop/【项目的游戏】/deliveries/obr_n_1778805187338_cxt6gg/macos-app/Sources/WormholeLandlord/Models/CardModels.swift:152:9: warning: immutable property will not be decoded because it is declared with an initial value which cannot be overwritten
+150 | 
+151 | struct TablePlay: Identifiable, Codable {
+152 |     let id = UUID()
+    |         |- warning: immutable property will not be decoded because it is declared with an initial value which cannot be overwritten
+    |         |- note: set the initial value via the initializer or explicitly define a CodingKeys enum including a 'id' case to silence this warning
+    |         `- note: make the property mutable instead
+153 |     let seat: Seat
+154 |     let play: Play
+
+/Users/apple/Desktop/【项目的游戏】/deliveries/obr_n_1778805187338_cxt6gg/macos-app/Sources/WormholeLandlord/Models/CardModels.swift:164:9: warning: immutable property will not be decoded because it is declared with an initial value which cannot be overwritten
+162 | 
+163 | struct LogEntry: Identifiable, Codable {
+164 |     let id = UUID()
+    |         |- warning: immutable property will not be decoded because it is declared with an initial value which cannot be overwritten
+    |         |- note: set the initial value via the initializer or explicitly define a CodingKeys enum including a 'id' case to silence this warning
+    |         `- note: make the property mutable instead
+165 |     let text: String
+166 | }
+[10/20] Compiling WormholeLandlord WormholeLandlordApp.swift
+[11/20] Compiling WormholeLandlord LandlordRules.swift
+[12/20] Compiling WormholeLandlord ContentView.swift
+[13/20] Compiling WormholeLandlord WormholeTheme.swift
+[14/20] Emitting module WormholeLandlord
+[15/20] Compiling WormholeLandlord GameTableView.swift
+[15/20] Write Objects.LinkFileList
+[16/20] Linking WormholeLandlord
+[17/20] Applying WormholeLandlord
+[19/22] Compiling WormholeLandlordTests LandlordRulesTests.swift
+[20/22] Emitting module WormholeLandlordTests
+[21/24] Emitting module WormholeLandlordPackageTests
+[22/24] Compiling WormholeLandlordPackageTests runner.swift
+[22/24] Write Objects.LinkFileList
+[23/24] Linking WormholeLandlordPackageTests
+Build complete! (13.10s)
+Test Suite 'All tests' started at 2026-05-15 08:33:27.546.
+Test Suite 'WormholeLandlordPackageTests.xctest' started at 2026-05-15 08:33:27.549.
+Test Suite 'LandlordRulesTests' started at 2026-05-15 08:33:27.549.
+Test Case '-[WormholeLandlordTests.LandlordRulesTests testBeatingRules]' started.
+Test Case '-[WormholeLandlordTests.LandlordRulesTests testBeatingRules]' passed (0.002 seconds).
+Test Case '-[WormholeLandlordTests.LandlordRulesTests testClassifiesRequiredPatterns]' started.
+Test Case '-[WormholeLandlordTests.LandlordRulesTests testClassifiesRequiredPatterns]' passed (0.001 seconds).
+Test Case '-[WormholeLandlordTests.LandlordRulesTests testDeckAndDealAreDeterministic]' started.
+Test Case '-[WormholeLandlordTests.LandlordRulesTests testDeckAndDealAreDeterministic]' passed (0.000 seconds).
+Test Case '-[WormholeLandlordTests.LandlordRulesTests testLegalPlaysIncludePassableResponsesAndGameCanFinish]' started.
+/Users/apple/Desktop/【项目的游戏】/deliveries/obr_n_1778805187338_cxt6gg/macos-app/Tests/WormholeLandlordTests/LandlordRulesTests.swift:43: error: -[WormholeLandlordTests.LandlordRulesTests testLegalPlaysIncludePassableResponsesAndGameCanFinish] : XCTAssertTrue failed
+/Users/apple/Desktop/【项目的游戏】/deliveries/obr_n_1778805187338_cxt6gg/macos-app/Tests/WormholeLandlordTests/LandlordRulesTests.swift:44: error: -[WormholeLandlordTests.LandlordRulesTests testLegalPlaysIncludePassableResponsesAndGameCanFinish] : XCTAssertTrue failed
+Test Case '-[WormholeLandlordTests.LandlordRulesTests testLegalPlaysIncludePassableResponsesAndGameCanFinish]' failed (0.951 seconds).
+Test Suite 'LandlordRulesTests' failed at 2026-05-15 08:33:28.504.
+	 Executed 4 tests, with 2 failures (0 unexpected) in 0.954 (0.955) seconds
+Test Suite 'WormholeLandlordPackageTests.xctest' failed at 2026-05-15 08:33:28.504.
+	 Executed 4 tests, with 2 failures (0 unexpected) in 0.954 (0.955) seconds
+Test Suite 'All tests' failed at 2026-05-15 08:33:28.504.
+	 Executed 4 tests, with 2 failures (0 unexpected) in 0.954 (0.958) seconds
+◇ Test run started.
+↳ Testing Library Version: 1743
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

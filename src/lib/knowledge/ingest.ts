@@ -63,64 +63,56 @@ export async function fetchUrlContent(url: string): Promise<{
 
 // ─── 文件读取 ───
 
-/** 支持的文件扩展名 */
-const TEXT_EXTENSIONS = new Set([
-  '.md', '.txt', '.markdown', '.json', '.csv', '.tsv',
+export type FileIntakeKind = 'text' | 'code' | 'pdf' | 'document' | 'image' | 'audio' | 'video' | 'unknown'
+
+const TEXT_EXTENSIONS = new Set(['.md', '.txt', '.markdown', '.json', '.csv', '.tsv', '.srt', '.vtt'])
+const CODE_EXTENSIONS = new Set([
   '.ts', '.tsx', '.js', '.jsx', '.mjs',
   '.py', '.go', '.rs', '.java', '.kt', '.swift', '.c', '.cpp', '.h',
   '.html', '.css', '.scss', '.yaml', '.yml', '.toml', '.xml',
   '.sh', '.bash', '.zsh', '.sql', '.graphql',
   '.rb', '.php', '.lua', '.dart', '.r', '.scala', '.clj',
 ])
-const DOCUMENT_EXTENSIONS = new Set(['.doc', '.docx', '.rtf', '.odt'])
 const PDF_EXTENSIONS = new Set(['.pdf'])
-const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.heic', '.tif', '.tiff'])
-const AUDIO_EXTENSIONS = new Set(['.mp3', '.m4a', '.wav', '.aac', '.flac', '.ogg'])
-const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.m4v', '.webm', '.mkv'])
-const TRANSCRIPT_EXTENSIONS = new Set(['.srt', '.vtt', '.ass', '.ssa', '.lrc'])
-const CODE_EXTENSIONS = new Set([
-  '.ts', '.tsx', '.js', '.jsx', '.mjs',
-  '.py', '.go', '.rs', '.java', '.kt', '.swift', '.c', '.cpp', '.h',
-  '.html', '.css', '.scss',
-  '.sh', '.bash', '.zsh', '.sql', '.graphql',
-  '.rb', '.php', '.lua', '.dart', '.r', '.scala', '.clj',
-])
+const DOCUMENT_EXTENSIONS = new Set(['.doc', '.docx', '.rtf', '.pages'])
+const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.heic', '.tiff', '.bmp', '.svg'])
+const AUDIO_EXTENSIONS = new Set(['.mp3', '.m4a', '.wav', '.aac', '.flac', '.ogg', '.webm'])
+const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.mkv', '.avi', '.m4v'])
+
+/** 支持的文件扩展名 */
 const SUPPORTED_EXTENSIONS = new Set([
   ...TEXT_EXTENSIONS,
-  ...DOCUMENT_EXTENSIONS,
+  ...CODE_EXTENSIONS,
   ...PDF_EXTENSIONS,
+  ...DOCUMENT_EXTENSIONS,
   ...IMAGE_EXTENSIONS,
   ...AUDIO_EXTENSIONS,
   ...VIDEO_EXTENSIONS,
-  ...TRANSCRIPT_EXTENSIONS,
 ])
-
-export type IntakeFileKind = 'text' | 'document' | 'pdf' | 'image' | 'audio' | 'video' | 'binary'
 
 function getExtension(filePath: string): string {
   return filePath.toLowerCase().match(/\.[^.]+$/)?.[0] || ''
 }
 
-/** 检查文件是否支持 */
-export function isFileSupported(filePath: string): boolean {
-  const ext = getExtension(filePath)
-  return SUPPORTED_EXTENSIONS.has(ext)
-}
-
-export function getFileIntakeKind(filePath: string): IntakeFileKind {
+export function getFileIntakeKind(filePath: string): FileIntakeKind {
   const ext = getExtension(filePath)
   if (TEXT_EXTENSIONS.has(ext)) return 'text'
-  if (TRANSCRIPT_EXTENSIONS.has(ext)) return 'text'
-  if (DOCUMENT_EXTENSIONS.has(ext)) return 'document'
+  if (CODE_EXTENSIONS.has(ext)) return 'code'
   if (PDF_EXTENSIONS.has(ext)) return 'pdf'
+  if (DOCUMENT_EXTENSIONS.has(ext)) return 'document'
   if (IMAGE_EXTENSIONS.has(ext)) return 'image'
   if (AUDIO_EXTENSIONS.has(ext)) return 'audio'
   if (VIDEO_EXTENSIONS.has(ext)) return 'video'
-  return 'binary'
+  return 'unknown'
 }
 
 export function shouldWrapAsCode(filePath: string): boolean {
-  return CODE_EXTENSIONS.has(getExtension(filePath))
+  return getFileIntakeKind(filePath) === 'code'
+}
+
+/** 检查文件是否支持 */
+export function isFileSupported(filePath: string): boolean {
+  return SUPPORTED_EXTENSIONS.has(getExtension(filePath))
 }
 
 /** 从文件扩展名推断语言 */
@@ -136,11 +128,6 @@ function inferLanguageFromExt(filePath: string): string {
     '.sh': 'shell', '.bash': 'shell', '.zsh': 'shell',
     '.yaml': 'yaml', '.yml': 'yaml', '.toml': 'toml', '.xml': 'xml',
     '.json': 'json', '.csv': 'csv', '.md': 'markdown', '.txt': 'text',
-    '.srt': 'subtitle', '.vtt': 'subtitle', '.ass': 'subtitle', '.ssa': 'subtitle', '.lrc': 'lyrics',
-    '.pdf': 'pdf', '.doc': 'document', '.docx': 'document', '.rtf': 'richtext', '.odt': 'document',
-    '.png': 'image', '.jpg': 'image', '.jpeg': 'image', '.webp': 'image', '.gif': 'image', '.heic': 'image',
-    '.mp3': 'audio', '.m4a': 'audio', '.wav': 'audio', '.aac': 'audio', '.flac': 'audio', '.ogg': 'audio',
-    '.mp4': 'video', '.mov': 'video', '.m4v': 'video', '.webm': 'video', '.mkv': 'video',
   }
   return langMap[ext] || 'text'
 }
@@ -162,13 +149,6 @@ function shellEscape(value: string): string {
 /** 读取文件内容（渲染进程） */
 async function readFileContent(filePath: string): Promise<string> {
   const electronAPI = (window as any)?.electronAPI
-  if (electronAPI?.extractFileContent) {
-    const extracted = await electronAPI.extractFileContent(filePath)
-    if (extracted?.success && typeof extracted.content === 'string') {
-      return extracted.content
-    }
-    if (extracted?.error) throw new Error(extracted.error)
-  }
   if (electronAPI?.readFile) {
     return electronAPI.readFile(filePath)
   }
@@ -498,9 +478,10 @@ export async function ingestFile(
   const content = await readFileContent(filePath)
   const fileName = filePath.split('/').pop() || filePath.split('\\').pop() || 'unknown'
   const language = inferLanguageFromExt(filePath)
+  const intakeKind = getFileIntakeKind(filePath)
 
   // 如果是代码文件，包装在代码块中
-  const wrappedContent = shouldWrapAsCode(fileName)
+  const wrappedContent = shouldWrapAsCode(filePath)
     ? `文件: ${fileName}\n语言: ${language}\n\n\`\`\`${language}\n${content}\n\`\`\``
     : content
 
@@ -510,7 +491,7 @@ export async function ingestFile(
     content: wrappedContent,
     rawContent: content,
     filePath,
-    metadata: { language, intakeKind: getFileIntakeKind(filePath), rootPath: options?.rootPath },
+    metadata: { language, intakeKind, rootPath: options?.rootPath },
   }, llmConfig)
 }
 
@@ -554,7 +535,7 @@ export async function ingestFolder(folderPath: string, llmConfig: LLMConfig): Pr
   )
 
   const files = stdout.trim().split('\n').filter(Boolean)
-  const importRootPath = folderPath
+  const importRootPath = dirnameCompat(folderPath) || folderPath
   return ingestFiles(files, llmConfig, { rootPath: importRootPath })
 }
 

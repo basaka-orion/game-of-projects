@@ -27,6 +27,7 @@ describe('tool trust audit', () => {
       localStorage,
       electronAPI: {
         executeCommand: vi.fn(),
+        writeFile: vi.fn(),
       },
     })
   })
@@ -49,5 +50,38 @@ describe('tool trust audit', () => {
     expect(payload.receipt.trust.risk).toBe('high')
     expect(payload.receipt.retry.recommended).toBe(true)
     expect(payload.receipt.trust.rationale).toContain('Command guard')
+  })
+
+  it('reports terminal non-zero exits as failed tool executions', async () => {
+    const executeCommand = vi.fn(async () => ({
+      success: false,
+      stdout: '',
+      stderr: 'build failed',
+      exitCode: 65,
+    }))
+    vi.stubGlobal('window', {
+      localStorage,
+      electronAPI: { executeCommand, writeFile: vi.fn() },
+    })
+
+    const result = await executeTool('terminal', { command: 'xcodebuild -version' })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('build failed')
+    expect(executeCommand).toHaveBeenCalledWith('xcodebuild -version', undefined)
+  })
+
+  it('reports Electron file write failures as failed tool executions', async () => {
+    const writeFile = vi.fn(async () => ({ success: false, error: 'permission denied' }))
+    vi.stubGlobal('window', {
+      localStorage,
+      electronAPI: { executeCommand: vi.fn(), writeFile },
+    })
+
+    const result = await executeTool('file_write', { path: '/tmp/luma.txt', content: 'hello' })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('permission denied')
+    expect(writeFile).toHaveBeenCalledWith('/tmp/luma.txt', 'hello')
   })
 })

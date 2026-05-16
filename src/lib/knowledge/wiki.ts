@@ -6,7 +6,7 @@
  * - WikiSource: 不可变的原始来源
  * - 页面链接、FTS 搜索、Index/Log 特殊页面
  */
-import { dbSaveOperatingEvent, query, run } from '../db/repository'
+import { query, run } from '../db/repository'
 import { generateId } from '../db/schema'
 import { buildFtsQuery, countOccurrences, extractSearchTerms } from './query-analysis'
 import {
@@ -88,22 +88,22 @@ function parsePageRow(r: Record<string, unknown>): WikiPage {
     id: r.id as string,
     title: r.title as string,
     slug: r.slug as string,
-    content: (r.content as string) || '',
-    summary: (r.summary as string) || '',
-    category: (r.category as string) || 'general',
-    tags: JSON.parse((r.tags as string) || '[]'),
-    frontmatter: JSON.parse((r.frontmatter_json as string) || '{}'),
-    sourceIds: JSON.parse((r.source_ids as string) || '[]'),
-    linkedPageIds: JSON.parse((r.linked_page_ids as string) || '[]'),
-    backlinkCount: (r.backlink_count as number) || 0,
-    importance: (r.importance as number) || 50,
-    confidence: (r.confidence as number) || 0.8,
+    content: r.content as string || '',
+    summary: r.summary as string || '',
+    category: r.category as string || 'general',
+    tags: JSON.parse(r.tags as string || '[]'),
+    frontmatter: JSON.parse(r.frontmatter_json as string || '{}'),
+    sourceIds: JSON.parse(r.source_ids as string || '[]'),
+    linkedPageIds: JSON.parse(r.linked_page_ids as string || '[]'),
+    backlinkCount: r.backlink_count as number || 0,
+    importance: r.importance as number || 50,
+    confidence: r.confidence as number || 0.8,
     isIndex: !!(r.is_index as number),
     isLog: !!(r.is_log as number),
-    folderPath: (r.folder_path as string) || '',
-    templateId: (r.template_id as string) || '',
-    version: (r.version as number) || 1,
-    metadata: JSON.parse((r.metadata_json as string) || '{}'),
+    folderPath: r.folder_path as string || '',
+    templateId: r.template_id as string || '',
+    version: r.version as number || 1,
+    metadata: JSON.parse(r.metadata_json as string || '{}'),
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
   }
@@ -114,19 +114,19 @@ function parseSourceRow(r: Record<string, unknown>): WikiSource {
     id: r.id as string,
     title: r.title as string,
     sourceType: r.source_type as string,
-    content: (r.content as string) || '',
-    rawContent: (r.raw_content as string) || '',
-    url: (r.url as string) || '',
-    filePath: (r.file_path as string) || '',
-    folderPath: (r.folder_path as string) || '',
-    author: (r.author as string) || '',
-    language: (r.language as string) || 'zh',
-    frontmatter: JSON.parse((r.frontmatter_json as string) || '{}'),
-    tags: JSON.parse((r.tags as string) || '[]'),
-    status: (r.status as string) || 'pending',
-    errorMessage: (r.error_message as string) || '',
-    templateId: (r.template_id as string) || '',
-    metadata: JSON.parse((r.metadata_json as string) || '{}'),
+    content: r.content as string || '',
+    rawContent: r.raw_content as string || '',
+    url: r.url as string || '',
+    filePath: r.file_path as string || '',
+    folderPath: r.folder_path as string || '',
+    author: r.author as string || '',
+    language: r.language as string || 'zh',
+    frontmatter: JSON.parse(r.frontmatter_json as string || '{}'),
+    tags: JSON.parse(r.tags as string || '[]'),
+    status: r.status as string || 'pending',
+    errorMessage: r.error_message as string || '',
+    templateId: r.template_id as string || '',
+    metadata: JSON.parse(r.metadata_json as string || '{}'),
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
   }
@@ -142,38 +142,25 @@ export async function createPage(p: Partial<WikiPage>): Promise<string> {
   const sourceIds = typeof p.sourceIds === 'string' ? p.sourceIds : JSON.stringify(p.sourceIds || [])
   const linkedPageIds = typeof p.linkedPageIds === 'string' ? p.linkedPageIds : JSON.stringify(p.linkedPageIds || [])
   const metadata = { ...(p.metadata || {}) }
-  const folderPath =
-    p.folderPath ||
-    deriveFolderPath({
-      folderPath: typeof metadata.folderPath === 'string' ? metadata.folderPath : '',
-      filePath: typeof metadata.sourceFilePath === 'string' ? metadata.sourceFilePath : '',
-    })
+  const folderPath = p.folderPath || deriveFolderPath({
+    folderPath: typeof metadata.folderPath === 'string' ? metadata.folderPath : '',
+    filePath: typeof metadata.sourceFilePath === 'string' ? metadata.sourceFilePath : '',
+  })
   if (!metadata.folderPath && folderPath) metadata.folderPath = folderPath
 
   await run(
     `INSERT OR IGNORE INTO wiki_pages (id, title, slug, content, summary, category, tags, frontmatter_json, source_ids, linked_page_ids, backlink_count, importance, confidence, is_index, is_log, folder_path, template_id, version, metadata_json)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      id,
-      p.title || '无标题',
-      slug,
-      p.content || '',
-      p.summary || '',
-      p.category || 'general',
-      tags,
+      id, p.title || '无标题', slug, p.content || '', p.summary || '',
+      p.category || 'general', tags,
       JSON.stringify(p.frontmatter || {}),
-      sourceIds,
-      linkedPageIds,
-      p.backlinkCount || 0,
-      p.importance ?? 50,
-      p.confidence ?? 0.8,
-      p.isIndex ? 1 : 0,
-      p.isLog ? 1 : 0,
-      folderPath,
-      p.templateId || '',
-      p.version || 1,
+      sourceIds, linkedPageIds,
+      p.backlinkCount || 0, p.importance ?? 50, p.confidence ?? 0.8,
+      p.isIndex ? 1 : 0, p.isLog ? 1 : 0,
+      folderPath, p.templateId || '', p.version || 1,
       JSON.stringify(metadata),
-    ],
+    ]
   )
   return id
 }
@@ -216,8 +203,7 @@ export async function parseWikiLinks(pageId: string): Promise<number> {
     // 如果之前有链接，清空
     if (page.linkedPageIds.length > 0) {
       const oldLinks = await query<{ id: string; target_page_id: string }>(
-        'SELECT id, target_page_id FROM wiki_page_links WHERE source_page_id = ?',
-        [pageId],
+        'SELECT id, target_page_id FROM wiki_page_links WHERE source_page_id = ?', [pageId]
       )
       for (const ol of oldLinks) {
         await run('DELETE FROM wiki_page_links WHERE id = ?', [ol.id])
@@ -230,8 +216,7 @@ export async function parseWikiLinks(pageId: string): Promise<number> {
 
   // 清除旧链接（修复反向链接计数）
   const oldLinks = await query<{ id: string; target_page_id: string }>(
-    'SELECT id, target_page_id FROM wiki_page_links WHERE source_page_id = ?',
-    [pageId],
+    'SELECT id, target_page_id FROM wiki_page_links WHERE source_page_id = ?', [pageId]
   )
   for (const ol of oldLinks) {
     await run('DELETE FROM wiki_page_links WHERE id = ?', [ol.id])
@@ -246,8 +231,7 @@ export async function parseWikiLinks(pageId: string): Promise<number> {
     let targetPage = await getPageByTitle(name)
     if (!targetPage) {
       const ciRows = await query<Record<string, unknown>>(
-        'SELECT * FROM wiki_pages WHERE LOWER(title) = LOWER(?) LIMIT 1',
-        [name],
+        'SELECT * FROM wiki_pages WHERE LOWER(title) = LOWER(?) LIMIT 1', [name]
       )
       if (ciRows.length > 0) targetPage = parsePageRow(ciRows[0])
     }
@@ -275,64 +259,29 @@ export async function updatePage(id: string, updates: Partial<WikiPage>): Promis
   const sets: string[] = []
   const params: unknown[] = []
 
-  if (updates.title !== undefined) {
-    sets.push('title = ?')
-    params.push(updates.title)
-  }
-  if (updates.slug !== undefined) {
-    sets.push('slug = ?')
-    params.push(updates.slug)
-  }
-  if (updates.content !== undefined) {
-    sets.push('content = ?')
-    params.push(updates.content)
-  }
-  if (updates.summary !== undefined) {
-    sets.push('summary = ?')
-    params.push(updates.summary)
-  }
-  if (updates.category !== undefined) {
-    sets.push('category = ?')
-    params.push(updates.category)
-  }
+  if (updates.title !== undefined) { sets.push('title = ?'); params.push(updates.title) }
+  if (updates.slug !== undefined) { sets.push('slug = ?'); params.push(updates.slug) }
+  if (updates.content !== undefined) { sets.push('content = ?'); params.push(updates.content) }
+  if (updates.summary !== undefined) { sets.push('summary = ?'); params.push(updates.summary) }
+  if (updates.category !== undefined) { sets.push('category = ?'); params.push(updates.category) }
   if (updates.tags !== undefined) {
     sets.push('tags = ?')
     params.push(typeof updates.tags === 'string' ? updates.tags : JSON.stringify(updates.tags))
   }
-  if (updates.frontmatter !== undefined) {
-    sets.push('frontmatter_json = ?')
-    params.push(JSON.stringify(updates.frontmatter))
-  }
+  if (updates.frontmatter !== undefined) { sets.push('frontmatter_json = ?'); params.push(JSON.stringify(updates.frontmatter)) }
   if (updates.sourceIds !== undefined) {
     sets.push('source_ids = ?')
     params.push(typeof updates.sourceIds === 'string' ? updates.sourceIds : JSON.stringify(updates.sourceIds))
   }
   if (updates.linkedPageIds !== undefined) {
     sets.push('linked_page_ids = ?')
-    params.push(
-      typeof updates.linkedPageIds === 'string' ? updates.linkedPageIds : JSON.stringify(updates.linkedPageIds),
-    )
+    params.push(typeof updates.linkedPageIds === 'string' ? updates.linkedPageIds : JSON.stringify(updates.linkedPageIds))
   }
-  if (updates.importance !== undefined) {
-    sets.push('importance = ?')
-    params.push(updates.importance)
-  }
-  if (updates.confidence !== undefined) {
-    sets.push('confidence = ?')
-    params.push(updates.confidence)
-  }
-  if (updates.version !== undefined) {
-    sets.push('version = ?')
-    params.push(updates.version)
-  }
-  if (updates.folderPath !== undefined) {
-    sets.push('folder_path = ?')
-    params.push(updates.folderPath)
-  }
-  if (updates.metadata !== undefined) {
-    sets.push('metadata_json = ?')
-    params.push(JSON.stringify(updates.metadata))
-  }
+  if (updates.importance !== undefined) { sets.push('importance = ?'); params.push(updates.importance) }
+  if (updates.confidence !== undefined) { sets.push('confidence = ?'); params.push(updates.confidence) }
+  if (updates.version !== undefined) { sets.push('version = ?'); params.push(updates.version) }
+  if (updates.folderPath !== undefined) { sets.push('folder_path = ?'); params.push(updates.folderPath) }
+  if (updates.metadata !== undefined) { sets.push('metadata_json = ?'); params.push(JSON.stringify(updates.metadata)) }
 
   if (sets.length === 0) return
   sets.push("updated_at = datetime('now','localtime')")
@@ -350,14 +299,14 @@ export async function deletePage(id: string): Promise<void> {
 export async function getAllPages(limit = 100, offset = 0): Promise<WikiPage[]> {
   if (limit <= 0) {
     const rows = await query<Record<string, unknown>>(
-      'SELECT * FROM wiki_pages WHERE is_index = 0 AND is_log = 0 ORDER BY importance DESC, updated_at DESC',
+      'SELECT * FROM wiki_pages WHERE is_index = 0 AND is_log = 0 ORDER BY importance DESC, updated_at DESC'
     )
     return rows.map(parsePageRow)
   }
 
   const rows = await query<Record<string, unknown>>(
     'SELECT * FROM wiki_pages WHERE is_index = 0 AND is_log = 0 ORDER BY importance DESC, updated_at DESC LIMIT ? OFFSET ?',
-    [limit, offset],
+    [limit, offset]
   )
   return rows.map(parsePageRow)
 }
@@ -381,7 +330,7 @@ export async function getAllPagesUnbounded(batchSize = 500): Promise<WikiPage[]>
 export async function getPagesByCategory(category: string): Promise<WikiPage[]> {
   const rows = await query<Record<string, unknown>>(
     'SELECT * FROM wiki_pages WHERE category = ? ORDER BY importance DESC, updated_at DESC',
-    [category],
+    [category]
   )
   return rows.map(parsePageRow)
 }
@@ -399,58 +348,26 @@ export async function createSource(s: Partial<WikiSource>): Promise<string> {
   const id = generateId()
   const tags = typeof s.tags === 'string' ? s.tags : JSON.stringify(s.tags || [])
   const metadata = { ...(s.metadata || {}) }
-  const folderPath =
-    s.folderPath ||
-    deriveFolderPath({
-      folderPath: typeof metadata.folderPath === 'string' ? metadata.folderPath : '',
-      filePath: s.filePath,
-      rootPath: typeof metadata.rootPath === 'string' ? metadata.rootPath : undefined,
-      sourceType: s.sourceType,
-    })
+  const folderPath = s.folderPath || deriveFolderPath({
+    folderPath: typeof metadata.folderPath === 'string' ? metadata.folderPath : '',
+    filePath: s.filePath,
+    rootPath: typeof metadata.rootPath === 'string' ? metadata.rootPath : undefined,
+    sourceType: s.sourceType,
+  })
   if (!metadata.folderPath && folderPath) metadata.folderPath = folderPath
 
   await run(
     `INSERT INTO wiki_sources (id, title, source_type, content, raw_content, url, file_path, folder_path, author, language, frontmatter_json, tags, status, error_message, template_id, metadata_json)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      id,
-      s.title || '无标题',
-      s.sourceType || 'paste',
-      s.content || '',
-      s.rawContent || '',
-      s.url || '',
-      s.filePath || '',
-      folderPath,
-      s.author || '',
-      s.language || 'zh',
+      id, s.title || '无标题', s.sourceType || 'paste',
+      s.content || '', s.rawContent || '',
+      s.url || '', s.filePath || '', folderPath, s.author || '', s.language || 'zh',
       JSON.stringify(s.frontmatter || {}),
-      tags,
-      s.status || 'pending',
-      s.errorMessage || '',
-      s.templateId || '',
-      JSON.stringify(metadata),
-    ],
+      tags, s.status || 'pending', s.errorMessage || '',
+      s.templateId || '', JSON.stringify(metadata),
+    ]
   )
-  try {
-    await dbSaveOperatingEvent({
-      id: `op_wiki_source_${id}`,
-      type: 'knowledge_source',
-      stage: 'compile',
-      title: s.title || '无标题',
-      scope: folderPath,
-      status: s.status === 'processed' ? 'indexed' : s.status === 'processing' ? 'chunked' : 'imported',
-      source: {
-        kind: 'wiki',
-        sourceId: id,
-        title: s.title || 'wiki_source',
-        path: s.filePath,
-        url: s.url,
-      },
-      confidence: 0.78,
-    })
-  } catch {
-    // Event ledger should not block source import.
-  }
   return id
 }
 
@@ -459,59 +376,22 @@ export async function updateSource(id: string, updates: Partial<WikiSource>): Pr
   const sets: string[] = []
   const params: unknown[] = []
 
-  if (updates.title !== undefined) {
-    sets.push('title = ?')
-    params.push(updates.title)
-  }
-  if (updates.content !== undefined) {
-    sets.push('content = ?')
-    params.push(updates.content)
-  }
-  if (updates.rawContent !== undefined) {
-    sets.push('raw_content = ?')
-    params.push(updates.rawContent)
-  }
-  if (updates.status !== undefined) {
-    sets.push('status = ?')
-    params.push(updates.status)
-  }
-  if (updates.errorMessage !== undefined) {
-    sets.push('error_message = ?')
-    params.push(updates.errorMessage)
-  }
-  if (updates.folderPath !== undefined) {
-    sets.push('folder_path = ?')
-    params.push(updates.folderPath)
-  }
+  if (updates.title !== undefined) { sets.push('title = ?'); params.push(updates.title) }
+  if (updates.content !== undefined) { sets.push('content = ?'); params.push(updates.content) }
+  if (updates.rawContent !== undefined) { sets.push('raw_content = ?'); params.push(updates.rawContent) }
+  if (updates.status !== undefined) { sets.push('status = ?'); params.push(updates.status) }
+  if (updates.errorMessage !== undefined) { sets.push('error_message = ?'); params.push(updates.errorMessage) }
+  if (updates.folderPath !== undefined) { sets.push('folder_path = ?'); params.push(updates.folderPath) }
   if (updates.tags !== undefined) {
     sets.push('tags = ?')
     params.push(typeof updates.tags === 'string' ? updates.tags : JSON.stringify(updates.tags))
   }
-  if (updates.metadata !== undefined) {
-    sets.push('metadata_json = ?')
-    params.push(JSON.stringify(updates.metadata))
-  }
+  if (updates.metadata !== undefined) { sets.push('metadata_json = ?'); params.push(JSON.stringify(updates.metadata)) }
 
   if (sets.length === 0) return
   sets.push("updated_at = datetime('now','localtime')")
   params.push(id)
   await run(`UPDATE wiki_sources SET ${sets.join(', ')} WHERE id = ?`, params)
-  try {
-    if (updates.status !== undefined) {
-      await dbSaveOperatingEvent({
-        id: `op_wiki_source_${id}`,
-        type: 'knowledge_source',
-        stage: 'compile',
-        title: updates.title || '知识来源状态更新',
-        scope: updates.folderPath,
-        status: updates.status === 'processed' ? 'indexed' : updates.status === 'processing' ? 'chunked' : 'imported',
-        source: { kind: 'wiki', sourceId: id, title: updates.title || 'wiki_source' },
-        confidence: 0.8,
-      })
-    }
-  } catch {
-    // Event ledger should not block source update.
-  }
 }
 
 /** 获取源 */
@@ -522,10 +402,11 @@ export async function getSource(id: string): Promise<WikiSource | undefined> {
 
 /** 获取所有源 */
 export async function getAllSources(limit = 100): Promise<WikiSource[]> {
-  const rows =
-    limit <= 0
-      ? await query<Record<string, unknown>>('SELECT * FROM wiki_sources ORDER BY created_at DESC')
-      : await query<Record<string, unknown>>('SELECT * FROM wiki_sources ORDER BY created_at DESC LIMIT ?', [limit])
+  const rows = limit <= 0
+    ? await query<Record<string, unknown>>('SELECT * FROM wiki_sources ORDER BY created_at DESC')
+    : await query<Record<string, unknown>>(
+        'SELECT * FROM wiki_sources ORDER BY created_at DESC LIMIT ?', [limit]
+      )
   return rows.map(parseSourceRow)
 }
 
@@ -537,7 +418,7 @@ export async function getAllSourcesUnbounded(batchSize = 500): Promise<WikiSourc
   while (true) {
     const rows = await query<Record<string, unknown>>(
       'SELECT * FROM wiki_sources ORDER BY created_at DESC LIMIT ? OFFSET ?',
-      [batchSize, offset],
+      [batchSize, offset]
     )
     const batch = rows.map(parseSourceRow)
     allSources.push(...batch)
@@ -551,8 +432,7 @@ export async function getAllSourcesUnbounded(batchSize = 500): Promise<WikiSourc
 /** 按状态获取源 */
 export async function getSourcesByStatus(status: string): Promise<WikiSource[]> {
   const rows = await query<Record<string, unknown>>(
-    'SELECT * FROM wiki_sources WHERE status = ? ORDER BY created_at DESC',
-    [status],
+    'SELECT * FROM wiki_sources WHERE status = ? ORDER BY created_at DESC', [status]
   )
   return rows.map(parseSourceRow)
 }
@@ -575,13 +455,13 @@ export async function addPageLink(
   sourcePageId: string,
   targetPageId: string,
   linkType = 'reference',
-  context = '',
+  context = ''
 ): Promise<string> {
   const id = generateId()
   await run(
     `INSERT OR IGNORE INTO wiki_page_links (id, source_page_id, target_page_id, link_type, context)
      VALUES (?, ?, ?, ?, ?)`,
-    [id, sourcePageId, targetPageId, linkType, context],
+    [id, sourcePageId, targetPageId, linkType, context]
   )
   // 更新反向链接计数
   await run('UPDATE wiki_pages SET backlink_count = backlink_count + 1 WHERE id = ?', [targetPageId])
@@ -591,22 +471,18 @@ export async function addPageLink(
 /** 移除页面链接 */
 export async function removePageLink(id: string): Promise<void> {
   const link = await query<{ source_page_id: string; target_page_id: string }>(
-    'SELECT source_page_id, target_page_id FROM wiki_page_links WHERE id = ?',
-    [id],
+    'SELECT source_page_id, target_page_id FROM wiki_page_links WHERE id = ?', [id]
   )
   if (link.length > 0) {
     await run('DELETE FROM wiki_page_links WHERE id = ?', [id])
-    await run('UPDATE wiki_pages SET backlink_count = MAX(0, backlink_count - 1) WHERE id = ?', [
-      link[0].target_page_id,
-    ])
+    await run('UPDATE wiki_pages SET backlink_count = MAX(0, backlink_count - 1) WHERE id = ?', [link[0].target_page_id])
   }
 }
 
 /** 获取页面的反向链接（谁链接到此页） */
 export async function getPageBacklinks(pageId: string): Promise<WikiPage[]> {
   const rows = await query<{ source_page_id: string }>(
-    'SELECT source_page_id FROM wiki_page_links WHERE target_page_id = ?',
-    [pageId],
+    'SELECT source_page_id FROM wiki_page_links WHERE target_page_id = ?', [pageId]
   )
   const pages: WikiPage[] = []
   for (const r of rows) {
@@ -619,8 +495,7 @@ export async function getPageBacklinks(pageId: string): Promise<WikiPage[]> {
 /** 获取页面的外向链接（此页链接到谁） */
 export async function getPageOutlinks(pageId: string): Promise<Array<WikiPage & { linkType: string }>> {
   const rows = await query<{ target_page_id: string; link_type: string }>(
-    'SELECT target_page_id, link_type FROM wiki_page_links WHERE source_page_id = ?',
-    [pageId],
+    'SELECT target_page_id, link_type FROM wiki_page_links WHERE source_page_id = ?', [pageId]
   )
   const pages: Array<WikiPage & { linkType: string }> = []
   for (const r of rows) {
@@ -667,12 +542,11 @@ async function filterPagesByScope(
   folderPath?: string | null,
 ): Promise<Array<WikiPage & { score: number }>> {
   if (!folderPath) return rows
-  const sourceIds = Array.from(new Set(rows.flatMap((page) => page.sourceIds).filter(Boolean)))
-  const sourceFolderMap =
-    sourceIds.length > 0
-      ? new Map((await loadKnowledgeSourceScopeEntries(sourceIds)).map((entry) => [entry.id, entry.folderPath]))
-      : new Map<string, string>()
-  return rows.filter((page) => pageMatchesFolderScope(page, folderPath, sourceFolderMap))
+  const sourceIds = Array.from(new Set(rows.flatMap(page => page.sourceIds).filter(Boolean)))
+  const sourceFolderMap = sourceIds.length > 0
+    ? new Map((await loadKnowledgeSourceScopeEntries(sourceIds)).map(entry => [entry.id, entry.folderPath]))
+    : new Map<string, string>()
+  return rows.filter(page => pageMatchesFolderScope(page, folderPath, sourceFolderMap))
 }
 
 export async function searchPages(
@@ -701,7 +575,7 @@ export async function searchPages(
     const ftsRows = await query<Record<string, unknown> & { rank: number }>(sql, params)
     if (ftsRows.length > 0) {
       const filteredRows = await filterPagesByScope(
-        ftsRows.map((r) => ({ ...parsePageRow(r), score: -r.rank })),
+        ftsRows.map(r => ({ ...parsePageRow(r), score: -r.rank })),
         folderPath,
       )
       if (filteredRows.length > 0) return filteredRows.slice(0, limit)
@@ -730,11 +604,11 @@ export async function searchPages(
   const rows = await query<Record<string, unknown>>(sql, params)
   const filteredRows = await filterPagesByScope(
     rows
-      .map((r) => {
+      .map(r => {
         const page = parsePageRow(r)
         return { ...page, score: scorePageMatch(page, keywords) }
       })
-      .filter((page) => page.score > 0)
+      .filter(page => page.score > 0)
       .sort((a, b) => b.score - a.score || b.importance - a.importance || b.confidence - a.confidence),
     folderPath,
   )
@@ -765,11 +639,9 @@ export async function searchSources(
 
     const ftsRows = await query<Record<string, unknown> & { rank: number }>(sql, params)
     if (ftsRows.length > 0) {
-      return ftsRows.map((r) => ({ ...parseSourceRow(r), score: -r.rank }))
+      return ftsRows.map(r => ({ ...parseSourceRow(r), score: -r.rank }))
     }
-  } catch {
-    /* fallback */
-  }
+  } catch { /* fallback */ }
 
   const keywords = extractSearchTerms(queryText, { maxTerms: 12 })
   if (keywords.length === 0) return []
@@ -789,11 +661,11 @@ export async function searchSources(
   params.push(Math.max(limit * 4, 50))
   const rows = await query<Record<string, unknown>>(sql, params)
   return rows
-    .map((r) => {
+    .map(r => {
       const source = parseSourceRow(r)
       return { ...source, score: scoreSourceMatch(source, keywords) }
     })
-    .filter((source) => source.score > 0)
+    .filter(source => source.score > 0)
     .sort((a, b) => b.score - a.score || b.updatedAt.localeCompare(a.updatedAt))
     .slice(0, limit)
 }
@@ -835,18 +707,12 @@ export async function getOrCreateLogPage(): Promise<WikiPage> {
 }
 
 /** 追加日志条目 */
-export async function appendToLog(
-  action: string,
-  targetType: string,
-  targetId: string,
-  description: string,
-  details?: Record<string, unknown>,
-): Promise<string> {
+export async function appendToLog(action: string, targetType: string, targetId: string, description: string, details?: Record<string, unknown>): Promise<string> {
   const id = generateId()
   await run(
     `INSERT INTO wiki_activity_log (id, action, target_type, target_id, description, details_json)
      VALUES (?, ?, ?, ?, ?, ?)`,
-    [id, action, targetType, targetId, description, JSON.stringify(details || {})],
+    [id, action, targetType, targetId, description, JSON.stringify(details || {})]
   )
   return id
 }
@@ -866,7 +732,7 @@ export async function getWikiStats(): Promise<{
   const confRows = await query<{ avg_conf: number }>('SELECT AVG(confidence) as avg_conf FROM wiki_pages')
   const impRows = await query<{ avg_imp: number }>('SELECT AVG(importance) as avg_imp FROM wiki_pages')
   const catRows = await query<{ category: string; cnt: number }>(
-    'SELECT category, COUNT(*) as cnt FROM wiki_pages WHERE is_index = 0 AND is_log = 0 GROUP BY category ORDER BY cnt DESC LIMIT 10',
+    'SELECT category, COUNT(*) as cnt FROM wiki_pages WHERE is_index = 0 AND is_log = 0 GROUP BY category ORDER BY cnt DESC LIMIT 10'
   )
 
   return {

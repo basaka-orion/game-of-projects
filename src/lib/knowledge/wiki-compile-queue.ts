@@ -1,7 +1,13 @@
 import { dbSaveOperatingEvent } from '../db/repository'
 import type { OperatingLoopSourceRef } from '../operating-loop'
 
-export type WikiCompileQueueTrigger = 'archive-message' | 'archive-inbox-confirm' | 'archive-inbox-bulk' | 'manual'
+export type WikiCompileQueueTrigger =
+  | 'archive-message'
+  | 'archive-inbox-confirm'
+  | 'archive-inbox-bulk'
+  | 'manual'
+  | 'wanxiang-absorption'
+  | 'wanxiang-archive'
 
 export interface WikiCompileQueueRequest {
   id?: string

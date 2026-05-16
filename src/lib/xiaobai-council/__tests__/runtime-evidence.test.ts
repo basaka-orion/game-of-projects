@@ -3,6 +3,7 @@ import { buildCouncilLaunchReadinessPack } from '../action-pack'
 import { buildCouncilBaoyuVisualPlans } from '../baoyu'
 import { buildCouncilDebateTheater } from '../debate-theater'
 import { buildCouncilDeliveryModes } from '../delivery-modes'
+import { createCouncilInternetResearchPack } from '../internet-research'
 import { buildCouncilQualityGate } from '../quality-gate'
 import { buildCouncilRuntimeEvidenceLedger, flattenCouncilActionTasks, renderCouncilRuntimeEvidenceMarkdown } from '../runtime-evidence'
 import { selectCouncilTeam } from '../selector'
@@ -99,6 +100,24 @@ describe('xiaobai council runtime evidence ledger', () => {
       qualityGate: certifiedQualityGate,
       baoyuVisualPlans,
     })
+    const internetResearch = createCouncilInternetResearchPack({
+      required: true,
+      attempted: true,
+      grounded: true,
+      status: 'grounded',
+      summary: '已联网核验外部事实边界。',
+      queries: ['小白智囊团 runtime evidence 2026'],
+      sources: [
+        {
+          title: 'Runtime evidence source',
+          url: 'https://example.com/runtime-evidence',
+          domain: 'example.com',
+          authority: 'reference',
+          snippet: 'Evidence source used to verify internet grounding is recorded.',
+        },
+      ],
+      generatedAt: '2026-05-15T00:00:00.000Z',
+    })
 
     const ledger = buildCouncilRuntimeEvidenceLedger({
       runStartedAt: 1000,
@@ -111,6 +130,7 @@ describe('xiaobai council runtime evidence ledger', () => {
       qualityGate: certifiedQualityGate,
       actionTasks: flattenCouncilActionTasks(actionPack.taskGroups),
       baoyuVisualPlans,
+      internetResearch,
     })
 
     expect(ledger.durationMs).toBe(5000)
@@ -118,12 +138,19 @@ describe('xiaobai council runtime evidence ledger', () => {
     expect(ledger.deepRunCertification.status).toBe('partial')
     expect(ledger.deepRunCertification.blockers.join('\n')).toContain('未达到默认深度模式')
     expect(ledger.replayFrames.map((frame) => frame.source)).toContain('match-gate')
+    expect(ledger.replayFrames.map((frame) => frame.source)).toContain('internet-research')
     expect(ledger.replayFrames.map((frame) => frame.source)).toContain('quality-gate')
     expect(ledger.stageTrace).toHaveLength(6)
+    expect(ledger.internetResearchRequired).toBe(true)
+    expect(ledger.internetResearchGrounded).toBe(true)
+    expect(ledger.internetSourceCount).toBe(1)
     expect(ledger.evidenceItems.map((item) => item.id)).toContain('deep-run-certification')
+    expect(ledger.evidenceItems.map((item) => item.id)).toContain('internet-research')
     expect(ledger.evidenceItems.map((item) => item.id)).toContain('action-pack')
     expect(ledger.nextProofNeeded.join('\n')).toContain('真实小白用户验证')
     expect(renderCouncilRuntimeEvidenceMarkdown(ledger)).toContain('真实运行证据账本')
+    expect(renderCouncilRuntimeEvidenceMarkdown(ledger)).toContain('internetResearch: required=yes grounded=yes sources=1')
+    expect(renderCouncilRuntimeEvidenceMarkdown(ledger)).toContain('小白智囊团 runtime evidence 2026')
     expect(renderCouncilRuntimeEvidenceMarkdown(ledger)).toContain('深度长跑认证')
     expect(renderCouncilRuntimeEvidenceMarkdown(ledger)).toContain('运行回放帧')
     expect(renderCouncilRuntimeEvidenceMarkdown(ledger)).not.toContain('sk-')

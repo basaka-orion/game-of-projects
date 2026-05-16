@@ -3,7 +3,7 @@ import { query, run } from '../db/repository'
 import { generateId } from '../db/schema'
 import { approveTeamAction, executeTeamAction, isExecutableTeamAction } from '../teams/action-broker'
 import { runTeamSession } from '../teams/engine'
-import { createTeam, createTeamActions, getTeam, listTeamActions, listTeams } from '../teams/store'
+import { createTeam, createTeamActions, getTeam, listTeamActions, listTeams, updateTeam } from '../teams/store'
 import type { TeamAction, TeamMessage, TeamWorkflowType } from '../teams/types'
 import { buildUiMuseumPrdContext } from '../ui-museum/context'
 import { buildWorkflowDeliveryActions, shouldMaterializeWorkflowDelivery } from './delivery'
@@ -118,6 +118,8 @@ const DEFAULT_PROMPT_TEMPLATE = generatePromptTemplateFromWorkflow({
 })
 const MAC_APP_DEVELOPMENT_TEAM_NAME = 'Mac App 大师开发群策'
 const MAC_APP_DEVELOPMENT_WORKFLOW_ID = 'wfs_mac_app_lumadesk_master'
+let macAppDevelopmentTeamPromise: Promise<string> | null = null
+let macAppDevelopmentWorkflowPromise: Promise<string> | null = null
 
 const MAC_APP_DEVELOPMENT_STEPS = [
   '把 Boss 的一句 Mac App 想法压缩成一句清晰产品承诺，并明确不做什么',
@@ -759,10 +761,18 @@ export async function publishWorkflowStudioItem(
   )
 }
 
-async function ensureMacAppDevelopmentTeam(): Promise<string> {
+async function ensureMacAppDevelopmentTeamRecord(): Promise<string> {
   const teams = await listTeams({ status: 'active' }).catch(() => [])
-  const existing = teams.find((team) => team.name === MAC_APP_DEVELOPMENT_TEAM_NAME)
-  if (existing) return existing.id
+  const matching = teams
+    .filter((team) => team.name === MAC_APP_DEVELOPMENT_TEAM_NAME)
+    .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''))
+  const existing = matching[0]
+  if (existing) {
+    await Promise.all(
+      matching.slice(1).map((team) => updateTeam(team.id, { status: 'archived' }).catch(() => undefined)),
+    )
+    return existing.id
+  }
 
   return createTeam({
     name: MAC_APP_DEVELOPMENT_TEAM_NAME,
@@ -797,7 +807,16 @@ async function ensureMacAppDevelopmentTeam(): Promise<string> {
   })
 }
 
-export async function ensureMacAppDevelopmentWorkflow(): Promise<string> {
+async function ensureMacAppDevelopmentTeam(): Promise<string> {
+  if (!macAppDevelopmentTeamPromise) {
+    macAppDevelopmentTeamPromise = ensureMacAppDevelopmentTeamRecord().finally(() => {
+      macAppDevelopmentTeamPromise = null
+    })
+  }
+  return macAppDevelopmentTeamPromise
+}
+
+async function ensureMacAppDevelopmentWorkflowRecord(): Promise<string> {
   await ensureWorkflowStudioSchema()
   const teamId = await ensureMacAppDevelopmentTeam()
   const existing = await getWorkflowStudioItem(MAC_APP_DEVELOPMENT_WORKFLOW_ID)
@@ -811,7 +830,7 @@ export async function ensureMacAppDevelopmentWorkflow(): Promise<string> {
   })
 
   await run(
-    `INSERT INTO workflow_studio_items
+    `INSERT OR REPLACE INTO workflow_studio_items
      (id, name, goal, workflow_type, team_id, prompt_template, steps_json, target_consumers_json,
       status, last_test_status, last_test_input, last_test_output, published_targets_json)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', 'idle', ?, '', ?)`,
@@ -829,4 +848,13 @@ export async function ensureMacAppDevelopmentWorkflow(): Promise<string> {
     ],
   )
   return MAC_APP_DEVELOPMENT_WORKFLOW_ID
+}
+
+export async function ensureMacAppDevelopmentWorkflow(): Promise<string> {
+  if (!macAppDevelopmentWorkflowPromise) {
+    macAppDevelopmentWorkflowPromise = ensureMacAppDevelopmentWorkflowRecord().finally(() => {
+      macAppDevelopmentWorkflowPromise = null
+    })
+  }
+  return macAppDevelopmentWorkflowPromise
 }

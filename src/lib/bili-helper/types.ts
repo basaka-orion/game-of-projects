@@ -1,4 +1,4 @@
-export type BiliHelperView = 'workspace' | 'insights' | 'tutorial' | 'chat' | 'downloads' | 'coverage' | 'library'
+export type BiliHelperView = 'workspace' | 'insights' | 'tutorial' | 'wanxiang' | 'chat' | 'downloads' | 'coverage' | 'library'
 
 export type BiliSourceKind = 'video' | 'webpage' | 'file' | 'image' | 'audio' | 'document' | 'social' | 'cloud' | 'podcast' | 'meeting'
 
@@ -26,11 +26,112 @@ export type BiliSourcePlatform =
 
 export type BiliArtifactMode = 'tutorial' | 'mindmap' | 'quiz' | 'tldr' | 'debate' | 'timeline' | 'actionable' | 'roast'
 
-export type BiliDownloadFormat = 'video' | 'audio' | 'subtitle' | 'cover' | 'markdown'
+export type BiliDownloadFormat = 'video' | 'audio' | 'subtitle' | 'vtt' | 'cover' | 'markdown' | 'json' | 'mindmap'
 
 export type BiliDownloadStatus = 'queued' | 'running' | 'done' | 'failed'
 
 export type BiliChatRole = 'user' | 'assistant'
+
+export type SourceAssetStageId =
+  | 'received'
+  | 'metadata'
+  | 'content'
+  | 'transcript'
+  | 'summary'
+  | 'artifacts'
+  | 'chatIndex'
+  | 'archived'
+  | 'exported'
+
+export type SourceAssetStageStatus = 'pending' | 'running' | 'done' | 'partial' | 'blocked' | 'failed'
+
+export type SourceAssetProvider = 'local' | 'bibigpt' | 'electron' | 'yt-dlp' | 'whisper' | 'apple-vision' | 'openbasaka'
+
+export type SourceAssetArtifactKind =
+  | 'summary'
+  | 'learning-pack'
+  | 'wanxiang'
+  | 'chat-index'
+  | 'mindmap'
+  | 'transcript'
+  | 'visual'
+  | 'download'
+  | 'archive'
+
+export interface SourceAssetStage {
+  id: SourceAssetStageId
+  label: string
+  status: SourceAssetStageStatus
+  detail: string
+  provider?: SourceAssetProvider | string
+  startedAt?: number
+  completedAt?: number
+  error?: string
+}
+
+export interface SourceAssetProviderRun {
+  id: string
+  provider: SourceAssetProvider
+  capability: string
+  status: 'running' | 'done' | 'failed' | 'skipped'
+  startedAt: number
+  completedAt?: number
+  durationMs?: number
+  detail: string
+  error?: string
+  receipt?: Record<string, unknown>
+}
+
+export interface SourceAssetArtifactRecord {
+  id: string
+  kind: SourceAssetArtifactKind
+  label: string
+  status: 'ready' | 'generated' | 'failed' | 'blocked'
+  source: SourceAssetProvider | 'ai'
+  createdAt: number
+  evidenceRefIds: string[]
+  description: string
+  outputPath?: string
+  error?: string
+}
+
+export interface SourceAssetExportReceipt {
+  id: string
+  format: BiliDownloadFormat
+  outputName: string
+  status: 'done' | 'failed'
+  createdAt: number
+  outputPath?: string
+  error?: string
+}
+
+export interface SourceAssetLibraryReceipt {
+  sourceId: string
+  drawerId?: string
+  queueEventId?: string
+  folderPath: string
+  archivedAt: number
+  mode: 'archive' | 'absorption' | 'general'
+}
+
+export interface SourceAsset {
+  id: string
+  sourceId: string
+  title: string
+  status: 'empty' | 'blocked' | 'partial' | 'ready' | 'archived'
+  updatedAt: number
+  intakeRun: {
+    method: string
+    contentLength: number
+    evidenceCount: number
+  }
+  pipeline: SourceAssetStage[]
+  evidenceRefs: SourceEvidenceRef[]
+  providerRuns: SourceAssetProviderRun[]
+  artifacts: SourceAssetArtifactRecord[]
+  exportReceipts: SourceAssetExportReceipt[]
+  libraryReceipt?: SourceAssetLibraryReceipt
+}
 
 export type BaoyuVisualArtifactKind = 'image-cards' | 'infographic' | 'comic' | 'diagram' | 'cover' | 'article-illustration'
 
@@ -64,11 +165,31 @@ export interface TeachingVerdictResult {
   nonTeachingDigest?: string
 }
 
+export interface OpenbasakaPromptPatch {
+  title: string
+  target: WanxiangFusionSubsystem | string
+  prompt: string
+  evidenceRefs: SourceEvidenceRef[]
+}
+
+export interface OpenbasakaReusableAsset {
+  title: string
+  kind: string
+  content: string
+  evidenceRefs: SourceEvidenceRef[]
+}
+
 export interface OpenbasakaFusionResult {
   applicable: boolean
   targetSubsystems: WanxiangFusionSubsystem[]
   rationale: string
   masterPrompt: string
+  systemTransformationPrompt: string
+  absorptionScore: number
+  absorptionVerdict: string
+  promptPatches: OpenbasakaPromptPatch[]
+  reusableAssets: OpenbasakaReusableAsset[]
+  integrationSteps: string[]
   archiveTags: string[]
   folderPath: string
   risks: string[]
@@ -239,8 +360,10 @@ export interface BiliDownloadTask {
 export interface BiliVideoWorkspace {
   video: BiliVideoInfo
   transcript: string
+  sourceAsset?: SourceAsset
   wanxiang?: WanxiangLearningResult
   pack?: BiliLearningPack
+  modePacks?: Partial<Record<BiliArtifactMode, BiliLearningPack>>
   visualArtifacts?: BaoyuVisualArtifact[]
   archive?: BiliArchiveState
   chat: BiliChatMessage[]

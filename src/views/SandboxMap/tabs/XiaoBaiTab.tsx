@@ -11,7 +11,7 @@ import { diagnoseStreaming, followUpStreaming, type StreamPhase } from '../../..
 import { storeSolution } from '../../../lib/xiaobai/knowledge-base'
 import { listAllAgents, AgentDefinition } from '../../../lib/agents/registry'
 import { getSoul, renderSoulPrompt } from '../../../lib/agents/soul'
-import { listEvolutionEvents, type EvolutionEvent } from '../../../lib/evolution/workshop'
+import { recordOpenbasakaOperationQuietly } from '../../../lib/openbasaka/operation-history'
 import RLJBMacApp from './rljb/RLJBMacApp'
 import FlashOfGeniusMacApp from './flash-of-genius/FlashOfGeniusMacApp'
 import ChuangyiMacApp from './chuangyi/ChuangyiMacApp'
@@ -28,6 +28,21 @@ type ActionType = 'copy' | 'run_terminal' | 'open_url' | 'multi_step'
 type SidebarTab = 'history' | 'notes'
 type MainView = 'home' | 'result' | 'note'
 type XiaoBaiMode = 'diagnose' | 'rljb' | 'flash' | 'chuangyi' | 'bili' | 'council' | 'uiMuseum' | 'foodAd'
+
+const xiaobaiWorkspaces: Array<{
+  id: XiaoBaiMode
+  label: string
+  subtitle: string
+}> = [
+  { id: 'diagnose', label: '小白诊断', subtitle: '问题诊断 / 笔记 / 历史' },
+  { id: 'rljb', label: '人类基本盘', subtitle: '知识树 / 认知成长' },
+  { id: 'flash', label: '灵犀一念', subtitle: '灵感捕捉 / 作品生成' },
+  { id: 'chuangyi', label: '创意孵化器', subtitle: '创意画像 / 蓝图' },
+  { id: 'bili', label: '万象学习', subtitle: '视频 / 文件 / 学习包' },
+  { id: 'council', label: '小白智囊团', subtitle: '多专家审查 / PRD' },
+  { id: 'uiMuseum', label: 'UI 风格馆', subtitle: '审美参考 / 视觉规范' },
+  { id: 'foodAd', label: '广告大片', subtitle: '美食视觉 / 提示词' },
+]
 
 interface FollowUp {
   question: string
@@ -104,11 +119,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
     const line = lines[i]
     if (line.startsWith('```')) {
       if (inCodeBlock) {
-        elements.push(
-          <pre key={`code${codeKey++}`}>
-            <code>{codeBuffer.join('\n')}</code>
-          </pre>,
-        )
+        elements.push(<pre key={`code${codeKey++}`}><code>{codeBuffer.join('\n')}</code></pre>)
         codeBuffer = []
         inCodeBlock = false
       } else {
@@ -116,10 +127,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
       }
       continue
     }
-    if (inCodeBlock) {
-      codeBuffer.push(line)
-      continue
-    }
+    if (inCodeBlock) { codeBuffer.push(line); continue }
 
     if (line.startsWith('> ')) {
       elements.push(<blockquote key={i}>{processInline(line.slice(2))}</blockquote>)
@@ -134,7 +142,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
         <div key={i} style={{ display: 'flex', gap: '6px', margin: '2px 0' }}>
           <span style={{ color: 'var(--hd-text-muted)', flexShrink: 0 }}>•</span>
           <span>{processInline(line.slice(2))}</span>
-        </div>,
+        </div>
       )
     } else if (/^\d+\.\s/.test(line)) {
       const m = line.match(/^(\d+)\.\s(.*)/)
@@ -143,17 +151,13 @@ function renderMarkdown(text: string): React.ReactNode[] {
           <div key={i} style={{ display: 'flex', gap: '6px', margin: '2px 0' }}>
             <span style={{ color: 'var(--hd-text-muted)', flexShrink: 0, minWidth: '18px' }}>{m[1]}.</span>
             <span>{processInline(m[2])}</span>
-          </div>,
+          </div>
         )
       }
     } else if (line.trim() === '' || line.startsWith('---')) {
       elements.push(<div key={i} style={{ height: '8px' }} />)
     } else {
-      elements.push(
-        <p key={i} style={{ margin: '3px 0' }}>
-          {processInline(line)}
-        </p>,
-      )
+      elements.push(<p key={i} style={{ margin: '3px 0' }}>{processInline(line)}</p>)
     }
   }
   return elements
@@ -165,9 +169,9 @@ export default function XiaoBaiTab() {
   // LLM config — 直接使用 OpenBasaka 全局共享配置
 
   // ─── State ──────────────────────────────────────────────
+  const [workspaceMode, setWorkspaceMode] = useState<XiaoBaiMode>('diagnose')
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>('history')
   const [mainView, setMainView] = useState<MainView>('home')
-  const [workspaceMode, setWorkspaceMode] = useState<XiaoBaiMode>('diagnose')
   const [searchText, setSearchText] = useState('')
 
   // Diagnosis
@@ -181,7 +185,6 @@ export default function XiaoBaiTab() {
   // Notes
   const [notes, setNotes] = useState<CustomNote[]>([])
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null)
-  const [evolutionEvents, setEvolutionEvents] = useState<EvolutionEvent[]>([])
 
   // Attachments
   const [attachments, setAttachments] = useState<Attachment[]>([])
@@ -194,7 +197,7 @@ export default function XiaoBaiTab() {
   const [selectedAgentId, setSelectedAgentId] = useState('')
 
   useEffect(() => {
-    listAllAgents().then((list) => setAgents(list.filter((a) => a.isCustom)))
+    listAllAgents().then(list => setAgents(list.filter(a => a.isCustom)))
   }, [])
 
   // Result view
@@ -209,61 +212,33 @@ export default function XiaoBaiTab() {
   const bottomRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const workspaceTitle =
-    workspaceMode === 'diagnose'
-      ? '诊断助手'
-      : workspaceMode === 'rljb'
-        ? '人类基本盘 · RLJB Mac'
-        : workspaceMode === 'flash'
-          ? '灵犀一念 · Flash Mac'
-          : workspaceMode === 'chuangyi'
-            ? '创意孵化器 · Chuangyi Mac'
-            : workspaceMode === 'bili'
-              ? '万象学习助手 · SourceOS Mac'
-              : workspaceMode === 'council'
-                ? '小白智囊团 · PRD 闭环'
-                : workspaceMode === 'uiMuseum'
-                  ? 'UI 风格博物馆 · UI- Mac'
-                  : '美食广告大片生成器 · AI Studio Mac'
-
   // ─── Data Loading ────────────────────────────────────────
 
   useEffect(() => {
     loadHistory()
     loadNotes()
-    listEvolutionEvents(6).then(setEvolutionEvents)
   }, [])
 
   async function loadHistory() {
     try {
       const rows = await query<{
-        id: string
-        problem: string
-        solution: string
-        source: string
-        confidence: number
-        action_type: string
-        tags: string
-        followups_json: string
-        is_pinned: number
-        is_favorite: number
-        created_at: string
+        id: string; problem: string; solution: string; source: string;
+        confidence: number; action_type: string; tags: string;
+        followups_json: string; is_pinned: number; is_favorite: number; created_at: string
       }>('SELECT * FROM xiaobai_history ORDER BY is_pinned DESC, created_at DESC LIMIT 50')
-      setHistory(
-        rows.map((r) => ({
-          id: r.id,
-          problem: r.problem,
-          solution: r.solution,
-          source: (r.source || 'generated') as SourceType,
-          confidence: r.confidence || 0.5,
-          actionType: (r.action_type || 'copy') as ActionType,
-          followUps: JSON.parse(r.followups_json || '[]'),
-          tags: r.tags ? r.tags.split(',').filter(Boolean) : [],
-          isPinned: !!r.is_pinned,
-          isFavorite: !!r.is_favorite,
-          createdAt: r.created_at,
-        })),
-      )
+      setHistory(rows.map(r => ({
+        id: r.id,
+        problem: r.problem,
+        solution: r.solution,
+        source: (r.source || 'generated') as SourceType,
+        confidence: r.confidence || 0.5,
+        actionType: (r.action_type || 'copy') as ActionType,
+        followUps: JSON.parse(r.followups_json || '[]'),
+        tags: r.tags ? r.tags.split(',').filter(Boolean) : [],
+        isPinned: !!r.is_pinned,
+        isFavorite: !!r.is_favorite,
+        createdAt: r.created_at,
+      })))
     } catch {
       // 表可能不存在
     }
@@ -272,25 +247,18 @@ export default function XiaoBaiTab() {
   async function loadNotes() {
     try {
       const rows = await query<{
-        id: string
-        title: string
-        content: string
-        is_pinned: number
-        is_favorite: number
-        created_at: string
-        updated_at: string
+        id: string; title: string; content: string;
+        is_pinned: number; is_favorite: number; created_at: string; updated_at: string
       }>('SELECT * FROM xiaobai_notes ORDER BY is_pinned DESC, updated_at DESC')
-      setNotes(
-        rows.map((r) => ({
-          id: r.id,
-          title: r.title,
-          content: r.content || '',
-          isPinned: !!r.is_pinned,
-          isFavorite: !!r.is_favorite,
-          createdAt: r.created_at,
-          updatedAt: r.updated_at,
-        })),
-      )
+      setNotes(rows.map(r => ({
+        id: r.id,
+        title: r.title,
+        content: r.content || '',
+        isPinned: !!r.is_pinned,
+        isFavorite: !!r.is_favorite,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+      })))
     } catch {
       // 表可能不存在
     }
@@ -305,7 +273,7 @@ export default function XiaoBaiTab() {
     setStreamContent('')
     setRated(false)
 
-    const attachmentData = attachments.map((a) => ({
+    const attachmentData = attachments.map(a => ({
       type: a.type as 'image' | 'file',
       dataUrl: a.dataUrl,
       name: a.name,
@@ -318,88 +286,67 @@ export default function XiaoBaiTab() {
       try {
         const soul = await getSoul(selectedAgentId)
         personaOverride = renderSoulPrompt(soul)
-      } catch {
-        /* ignore */
-      }
+      } catch { /* ignore */ }
     }
 
-    diagnoseStreaming(
-      llmConfig,
-      problemText,
-      mode,
-      {
-        onPhase: (phase) => setStreamPhase(phase),
-        onChunk: (chunk) => setStreamContent((prev) => prev + chunk),
-        onDone: async (result) => {
-          const diagnosis: Diagnosis = {
-            id: generateId(),
-            problem: result.problem,
-            solution: result.solution,
-            source: result.source,
-            confidence: result.confidence,
-            actionType: result.actionType as ActionType,
-            followUps: [],
-            tags: result.tags || (mode === 'analyze' ? ['🔮 分析'] : []),
-            isPinned: false,
-            isFavorite: false,
-            createdAt: new Date().toISOString(),
-          }
+    diagnoseStreaming(llmConfig, problemText, mode, {
+      onPhase: (phase) => setStreamPhase(phase),
+      onChunk: (chunk) => setStreamContent(prev => prev + chunk),
+      onDone: async (result) => {
+        const diagnosis: Diagnosis = {
+          id: generateId(),
+          problem: result.problem,
+          solution: result.solution,
+          source: result.source,
+          confidence: result.confidence,
+          actionType: result.actionType as ActionType,
+          followUps: [],
+          tags: result.tags || (mode === 'analyze' ? ['🔮 分析'] : []),
+          isPinned: false,
+          isFavorite: false,
+          createdAt: new Date().toISOString(),
+        }
 
-          setCurrentDiagnosis(diagnosis)
-          setMainView('result')
-          setIsLoading(false)
-          setStreamPhase('done')
-          setAttachments([])
-          setProblemText('')
+        setCurrentDiagnosis(diagnosis)
+        setMainView('result')
+        setIsLoading(false)
+        setStreamPhase('done')
+        setAttachments([])
+        setProblemText('')
 
-          // 写入历史
-          const newHistory = [diagnosis, ...history].slice(0, 50)
-          setHistory(newHistory)
+        // 写入历史
+        const newHistory = [diagnosis, ...history].slice(0, 50)
+        setHistory(newHistory)
 
-          try {
-            await run(
-              `INSERT INTO xiaobai_history (id, problem, solution, source, confidence, action_type, tags, followups_json, is_pinned, is_favorite)
+        try {
+          await run(
+            `INSERT INTO xiaobai_history (id, problem, solution, source, confidence, action_type, tags, followups_json, is_pinned, is_favorite)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [
-                diagnosis.id,
-                diagnosis.problem,
-                diagnosis.solution,
-                diagnosis.source,
-                diagnosis.confidence,
-                diagnosis.actionType,
-                diagnosis.tags.join(','),
-                '[]',
-                0,
-                0,
-              ],
-            )
-          } catch {
-            /* ignore */
-          }
-        },
-        onError: (err) => {
-          const errorDiagnosis: Diagnosis = {
-            id: generateId(),
-            problem: problemText,
-            solution: `诊断失败：\n\n\`\`\`\n${err.message}\n\`\`\`\n\n请检查 API 密钥和网络设置。`,
-            source: 'local',
-            confidence: 0,
-            actionType: 'copy',
-            followUps: [],
-            tags: [],
-            isPinned: false,
-            isFavorite: false,
-            createdAt: new Date().toISOString(),
-          }
-          setCurrentDiagnosis(errorDiagnosis)
-          setMainView('result')
-          setIsLoading(false)
-          setStreamPhase('done')
-        },
+            [diagnosis.id, diagnosis.problem, diagnosis.solution, diagnosis.source, diagnosis.confidence,
+             diagnosis.actionType, diagnosis.tags.join(','), '[]', 0, 0]
+          )
+        } catch { /* ignore */ }
       },
-      attachmentData,
-      personaOverride,
-    )
+      onError: (err) => {
+        const errorDiagnosis: Diagnosis = {
+          id: generateId(),
+          problem: problemText,
+          solution: `诊断失败：\n\n\`\`\`\n${err.message}\n\`\`\`\n\n请检查 API 密钥和网络设置。`,
+          source: 'local',
+          confidence: 0,
+          actionType: 'copy',
+          followUps: [],
+          tags: [],
+          isPinned: false,
+          isFavorite: false,
+          createdAt: new Date().toISOString(),
+        }
+        setCurrentDiagnosis(errorDiagnosis)
+        setMainView('result')
+        setIsLoading(false)
+        setStreamPhase('done')
+      },
+    }, attachmentData, personaOverride)
   }
 
   // ─── Follow Up ──────────────────────────────────────────
@@ -428,12 +375,12 @@ export default function XiaoBaiTab() {
           setCurrentDiagnosis(updated)
           setIsFollowUpLoading(false)
           // 更新历史
-          setHistory((prev) => prev.map((h) => (h.id === updated.id ? updated : h)))
+          setHistory(prev => prev.map(h => h.id === updated.id ? updated : h))
           // 更新 DB
-          run('UPDATE xiaobai_history SET followups_json = ? WHERE id = ?', [
-            JSON.stringify(updated.followUps),
-            updated.id,
-          ]).catch(() => {})
+          run(
+            'UPDATE xiaobai_history SET followups_json = ? WHERE id = ?',
+            [JSON.stringify(updated.followUps), updated.id]
+          ).catch(() => {})
           setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
         },
         onError: (err) => {
@@ -444,7 +391,7 @@ export default function XiaoBaiTab() {
           })
           setIsFollowUpLoading(false)
         },
-      },
+      }
     )
   }
 
@@ -463,9 +410,7 @@ export default function XiaoBaiTab() {
         rating,
         tags: currentDiagnosis.tags,
       })
-    } catch {
-      /* ignore */
-    }
+    } catch { /* ignore */ }
   }
 
   // ─── Notes CRUD ──────────────────────────────────────────
@@ -480,7 +425,7 @@ export default function XiaoBaiTab() {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }
-    setNotes((prev) => [newNote, ...prev])
+    setNotes(prev => [newNote, ...prev])
     setActiveNoteId(newNote.id)
     setMainView('note')
     setSidebarTab('notes')
@@ -489,28 +434,28 @@ export default function XiaoBaiTab() {
     run(
       `INSERT INTO xiaobai_notes (id, title, content, is_pinned, is_favorite)
        VALUES (?, ?, ?, ?, ?)`,
-      [newNote.id, newNote.title, '', 0, 0],
+      [newNote.id, newNote.title, '', 0, 0]
     ).catch(() => {})
   }
 
   const updateNoteDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   function updateNote(id: string, title: string, content: string) {
-    setNotes((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, title, content, updatedAt: new Date().toISOString() } : n)),
-    )
+    setNotes(prev => prev.map(n => n.id === id
+      ? { ...n, title, content, updatedAt: new Date().toISOString() }
+      : n
+    ))
     if (updateNoteDebounce.current) clearTimeout(updateNoteDebounce.current)
     updateNoteDebounce.current = setTimeout(() => {
-      run("UPDATE xiaobai_notes SET title = ?, content = ?, updated_at = datetime('now','localtime') WHERE id = ?", [
-        title,
-        content,
-        id,
-      ]).catch(() => {})
+      run(
+        'UPDATE xiaobai_notes SET title = ?, content = ?, updated_at = datetime(\'now\',\'localtime\') WHERE id = ?',
+        [title, content, id]
+      ).catch(() => {})
     }, 500)
   }
 
   function deleteNote(id: string) {
-    setNotes((prev) => prev.filter((n) => n.id !== id))
+    setNotes(prev => prev.filter(n => n.id !== id))
     if (activeNoteId === id) {
       setActiveNoteId(null)
       setMainView('home')
@@ -529,7 +474,7 @@ export default function XiaoBaiTab() {
   }
 
   function deleteHistory(id: string) {
-    setHistory((prev) => prev.filter((h) => h.id !== id))
+    setHistory(prev => prev.filter(h => h.id !== id))
     if (currentDiagnosis?.id === id) {
       setCurrentDiagnosis(null)
       setMainView('home')
@@ -538,16 +483,16 @@ export default function XiaoBaiTab() {
   }
 
   function toggleHistoryPin(id: string) {
-    setHistory((prev) => prev.map((h) => (h.id === id ? { ...h, isPinned: !h.isPinned } : h)))
-    const item = history.find((h) => h.id === id)
+    setHistory(prev => prev.map(h => h.id === id ? { ...h, isPinned: !h.isPinned } : h))
+    const item = history.find(h => h.id === id)
     if (item) {
       run('UPDATE xiaobai_history SET is_pinned = ? WHERE id = ?', [item.isPinned ? 0 : 1, id]).catch(() => {})
     }
   }
 
   function toggleHistoryFavorite(id: string) {
-    setHistory((prev) => prev.map((h) => (h.id === id ? { ...h, isFavorite: !h.isFavorite } : h)))
-    const item = history.find((h) => h.id === id)
+    setHistory(prev => prev.map(h => h.id === id ? { ...h, isFavorite: !h.isFavorite } : h))
+    const item = history.find(h => h.id === id)
     if (item) {
       run('UPDATE xiaobai_history SET is_favorite = ? WHERE id = ?', [item.isFavorite ? 0 : 1, id]).catch(() => {})
     }
@@ -562,16 +507,16 @@ export default function XiaoBaiTab() {
   }
 
   function toggleNotePin(id: string) {
-    setNotes((prev) => prev.map((n) => (n.id === id ? { ...n, isPinned: !n.isPinned } : n)))
-    const item = notes.find((n) => n.id === id)
+    setNotes(prev => prev.map(n => n.id === id ? { ...n, isPinned: !n.isPinned } : n))
+    const item = notes.find(n => n.id === id)
     if (item) {
       run('UPDATE xiaobai_notes SET is_pinned = ? WHERE id = ?', [item.isPinned ? 0 : 1, id]).catch(() => {})
     }
   }
 
   function toggleNoteFavorite(id: string) {
-    setNotes((prev) => prev.map((n) => (n.id === id ? { ...n, isFavorite: !n.isFavorite } : n)))
-    const item = notes.find((n) => n.id === id)
+    setNotes(prev => prev.map(n => n.id === id ? { ...n, isFavorite: !n.isFavorite } : n))
+    const item = notes.find(n => n.id === id)
     if (item) {
       run('UPDATE xiaobai_notes SET is_favorite = ? WHERE id = ?', [item.isFavorite ? 0 : 1, id]).catch(() => {})
     }
@@ -592,7 +537,7 @@ export default function XiaoBaiTab() {
       const reader = new FileReader()
       reader.onload = () => {
         att.dataUrl = reader.result as string
-        setAttachments((prev) => [...prev, att])
+        setAttachments(prev => [...prev, att])
       }
       reader.readAsDataURL(file)
     }
@@ -607,9 +552,7 @@ export default function XiaoBaiTab() {
       await navigator.clipboard.writeText(currentDiagnosis.solution)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
-    } catch {
-      /* ignore */
-    }
+    } catch { /* ignore */ }
   }
 
   // ─── Edit ────────────────────────────────────────────────
@@ -618,7 +561,7 @@ export default function XiaoBaiTab() {
     if (!currentDiagnosis) return
     const updated = { ...currentDiagnosis, solution: editText }
     setCurrentDiagnosis(updated)
-    setHistory((prev) => prev.map((h) => (h.id === updated.id ? updated : h)))
+    setHistory(prev => prev.map(h => h.id === updated.id ? updated : h))
     setIsEditing(false)
     run('UPDATE xiaobai_history SET solution = ? WHERE id = ?', [editText, updated.id]).catch(() => {})
   }
@@ -628,16 +571,23 @@ export default function XiaoBaiTab() {
   const filteredHistory = useMemo(() => {
     if (!searchText.trim()) return history
     const kw = searchText.toLowerCase()
-    return history.filter((h) => h.problem.toLowerCase().includes(kw) || h.solution.toLowerCase().includes(kw))
+    return history.filter(h =>
+      h.problem.toLowerCase().includes(kw) || h.solution.toLowerCase().includes(kw)
+    )
   }, [history, searchText])
 
   const filteredNotes = useMemo(() => {
     if (!searchText.trim()) return notes
     const kw = searchText.toLowerCase()
-    return notes.filter((n) => n.title.toLowerCase().includes(kw) || n.content.toLowerCase().includes(kw))
+    return notes.filter(n =>
+      n.title.toLowerCase().includes(kw) || n.content.toLowerCase().includes(kw)
+    )
   }, [notes, searchText])
 
-  const activeNote = useMemo(() => notes.find((n) => n.id === activeNoteId), [notes, activeNoteId])
+  const activeNote = useMemo(() =>
+    notes.find(n => n.id === activeNoteId),
+    [notes, activeNoteId]
+  )
 
   // ─── Back to home ────────────────────────────────────────
 
@@ -648,81 +598,59 @@ export default function XiaoBaiTab() {
     setIsEditing(false)
   }
 
+  function openWorkspace(mode: XiaoBaiMode) {
+    setWorkspaceMode(mode)
+    recordOpenbasakaOperationQuietly({
+      moduleId: 'xiaobai',
+      moduleName: '小白',
+      action: '切换小白工作台',
+      summary: `进入 ${xiaobaiWorkspaces.find((item) => item.id === mode)?.label || mode}`,
+      toolRefs: ['xiaobai', mode, 'operating_events'],
+      entities: [mode],
+    })
+  }
+
+  function renderWorkspaceApp() {
+    if (workspaceMode === 'rljb') return <RLJBMacApp />
+    if (workspaceMode === 'flash') return <FlashOfGeniusMacApp />
+    if (workspaceMode === 'chuangyi') return <ChuangyiMacApp />
+    if (workspaceMode === 'bili') return <BiliHelperMacApp />
+    if (workspaceMode === 'council') return <CouncilMacApp />
+    if (workspaceMode === 'uiMuseum') return <UIStyleMuseumMacApp />
+    return <FoodAdCrafterMacApp />
+  }
+
   // ─── Render ──────────────────────────────────────────────
 
   return (
-    <div className="xiaobai-tab" style={{ position: 'relative' }}>
-      <div className="xiaobai-tab__modebar">
-        <div>
-          <span>小白工作台</span>
-          <strong>{workspaceTitle}</strong>
-        </div>
-        <div className="xiaobai-tab__mode-switch">
+    <div className={`xiaobai-tab xiaobai-tab--${workspaceMode}`} style={{ position: 'relative' }}>
+      {/* 隐藏文件 input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept="image/*,.pdf,.txt,.md,.json,.csv,.doc,.docx"
+        style={{ display: 'none' }}
+        onChange={handleFileSelect}
+      />
+
+      <div className="xiaobai-tab__workspace-switcher">
+        {xiaobaiWorkspaces.map((workspace) => (
           <button
-            className={workspaceMode === 'diagnose' ? 'xiaobai-tab__mode-btn--active' : ''}
-            onClick={() => setWorkspaceMode('diagnose')}
+            key={workspace.id}
+            className={`xiaobai-tab__workspace-btn ${workspaceMode === workspace.id ? 'xiaobai-tab__workspace-btn--active' : ''}`}
+            onClick={() => openWorkspace(workspace.id)}
           >
-            小白诊断
+            <span>{workspace.label}</span>
+            <small>{workspace.subtitle}</small>
           </button>
-          <button
-            className={workspaceMode === 'rljb' ? 'xiaobai-tab__mode-btn--active' : ''}
-            onClick={() => setWorkspaceMode('rljb')}
-          >
-            人类基本盘
-          </button>
-          <button
-            className={workspaceMode === 'flash' ? 'xiaobai-tab__mode-btn--active' : ''}
-            onClick={() => setWorkspaceMode('flash')}
-          >
-            灵犀一念
-          </button>
-          <button
-            className={workspaceMode === 'chuangyi' ? 'xiaobai-tab__mode-btn--active' : ''}
-            onClick={() => setWorkspaceMode('chuangyi')}
-          >
-            创意孵化器
-          </button>
-          <button
-            className={workspaceMode === 'bili' ? 'xiaobai-tab__mode-btn--active' : ''}
-            onClick={() => setWorkspaceMode('bili')}
-          >
-            万象学习
-          </button>
-          <button
-            className={workspaceMode === 'council' ? 'xiaobai-tab__mode-btn--active' : ''}
-            onClick={() => setWorkspaceMode('council')}
-          >
-            小白智囊团
-          </button>
-          <button
-            className={workspaceMode === 'uiMuseum' ? 'xiaobai-tab__mode-btn--active' : ''}
-            onClick={() => setWorkspaceMode('uiMuseum')}
-          >
-            UI风格馆
-          </button>
-          <button
-            className={workspaceMode === 'foodAd' ? 'xiaobai-tab__mode-btn--active' : ''}
-            onClick={() => setWorkspaceMode('foodAd')}
-          >
-            广告大片
-          </button>
-        </div>
+        ))}
       </div>
 
       {workspaceMode === 'diagnose' ? (
-        <div className="xiaobai-tab__diagnose-shell">
-          {/* 隐藏文件 input */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept="image/*,.pdf,.txt,.md,.json,.csv,.doc,.docx"
-            style={{ display: 'none' }}
-            onChange={handleFileSelect}
-          />
-
-      {/* ─── 左面板 ─── */}
-      <div className="xiaobai-tab__left">
+      <div className="xiaobai-tab__diagnose-shell">
+        {/* ─── 左面板 ─── */}
+        <div className="xiaobai-tab__left">
         <div className="xiaobai-tab__left-tabs">
           <button
             className={`xiaobai-tab__left-tab ${sidebarTab === 'history' ? 'xiaobai-tab__left-tab--active' : ''}`}
@@ -744,7 +672,7 @@ export default function XiaoBaiTab() {
             className="xiaobai-tab__search-input"
             placeholder={sidebarTab === 'history' ? '搜索历史...' : '搜索笔记...'}
             value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
+            onChange={e => setSearchText(e.target.value)}
           />
         </div>
 
@@ -757,127 +685,99 @@ export default function XiaoBaiTab() {
 
         {/* 列表 */}
         <div className="xiaobai-tab__list">
-          {sidebarTab === 'history' &&
-            (filteredHistory.length === 0 ? (
+          {sidebarTab === 'history' && (
+            filteredHistory.length === 0 ? (
               <div className="xiaobai-tab__list-empty">暂无诊断历史</div>
-            ) : (
-              filteredHistory.map((diag) => (
-                <div
-                  key={diag.id}
-                  className={`xiaobai-tab__list-item ${currentDiagnosis?.id === diag.id ? 'xiaobai-tab__list-item--active' : ''}`}
-                  onClick={() => selectHistory(diag)}
-                >
-                  <div className="xiaobai-tab__list-item-title">
-                    {diag.isPinned && '📌 '}
-                    {diag.problem.slice(0, 60)}
-                  </div>
-                  <div className="xiaobai-tab__list-item-preview">{diag.solution.slice(0, 80)}</div>
-                  <div className="xiaobai-tab__list-item-time">{diag.createdAt?.slice(0, 16)}</div>
-                  <div className="xiaobai-tab__list-item-actions">
-                    <button
-                      className={`xiaobai-tab__list-action-btn ${diag.isPinned ? 'xiaobai-tab__list-action-btn--active' : ''}`}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        toggleHistoryPin(diag.id)
-                      }}
-                      title="置顶"
-                    >
-                      📌
-                    </button>
-                    <button
-                      className={`xiaobai-tab__list-action-btn ${diag.isFavorite ? 'xiaobai-tab__list-action-btn--active' : ''}`}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        toggleHistoryFavorite(diag.id)
-                      }}
-                      title="收藏"
-                    >
-                      ⭐
-                    </button>
-                    <button
-                      className="xiaobai-tab__list-action-btn"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        deleteHistory(diag.id)
-                      }}
-                      title="删除"
-                    >
-                      🗑️
-                    </button>
-                  </div>
+            ) : filteredHistory.map(diag => (
+              <div
+                key={diag.id}
+                className={`xiaobai-tab__list-item ${currentDiagnosis?.id === diag.id ? 'xiaobai-tab__list-item--active' : ''}`}
+                onClick={() => selectHistory(diag)}
+              >
+                <div className="xiaobai-tab__list-item-title">
+                  {diag.isPinned && '📌 '}{diag.problem.slice(0, 60)}
                 </div>
-              ))
-            ))}
+                <div className="xiaobai-tab__list-item-preview">
+                  {diag.solution.slice(0, 80)}
+                </div>
+                <div className="xiaobai-tab__list-item-time">{diag.createdAt?.slice(0, 16)}</div>
+                <div className="xiaobai-tab__list-item-actions">
+                  <button
+                    className={`xiaobai-tab__list-action-btn ${diag.isPinned ? 'xiaobai-tab__list-action-btn--active' : ''}`}
+                    onClick={(e) => { e.stopPropagation(); toggleHistoryPin(diag.id) }}
+                    title="置顶"
+                  >📌</button>
+                  <button
+                    className={`xiaobai-tab__list-action-btn ${diag.isFavorite ? 'xiaobai-tab__list-action-btn--active' : ''}`}
+                    onClick={(e) => { e.stopPropagation(); toggleHistoryFavorite(diag.id) }}
+                    title="收藏"
+                  >⭐</button>
+                  <button
+                    className="xiaobai-tab__list-action-btn"
+                    onClick={(e) => { e.stopPropagation(); deleteHistory(diag.id) }}
+                    title="删除"
+                  >🗑️</button>
+                </div>
+              </div>
+            ))
+          )}
 
-          {sidebarTab === 'notes' &&
-            (filteredNotes.length === 0 ? (
+          {sidebarTab === 'notes' && (
+            filteredNotes.length === 0 ? (
               <div className="xiaobai-tab__list-empty">暂无笔记</div>
-            ) : (
-              filteredNotes.map((note) => (
-                <div
-                  key={note.id}
-                  className={`xiaobai-tab__list-item ${activeNoteId === note.id ? 'xiaobai-tab__list-item--active' : ''}`}
-                  onClick={() => selectNote(note)}
-                >
-                  <div className="xiaobai-tab__list-item-title">
-                    {note.isPinned && '📌 '}
-                    {note.title}
-                  </div>
-                  <div className="xiaobai-tab__list-item-preview">{note.content.slice(0, 80) || '空笔记'}</div>
-                  <div className="xiaobai-tab__list-item-time">{note.updatedAt?.slice(0, 16)}</div>
-                  <div className="xiaobai-tab__list-item-actions">
-                    <button
-                      className={`xiaobai-tab__list-action-btn ${note.isPinned ? 'xiaobai-tab__list-action-btn--active' : ''}`}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        toggleNotePin(note.id)
-                      }}
-                      title="置顶"
-                    >
-                      📌
-                    </button>
-                    <button
-                      className={`xiaobai-tab__list-action-btn ${note.isFavorite ? 'xiaobai-tab__list-action-btn--active' : ''}`}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        toggleNoteFavorite(note.id)
-                      }}
-                      title="收藏"
-                    >
-                      ⭐
-                    </button>
-                    <button
-                      className="xiaobai-tab__list-action-btn"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        deleteNote(note.id)
-                      }}
-                      title="删除"
-                    >
-                      🗑️
-                    </button>
-                  </div>
+            ) : filteredNotes.map(note => (
+              <div
+                key={note.id}
+                className={`xiaobai-tab__list-item ${activeNoteId === note.id ? 'xiaobai-tab__list-item--active' : ''}`}
+                onClick={() => selectNote(note)}
+              >
+                <div className="xiaobai-tab__list-item-title">
+                  {note.isPinned && '📌 '}{note.title}
                 </div>
-              ))
-            ))}
+                <div className="xiaobai-tab__list-item-preview">
+                  {note.content.slice(0, 80) || '空笔记'}
+                </div>
+                <div className="xiaobai-tab__list-item-time">{note.updatedAt?.slice(0, 16)}</div>
+                <div className="xiaobai-tab__list-item-actions">
+                  <button
+                    className={`xiaobai-tab__list-action-btn ${note.isPinned ? 'xiaobai-tab__list-action-btn--active' : ''}`}
+                    onClick={(e) => { e.stopPropagation(); toggleNotePin(note.id) }}
+                    title="置顶"
+                  >📌</button>
+                  <button
+                    className={`xiaobai-tab__list-action-btn ${note.isFavorite ? 'xiaobai-tab__list-action-btn--active' : ''}`}
+                    onClick={(e) => { e.stopPropagation(); toggleNoteFavorite(note.id) }}
+                    title="收藏"
+                  >⭐</button>
+                  <button
+                    className="xiaobai-tab__list-action-btn"
+                    onClick={(e) => { e.stopPropagation(); deleteNote(note.id) }}
+                    title="删除"
+                  >🗑️</button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
-      </div>
+        </div>
 
-      {/* ─── 右面板 ─── */}
-      <div className="xiaobai-tab__right">
+        {/* ─── 右面板 ─── */}
+        <div className="xiaobai-tab__right">
         {/* 首页视图 */}
         {mainView === 'home' && (
           <div className="xiaobai-tab__home">
             <div className="xiaobai-tab__home-icon">🔮</div>
             <div className="xiaobai-tab__home-title">小白小白</div>
-            <div className="xiaobai-tab__home-subtitle">描述你的问题，我来诊断并给出解决方案</div>
+            <div className="xiaobai-tab__home-subtitle">
+              描述你的问题，我来诊断并给出解决方案
+            </div>
             <div className="xiaobai-tab__input-area">
               <textarea
                 className="xiaobai-tab__textarea"
                 placeholder="描述你遇到的问题..."
                 value={problemText}
-                onChange={(e) => setProblemText(e.target.value)}
-                onKeyDown={(e) => {
+                onChange={e => setProblemText(e.target.value)}
+                onKeyDown={e => {
                   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                     e.preventDefault()
                     handleDiagnose()
@@ -888,15 +788,13 @@ export default function XiaoBaiTab() {
               {/* 附件标签 */}
               {attachments.length > 0 && (
                 <div className="xiaobai-tab__attachments">
-                  {attachments.map((att) => (
+                  {attachments.map(att => (
                     <div key={att.id} className="xiaobai-tab__attachment-tag">
                       {att.type === 'image' ? '🖼️' : '📎'} {att.name}
                       <button
                         className="xiaobai-tab__attachment-remove"
-                        onClick={() => setAttachments((prev) => prev.filter((a) => a.id !== att.id))}
-                      >
-                        ×
-                      </button>
+                        onClick={() => setAttachments(prev => prev.filter(a => a.id !== att.id))}
+                      >×</button>
                     </div>
                   ))}
                 </div>
@@ -905,7 +803,10 @@ export default function XiaoBaiTab() {
               {/* 工具栏 */}
               <div className="xiaobai-tab__toolbar">
                 <div className="xiaobai-tab__toolbar-left">
-                  <button className="xiaobai-tab__file-btn" onClick={() => fileInputRef.current?.click()}>
+                  <button
+                    className="xiaobai-tab__file-btn"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
                     📎 附件
                   </button>
                   {agents.length > 0 && (
@@ -920,13 +821,11 @@ export default function XiaoBaiTab() {
                         cursor: 'pointer',
                       }}
                       value={selectedAgentId}
-                      onChange={(e) => setSelectedAgentId(e.target.value)}
+                      onChange={e => setSelectedAgentId(e.target.value)}
                     >
                       <option value="">🔮 小白</option>
-                      {agents.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.icon} {a.name}
-                        </option>
+                      {agents.map(a => (
+                        <option key={a.id} value={a.id}>{a.icon} {a.name}</option>
                       ))}
                     </select>
                   )}
@@ -949,42 +848,6 @@ export default function XiaoBaiTab() {
                 </div>
               </div>
             </div>
-
-            <div className="xiaobai-tab__evolution">
-              <div className="xiaobai-tab__evolution-head">
-                <div>
-                  <div className="xiaobai-tab__evolution-title">小白 · 进化工坊</div>
-                  <div className="xiaobai-tab__evolution-subtitle">
-                    这里记录系统从归档、Hermes 学习、大佬技能里学到了什么，并提示下一步该连接哪些神经元与突触。
-                  </div>
-                </div>
-                <button
-                  className="xiaobai-tab__evolution-refresh"
-                  onClick={() => listEvolutionEvents(6).then(setEvolutionEvents)}
-                >
-                  刷新
-                </button>
-              </div>
-              <div className="xiaobai-tab__evolution-list">
-                {evolutionEvents.length === 0 ? (
-                  <div className="xiaobai-tab__evolution-empty">
-                    当你点击 Openbasaka 的三标签归档后，进化事件会自动来到这里。
-                  </div>
-                ) : (
-                  evolutionEvents.map((event) => (
-                    <div key={event.id} className="xiaobai-tab__evolution-item">
-                      <div className="xiaobai-tab__evolution-item-title">{event.learnedWhat}</div>
-                      <div className="xiaobai-tab__evolution-item-meta">
-                        <span>{event.eventType}</span>
-                        <span>{Math.round(event.confidence * 100)}%</span>
-                        <span>{event.status}</span>
-                      </div>
-                      {event.nextAction && <div className="xiaobai-tab__evolution-item-next">{event.nextAction}</div>}
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
           </div>
         )}
 
@@ -994,9 +857,7 @@ export default function XiaoBaiTab() {
             {/* Header */}
             <div className="xiaobai-tab__result-header">
               <div className="xiaobai-tab__result-badges">
-                <button className="xiaobai-tab__back-btn" onClick={goHome}>
-                  ← 新诊断
-                </button>
+                <button className="xiaobai-tab__back-btn" onClick={goHome}>← 新诊断</button>
                 <span className="xiaobai-tab__badge xiaobai-tab__badge--source">
                   {currentDiagnosis.source === 'local' ? '📚 知识库' : '🤖 AI'}
                 </span>
@@ -1008,12 +869,8 @@ export default function XiaoBaiTab() {
                 <button
                   className={`xiaobai-tab__icon-btn ${isEditing ? 'xiaobai-tab__icon-btn--active' : ''}`}
                   onClick={() => {
-                    if (isEditing) {
-                      handleSaveEdit()
-                    } else {
-                      setIsEditing(true)
-                      setEditText(currentDiagnosis.solution)
-                    }
+                    if (isEditing) { handleSaveEdit() }
+                    else { setIsEditing(true); setEditText(currentDiagnosis.solution) }
                   }}
                 >
                   {isEditing ? '✅ 保存' : '✏️ 编辑'}
@@ -1027,11 +884,12 @@ export default function XiaoBaiTab() {
             {/* Body */}
             <div className="xiaobai-tab__result-body">
               {/* 原始问题 */}
-              <div className="xiaobai-tab__problem-box" onClick={() => setProblemExpanded(!problemExpanded)}>
+              <div
+                className="xiaobai-tab__problem-box"
+                onClick={() => setProblemExpanded(!problemExpanded)}
+              >
                 <div className="xiaobai-tab__problem-label">❓ 原始问题</div>
-                <div
-                  className={`xiaobai-tab__problem-text ${!problemExpanded && currentDiagnosis.problem.length > 200 ? 'xiaobai-tab__problem-text--truncated' : ''}`}
-                >
+                <div className={`xiaobai-tab__problem-text ${!problemExpanded && currentDiagnosis.problem.length > 200 ? 'xiaobai-tab__problem-text--truncated' : ''}`}>
                   {currentDiagnosis.problem}
                 </div>
               </div>
@@ -1041,10 +899,12 @@ export default function XiaoBaiTab() {
                 <textarea
                   className="xiaobai-tab__edit-textarea"
                   value={editText}
-                  onChange={(e) => setEditText(e.target.value)}
+                  onChange={e => setEditText(e.target.value)}
                 />
               ) : (
-                <div className="xiaobai-tab__solution">{renderMarkdown(currentDiagnosis.solution)}</div>
+                <div className="xiaobai-tab__solution">
+                  {renderMarkdown(currentDiagnosis.solution)}
+                </div>
               )}
 
               {/* Follow-ups */}
@@ -1056,7 +916,9 @@ export default function XiaoBaiTab() {
                         <div className="xiaobai-tab__followup-user-bubble">{fu.question}</div>
                       </div>
                       <div className="xiaobai-tab__followup-ai">
-                        <div className="xiaobai-tab__followup-ai-bubble">{renderMarkdown(fu.answer)}</div>
+                        <div className="xiaobai-tab__followup-ai-bubble">
+                          {renderMarkdown(fu.answer)}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1072,8 +934,8 @@ export default function XiaoBaiTab() {
                   className="xiaobai-tab__followup-field"
                   placeholder="继续追问..."
                   value={followUpText}
-                  onChange={(e) => setFollowUpText(e.target.value)}
-                  onKeyDown={(e) => {
+                  onChange={e => setFollowUpText(e.target.value)}
+                  onKeyDown={e => {
                     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                       e.preventDefault()
                       handleFollowUp()
@@ -1095,7 +957,7 @@ export default function XiaoBaiTab() {
               ) : (
                 <div className="xiaobai-tab__rating">
                   <div className="xiaobai-tab__rating-stars">
-                    {[1, 2, 3, 4, 5].map((star) => (
+                    {[1, 2, 3, 4, 5].map(star => (
                       <button
                         key={star}
                         className={`xiaobai-tab__star ${star <= hoveredStar ? 'xiaobai-tab__star--active' : ''}`}
@@ -1120,18 +982,24 @@ export default function XiaoBaiTab() {
             <input
               className="xiaobai-tab__note-title-input"
               value={activeNote.title}
-              onChange={(e) => updateNote(activeNote.id, e.target.value, activeNote.content)}
+              onChange={e => updateNote(activeNote.id, e.target.value, activeNote.content)}
               placeholder="笔记标题..."
             />
             <textarea
               className="xiaobai-tab__note-content"
               value={activeNote.content}
-              onChange={(e) => updateNote(activeNote.id, activeNote.title, e.target.value)}
+              onChange={e => updateNote(activeNote.id, activeNote.title, e.target.value)}
               placeholder="开始写笔记..."
             />
           </div>
         )}
+        </div>
       </div>
+      ) : (
+        <div className="xiaobai-tab__app-stage">
+          {renderWorkspaceApp()}
+        </div>
+      )}
 
       {/* ─── 流式进度遮罩 ─── */}
       {isLoading && (
@@ -1143,24 +1011,12 @@ export default function XiaoBaiTab() {
             {streamPhase === 'done' && '✅ 完成'}
             {streamPhase === 'error' && '❌ 出错'}
           </div>
-          {streamContent && <div className="xiaobai-tab__stream-content">{streamContent.slice(-500)}</div>}
+          {streamContent && (
+            <div className="xiaobai-tab__stream-content">
+              {streamContent.slice(-500)}
+            </div>
+          )}
         </div>
-      )}
-        </div>
-      ) : workspaceMode === 'rljb' ? (
-        <RLJBMacApp />
-      ) : workspaceMode === 'flash' ? (
-        <FlashOfGeniusMacApp />
-      ) : workspaceMode === 'chuangyi' ? (
-        <ChuangyiMacApp />
-      ) : workspaceMode === 'bili' ? (
-        <BiliHelperMacApp />
-      ) : workspaceMode === 'council' ? (
-        <CouncilMacApp />
-      ) : workspaceMode === 'uiMuseum' ? (
-        <UIStyleMuseumMacApp />
-      ) : (
-        <FoodAdCrafterMacApp />
       )}
     </div>
   )

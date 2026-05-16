@@ -6,6 +6,7 @@ import {
   createLocalVideoInfo,
   parseTranscriptTimeline,
 } from './state'
+import { getBiliUsableSourceText, hasBiliUsableSourceText } from './source-content'
 import { detectBibiPlatform } from './platforms'
 import { getBaoyuModelRoute, type BaoyuModelRoute } from './model-routing'
 import { createLocalWanxiangResult, normalizeWanxiangResult } from './wanxiang'
@@ -200,7 +201,9 @@ export async function generateBiliLearningPack(input: {
 }): Promise<BiliLearningPack> {
   const mode = input.mode || 'tutorial'
   const depth = input.depth ?? 70
-  const fallback = createLocalArtifactPack(input.video, input.transcript, input.goal, mode, depth)
+  const sourceText = getBiliUsableSourceText(input.video, input.transcript)
+  const fallback = createLocalArtifactPack(input.video, sourceText, input.goal, mode, depth)
+  if (!hasBiliUsableSourceText(input.video, input.transcript)) return fallback
   const modeLabel = BILI_ARTIFACT_MODES.find((item) => item.id === mode)?.label || '学习包'
   try {
     const response = await callBiliAI(
@@ -224,7 +227,7 @@ export async function generateBiliLearningPack(input: {
 详细度：${depth}%
 
 来源正文/字幕/转写/OCR：
-${input.transcript || input.video.contentText || '用户还没有提供正文，请基于标题、平台、简介和目标生成可继续补充的结构。'}
+${sourceText}
 
 请返回 JSON：
 {
@@ -241,7 +244,7 @@ ${input.transcript || input.video.contentText || '用户还没有提供正文，
       3600,
     )
     const parsed = extractJsonObject(response) as Partial<BiliLearningPack>
-    const timeline = Array.isArray(parsed.timeline) && parsed.timeline.length > 0 ? parsed.timeline : parseTranscriptTimeline(input.transcript)
+    const timeline = Array.isArray(parsed.timeline) && parsed.timeline.length > 0 ? parsed.timeline : parseTranscriptTimeline(sourceText)
     const pack: BiliLearningPack = {
       ...fallback,
       mode,
@@ -271,7 +274,9 @@ export async function generateWanxiangLearningResult(input: {
   transcript: string
   goal: string
 }): Promise<WanxiangLearningResult> {
-  const fallback = createLocalWanxiangResult(input)
+  const sourceText = getBiliUsableSourceText(input.video, input.transcript)
+  const fallback = createLocalWanxiangResult({ ...input, transcript: sourceText })
+  if (!hasBiliUsableSourceText(input.video, input.transcript)) return fallback
   try {
     const response = await callBiliAI(
       [
@@ -298,7 +303,7 @@ export async function generateWanxiangLearningResult(input: {
 用户目标：${input.goal || '最大化利用用户扔进来的资料'}
 
 来源正文/字幕/转写/OCR：
-${input.transcript || input.video.contentText || '用户还没有提供正文，请基于标题、平台、简介和目标生成可继续补充的结构，并降低置信度。'}
+${sourceText}
 
 请返回 JSON，字段必须匹配：
 {
@@ -399,7 +404,7 @@ export async function answerBiliQuestion(input: {
       [
         {
           role: 'system',
-          content: '你是本地优先的多来源学习问答助手。只基于已提供的来源信息、网页正文、字幕、OCR、转写和学习包回答；不确定就指出需要回原来源核对。',
+          content: '你是本地优先的多来源学习问答助手。只基于已提供的来源信息、网页正文、字幕、OCR、转写和学习包回答；每个关键判断都要引用时间戳、字幕行、OCR 段落或学习包条目。不确定就指出需要回原来源核对。',
         },
         {
           role: 'user',
@@ -423,7 +428,7 @@ ${historyText}
   } catch {
     return fallback
   }
-}
+} 
 
 function fallbackAnswer(input: {
   video: BiliVideoInfo
@@ -434,10 +439,17 @@ function fallbackAnswer(input: {
   const firstAction = input.pack?.actionList[0] || '先补充字幕或转写，再生成学习包。'
   const keyPoint = input.pack?.keyPoints[0] || '把来源内容转成自己的下一步，而不是停留在收藏。'
   const timeline = input.pack?.timeline[0]
+  const evidence = input.transcript
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((line, index) => `证据${index + 1}：${line.slice(0, 120)}`)
+    .join('\n')
   const content = `基于当前资料，「${input.video.title}」最稳定的判断是：${keyPoint}
 
 如果你的问题是“下一步做什么”，我会先做这件事：${firstAction}
 
-${timeline ? `可回看/核对位置：${timeline.time} ${timeline.title}，用于核对「${timeline.note}」。` : '当前还没有可靠时间线或正文，建议先粘贴字幕、导入文件、OCR 图片或补充转写。'}`
+${timeline ? `可回看/核对位置：${timeline.time} ${timeline.title}，用于核对「${timeline.note}」。` : evidence || '当前还没有可靠时间线或正文，建议先粘贴字幕、导入文件、OCR 图片或补充转写。'}`
   return createBiliChatMessage('assistant', content)
 }

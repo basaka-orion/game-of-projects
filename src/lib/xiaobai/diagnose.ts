@@ -9,8 +9,6 @@ import { quickWikiLookup } from '../knowledge/query-engine'
 import { searchDrawers } from '../knowledge/drawer'
 import { executeTool } from '../tools'
 import { loadCognitiveProfile, renderCognitivePrompt } from '../boss/cognitive-profile'
-import { recordAgentExecutionReceipt } from '../agents/execution-audit'
-import type { ExecutionEvidenceRef, ExecutionToolRef } from '../agents/execution-receipt'
 
 export type StreamPhase = 'kb' | 'ai' | 'done' | 'error'
 
@@ -71,27 +69,8 @@ export async function diagnoseStreaming(
   mode: 'diagnose' | 'analyze' = 'diagnose',
   callbacks: DiagnoseCallbacks,
   attachments?: AttachmentData[],
-  personaOverride?: string,
+  personaOverride?: string
 ): Promise<void> {
-  const recordDiagnosisReceipt = (
-    output: string,
-    status: 'completed' | 'failed',
-    evidenceRefs: ExecutionEvidenceRef[] = [],
-    tools: ExecutionToolRef[] = [],
-  ) => {
-    recordAgentExecutionReceipt({
-      agentId: 'xiaobai',
-      subject: `XiaoBai｜${mode === 'diagnose' ? '诊断' : '分析'}`,
-      input: problemText,
-      output,
-      status,
-      tools: [{ id: 'xiaobai-diagnose', label: 'XiaoBai Diagnose', risk: 'low', status }, ...tools],
-      evidenceRefs,
-      source: { kind: 'agent', sourceId: 'xiaobai', title: 'XiaoBai Diagnose' },
-      entities: ['xiaobai', mode, attachments?.length ? 'attachments' : ''].filter(Boolean),
-    }).catch(() => {})
-  }
-
   // Phase 0: 先查 Wiki 知识库（最高优先级）
   callbacks.onPhase('kb')
 
@@ -108,7 +87,6 @@ export async function diagnoseStreaming(
         actionType: 'copy',
         tags: ['wiki', 'knowledge-vault'],
       })
-      recordDiagnosisReceipt(wikiResult.content, 'completed', [{ kind: 'knowledge', title: 'Wiki quick lookup' }])
       return
     }
   } catch {
@@ -116,32 +94,16 @@ export async function diagnoseStreaming(
   }
 
   // Phase 0.5: 海马体原始记忆回溯（仅细节类问题触发）
-  const detailSignals = [
-    'debug',
-    'error',
-    'trace',
-    '过程',
-    '细节',
-    '原始',
-    '为什么',
-    'how',
-    'why',
-    'log',
-    'stack',
-    '报错',
-    '步骤',
-    '经过',
-    '详情',
-  ]
-  const needsDetail = detailSignals.some((s) => problemText.toLowerCase().includes(s))
+  const detailSignals = ['debug', 'error', 'trace', '过程', '细节', '原始', '为什么', 'how', 'why', 'log', 'stack', '报错', '步骤', '经过', '详情']
+  const needsDetail = detailSignals.some(s => problemText.toLowerCase().includes(s))
 
   if (needsDetail) {
     try {
       const drawerHits = await searchDrawers(problemText, 3)
       if (drawerHits.length > 0 && drawerHits[0].score > 0.5) {
-        const drawerContent = drawerHits
-          .map((d) => `**${d.title}** [Drawer:${d.id}]\n${d.rawContent.slice(0, 500)}`)
-          .join('\n---\n')
+        const drawerContent = drawerHits.map(d =>
+          `**${d.title}** [Drawer:${d.id}]\n${d.rawContent.slice(0, 500)}`
+        ).join('\n---\n')
         callbacks.onPhase('done')
         callbacks.onDone({
           problem: problemText,
@@ -151,9 +113,6 @@ export async function diagnoseStreaming(
           actionType: 'copy',
           tags: ['drawer', 'hippocampus'],
         })
-        recordDiagnosisReceipt(drawerContent, 'completed', [
-          { kind: 'memory', id: drawerHits[0].id, title: 'Mempalace drawer search' },
-        ])
         return
       }
     } catch {
@@ -174,9 +133,6 @@ export async function diagnoseStreaming(
         actionType: kbResult.actionType || 'copy',
         tags: kbResult.tags ? kbResult.tags.split(',') : [],
       })
-      recordDiagnosisReceipt(kbResult.solution, 'completed', [
-        { kind: 'knowledge', title: 'XiaoBai local knowledge base' },
-      ])
       return
     }
   } catch {
@@ -184,30 +140,17 @@ export async function diagnoseStreaming(
   }
 
   // Phase 1.5: 时事检测 — 如果问题涉及时事，先搜索外网
-  const timeSignals = [
-    '最新',
-    '最近',
-    '今天',
-    '现在',
-    '新闻',
-    '发布',
-    'release',
-    'update',
-    'latest',
-    'current',
-    '目前',
-    '行情',
-    '股价',
-    '天气',
-  ]
-  const needsRealtime = timeSignals.some((s) => problemText.toLowerCase().includes(s))
+  const timeSignals = ['最新', '最近', '今天', '现在', '新闻', '发布', 'release', 'update', 'latest', 'current', '目前', '行情', '股价', '天气']
+  const needsRealtime = timeSignals.some(s => problemText.toLowerCase().includes(s))
 
   let searchContext = ''
   if (needsRealtime) {
     try {
       const searchResult = await executeTool('web_search', { query: problemText, max_results: 5 })
       if (searchResult?.success && searchResult.data) {
-        searchContext = typeof searchResult.data === 'string' ? searchResult.data : JSON.stringify(searchResult.data)
+        searchContext = typeof searchResult.data === 'string'
+          ? searchResult.data
+          : JSON.stringify(searchResult.data)
       }
     } catch {
       // 搜索失败不阻断
@@ -218,12 +161,14 @@ export async function diagnoseStreaming(
   callbacks.onPhase('ai')
 
   // 构造消息：支持多模态（图片）
-  const hasImages = attachments?.some((a) => a.type === 'image' && a.dataUrl)
+  const hasImages = attachments?.some(a => a.type === 'image' && a.dataUrl)
   let userContent: string | ContentPart[]
 
   if (hasImages) {
     // 多模态消息：文本 + 图片
-    const parts: ContentPart[] = [{ type: 'text', text: problemText }]
+    const parts: ContentPart[] = [
+      { type: 'text', text: problemText },
+    ]
     if (searchContext) {
       parts.push({ type: 'text', text: `\n\n<realtime-search-results>\n${searchContext}\n</realtime-search-results>` })
     }
@@ -237,7 +182,7 @@ export async function diagnoseStreaming(
     // 纯文本消息
     userContent = problemText
     if (attachments && attachments.length > 0) {
-      const fileDescs = attachments.map((a) => a.description || `[FILE] ${a.name}`).join('\n')
+      const fileDescs = attachments.map(a => a.description || `[FILE] ${a.name}`).join('\n')
       userContent += '\n\n附件清单：\n' + fileDescs
     }
     if (searchContext) {
@@ -270,25 +215,14 @@ export async function diagnoseStreaming(
           confidence: 0.75,
           actionType: 'copy',
         })
-        recordDiagnosisReceipt(
-          fullText,
-          'completed',
-          [
-            { kind: 'memory', title: 'Boss cognitive profile' },
-            ...(searchContext ? [{ kind: 'tool' as const, id: 'web_search', title: 'Realtime search' }] : []),
-          ],
-          searchContext ? [{ id: 'web_search', label: 'Web Search', risk: 'low', status: 'completed' }] : [],
-        )
       },
       onError: (err) => {
         callbacks.onPhase('error')
-        recordDiagnosisReceipt(err.message, 'failed')
         callbacks.onError(err)
       },
     })
   } catch (err) {
     callbacks.onPhase('error')
-    recordDiagnosisReceipt(String(err), 'failed')
     callbacks.onError(err instanceof Error ? err : new Error(String(err)))
   }
 }
@@ -300,28 +234,14 @@ export async function followUpStreaming(
   previousSolution: string,
   previousFollowUps: Array<{ question: string; answer: string }>,
   newQuestion: string,
-  callbacks: Omit<DiagnoseCallbacks, 'onDone'> & { onDone: (answer: string) => void },
+  callbacks: Omit<DiagnoseCallbacks, 'onDone'> & { onDone: (answer: string) => void }
 ): Promise<void> {
   callbacks.onPhase('ai')
-  const recordFollowUpReceipt = (output: string, status: 'completed' | 'failed') => {
-    recordAgentExecutionReceipt({
-      agentId: 'xiaobai',
-      subject: 'XiaoBai｜追问',
-      input: `${originalProblem}\n\n${newQuestion}`,
-      output,
-      status,
-      tools: [{ id: 'xiaobai-followup', label: 'XiaoBai Follow-up', risk: 'low', status }],
-      evidenceRefs: [{ kind: 'manual', title: 'Previous diagnosis context' }],
-      source: { kind: 'agent', sourceId: 'xiaobai', title: 'XiaoBai Follow-up' },
-      entities: ['xiaobai', 'follow-up'],
-    }).catch(() => {})
-  }
 
   const contextMessages: ChatMessage[] = [
     {
       role: 'system',
-      content:
-        '你是"小白"——AI诊断助手。用户在追问之前的诊断结果，请基于上下文给出补充回答。用 Markdown 格式，用中文回答。',
+      content: '你是"小白"——AI诊断助手。用户在追问之前的诊断结果，请基于上下文给出补充回答。用 Markdown 格式，用中文回答。',
     },
     {
       role: 'user',
@@ -351,18 +271,15 @@ export async function followUpStreaming(
       },
       onDone: () => {
         callbacks.onPhase('done')
-        recordFollowUpReceipt(fullText, 'completed')
         callbacks.onDone(fullText)
       },
       onError: (err) => {
         callbacks.onPhase('error')
-        recordFollowUpReceipt(err.message, 'failed')
         callbacks.onError(err)
       },
     })
   } catch (err) {
     callbacks.onPhase('error')
-    recordFollowUpReceipt(String(err), 'failed')
     callbacks.onError(err instanceof Error ? err : new Error(String(err)))
   }
 }

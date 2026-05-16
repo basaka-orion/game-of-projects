@@ -60,6 +60,10 @@ function ledger(overrides: Partial<CouncilRuntimeEvidenceLedger> = {}): CouncilR
     actionTaskCount: 12,
     baoyuPlanCount: 5,
     localSvgCardCount: 1,
+    internetResearchRequired: false,
+    internetResearchGrounded: false,
+    internetSourceCount: 0,
+    internetQueries: [],
     deepRunCertification: {
       status: 'proved',
       label: '2-5 分钟深度长跑已认证',

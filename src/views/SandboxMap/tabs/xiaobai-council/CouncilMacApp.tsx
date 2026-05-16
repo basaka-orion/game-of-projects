@@ -32,7 +32,6 @@ import { buildCouncilPersonaProfile, type CouncilPersonaProfile } from '../../..
 import { renderCouncilQualityGateMarkdown } from '../../../../lib/xiaobai-council/quality-gate'
 import {
   buildCouncilConsensusTrace,
-  renderCouncilConsensusTraceMarkdown,
   validateCouncilMasterPrd,
 } from '../../../../lib/xiaobai-council/master-prd'
 import {
@@ -70,7 +69,18 @@ import {
   saveCouncilUserValidationRecord,
   type SaveCouncilUserValidationInput,
 } from '../../../../lib/xiaobai-council/user-validation'
+import {
+  deriveCouncilProjectTitle,
+  redactSensitiveText,
+  sanitizeCouncilFileBaseName,
+} from '../../../../lib/xiaobai-council/export-safety'
+import {
+  buildCouncilTopTierPrdEvaluation,
+  buildCouncilTopTierPrdExport,
+  buildCouncilTopTierPrdProcessMarkdown,
+} from '../../../../lib/xiaobai-council/top-tier-prd'
 import { runCouncilPrdWorkflow, type CouncilLiveRunSnapshot, type CouncilPrdRunResult } from '../../../../lib/xiaobai-council/workflow'
+import { dispatchCouncilPrdToWorkflow } from '../../../../lib/xiaobai-council/workflow-dispatch'
 import { type CouncilSelection, type CouncilSelectedSeat } from '../../../../lib/xiaobai-council/selector'
 import type { TeamMessage } from '../../../../lib/teams/types'
 import { buildUiMuseumPrdContext } from '../../../../lib/ui-museum/context'
@@ -99,8 +109,8 @@ const SAMPLE_PROMPT =
 const WORKFLOW_STEPS = [
   '输入问题',
   '匹配闸门',
-  '推荐编队',
-  '确认激活',
+  '自动编队',
+  '自动激活',
   '实时博弈',
   '共识 PRD',
   '质量闸门',
@@ -126,8 +136,22 @@ const SIGNATURE_PROMISES = [
   '证据链不自欺：机器强就写强，真人/审美没过就明确阻塞。',
 ]
 
+interface CouncilReplayFrame {
+  id: string
+  kind: string
+  label: string
+  title: string
+  body: string
+  meta: string
+  status: string
+}
+
 function compactDisplay(value: string, max = 120): string {
   return value.replace(/\s+/g, ' ').trim().slice(0, max)
+}
+
+function isWaitingDebateScene(scene?: { id?: string; sourceMessageIds?: string[] }): boolean {
+  return !scene || scene.id === 'scene-waiting-for-briefs' || (scene.sourceMessageIds?.length ?? 0) === 0
 }
 
 export default function CouncilMacApp() {
@@ -159,12 +183,21 @@ export default function CouncilMacApp() {
   const [nuwaPreflight, setNuwaPreflight] = useState<CouncilNuwaLocalPreflightReport | null>(null)
   const [nuwaPreflightRunning, setNuwaPreflightRunning] = useState(false)
   const [nuwaPreflightError, setNuwaPreflightError] = useState('')
+  const [replayOpen, setReplayOpen] = useState(false)
+  const [replayIndex, setReplayIndex] = useState(0)
+  const [workflowDispatchStatus, setWorkflowDispatchStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
+  const [workflowDispatchId, setWorkflowDispatchId] = useState('')
+  const [workflowDispatchError, setWorkflowDispatchError] = useState('')
+  const [workflowDispatchRunId, setWorkflowDispatchRunId] = useState('')
 
   const progressMessages = messages.filter((message) => message.kind !== 'reflection' && (message.kind === 'progress' || message.role === 'system'))
   const briefMessages = messages.filter((message) => message.kind === 'brief')
   const reflectionMessages = messages.filter((message) => message.kind === 'reflection')
   const artifactMessage = messages.find((message) => message.kind === 'artifact')
   const finalPrd = artifactMessage?.content || result?.session.summary || ''
+  const safeFinalPrd = useMemo(() => redactSensitiveText(finalPrd), [finalPrd])
+  const projectTitle = useMemo(() => deriveCouncilProjectTitle(problem, safeFinalPrd), [problem, safeFinalPrd])
+  const safeProblem = useMemo(() => redactSensitiveText(problem), [problem])
   const selectedPersonaIds = useMemo(
     () => new Set(selection?.seats.map((seat) => seat.persona.id) || []),
     [selection],
@@ -224,9 +257,9 @@ export default function CouncilMacApp() {
         ? latestRunSignal?.content.slice(0, 92) || '六阶段大师博弈正在推进'
       : matching
         ? latestMatchEvent?.detail || 'CouncilMatchGate 正在深度匹配'
-        : selection
-          ? '推荐队伍已成型，等待 Boss 激活'
-          : '输入问题后先匹配，再开会'
+      : selection
+          ? '推荐队伍已成型，系统自动进入六阶段博弈'
+          : '输入问题后点击开始，系统自动匹配、博弈并给 Boss 结果'
   const currentStep = result?.consensusTrace
     ? 7
     : result?.qualityGate
@@ -277,12 +310,72 @@ export default function CouncilMacApp() {
       }
     }
     if (!selection) return null
-    return buildCouncilDebateTheater({
+      return buildCouncilDebateTheater({
       selection,
       messages,
-      prdMarkdown: finalPrd,
+      prdMarkdown: safeFinalPrd,
     })
-  }, [finalPrd, messages, result, selection])
+  }, [messages, result, safeFinalPrd, selection])
+  const replayFrames = useMemo<CouncilReplayFrame[]>(() => {
+    const frames: CouncilReplayFrame[] = []
+    visibleMatchEvents.forEach((event, index) => {
+      frames.push({
+        id: `match-${index}-${event.phaseId}-${event.status}`,
+        kind: '匹配闸门',
+        label: event.label,
+        title: event.detail,
+        body: event.candidatePersonaIds.length ? `候选：${event.candidatePersonaIds.map(personaName).join(' / ')}` : '这一页记录匹配闸门的真实推进状态。',
+        meta: `${event.status}${event.decisionSource ? ` · ${event.decisionSource}` : ''}`,
+        status: event.status,
+      })
+    })
+    liveSnapshots.forEach((snapshot, index) => {
+      frames.push({
+        id: `snapshot-${index}-${snapshot.id}`,
+        kind: '实时博弈',
+        label: snapshot.phaseLabel || snapshot.status,
+        title: snapshot.headline,
+        body: snapshot.latestObjection || snapshot.latestClaim || snapshot.detail,
+        meta: `${snapshot.agentName || '系统'} · ${snapshot.sceneCount} 幕 · ${snapshot.briefCount} 条发言 · ${snapshot.relationCount} 关系`,
+        status: snapshot.status,
+      })
+    })
+    briefMessages.slice(-36).forEach((message, index) => {
+      frames.push({
+        id: `brief-${index}-${message.id}`,
+        kind: '角色发言',
+        label: String(message.metadata?.phaseLabel || message.metadata?.phase || (message.round ? `Round ${message.round}` : 'brief')),
+        title: message.agentName || '小白智囊团',
+        body: message.content,
+        meta: message.role,
+        status: 'brief-ready',
+      })
+    })
+    liveTheater?.scenes.filter((scene) => !isWaitingDebateScene(scene)).forEach((scene, index) => {
+      frames.push({
+        id: `scene-${index}-${scene.id}`,
+        kind: '决策剧场',
+        label: `第 ${index + 1} 幕`,
+        title: scene.sceneTitle,
+        body: [scene.claim, scene.objection, scene.verdictImpact].filter(Boolean).join(' / '),
+        meta: `${scene.phaseLabel || '阶段'} · ${scene.speakerName} -> ${scene.targetNames.join(' / ') || '全体'}`,
+        status: 'completed',
+      })
+    })
+    if (result?.qualityGate) {
+      frames.push({
+        id: `quality-${result.runtimeEvidence.runId}`,
+        kind: '质量闸门',
+        label: result.qualityGate.finalGateStatus,
+        title: `质量分 ${result.qualityGate.score}`,
+        body: result.qualityGate.summary,
+        meta: `${result.qualityGate.checks.length} 项检查`,
+        status: result.qualityGate.status,
+      })
+    }
+    return frames
+  }, [briefMessages, liveSnapshots, liveTheater?.scenes, result, visibleMatchEvents])
+  const activeReplayFrame = replayFrames[Math.min(replayIndex, Math.max(replayFrames.length - 1, 0))] || null
   const activeTheaterScene = liveTheater?.scenes[theaterSceneIndex]
   const consensusTrace = useMemo(() => {
     if (result?.consensusTrace) return result.consensusTrace
@@ -294,8 +387,20 @@ export default function CouncilMacApp() {
     })
   }, [liveTheater, result?.actionPack, result?.consensusTrace])
   const masterPrdValidation = useMemo(
-    () => result?.masterPrdValidation || validateCouncilMasterPrd(finalPrd),
-    [finalPrd, result?.masterPrdValidation],
+    () => result?.masterPrdValidation || validateCouncilMasterPrd(safeFinalPrd),
+    [result?.masterPrdValidation, safeFinalPrd],
+  )
+  const topTierEvaluation = useMemo(
+    () => buildCouncilTopTierPrdEvaluation({
+      projectTitle,
+      problem: safeProblem,
+      finalPrd: safeFinalPrd,
+      qualityGate: result?.qualityGate || null,
+      uiStyleContext,
+      actionPack: result?.actionPack || null,
+      consensusTrace,
+    }),
+    [consensusTrace, projectTitle, result?.actionPack, result?.qualityGate, safeFinalPrd, safeProblem, uiStyleContext],
   )
   const qualityFixes = result?.qualityGate.checks.flatMap((item) => item.requiredFixes) || []
   const qualityGapItems = qualityFixes.length
@@ -336,11 +441,13 @@ export default function CouncilMacApp() {
       userValidationLedger,
       artifactReviewLedger,
       nuwaEvidenceRegistry,
+      nuwaLocalPreflight: nuwaPreflight,
       sourceAuditLedger: nuwaSourceAuditLedger,
     }),
     [
       artifactReviewLedger,
       latestRuntimeEvidence,
+      nuwaPreflight,
       nuwaEvidenceRegistry,
       nuwaSourceAuditLedger,
       result?.excellenceAudit,
@@ -385,14 +492,14 @@ export default function CouncilMacApp() {
     if (nextSteps?.length) return nextSteps
     if (selection) {
       return [
-        '确认系统推荐的智囊团是否贴合这个问题。',
-        '激活六阶段博弈，等它裁掉不该做的方向。',
+        '直接开始六阶段博弈，让推荐智者先提取方法论再正面冲突。',
+        '看漫画回放里的主张、反方质询和主持裁决。',
         '拿到共识 PRD 后先执行行动面板里的第一件事。',
       ]
     }
     return [
       '输入一个真实项目或人生问题，不需要先会写 PRD。',
-      '点击生成推荐编队，看系统为什么选这 6 个灵魂。',
+      '点击开始后自动完成匹配、编队、博弈、成稿和工作流投递。',
       '只保留一个明天能做的动作，其他复杂度先折叠。',
     ]
   }, [result?.deliveryModes?.xiaobaiExecute.nextSteps, selection])
@@ -402,7 +509,15 @@ export default function CouncilMacApp() {
   const signaturePromise = result?.deliveryModes?.xiaobaiExecute.promise || '36 个思想原型先在幕后争论，首屏只交付判断、行动、取舍和可信证据。'
   const signaturePrimaryAction = result?.deliveryModes?.xiaobaiExecute.firstAction || signatureActions[0]
   const signatureProofChecks = useMemo(() => {
-    const preferred = ['deep-model-long-run', 'quality-and-excellence', 'debate-traceability', 'user-validation', 'artifact-review']
+    const preferred = [
+      'nuwa-local-skills',
+      'deep-model-long-run',
+      'quality-and-excellence',
+      'debate-traceability',
+      'selected-source-audit',
+      'user-validation',
+      'artifact-review',
+    ]
     const byId = new Map(certification95.checks.map((item) => [item.id, item]))
     return preferred
       .map((id) => byId.get(id))
@@ -413,12 +528,34 @@ export default function CouncilMacApp() {
     : certification95.status === 'needs-human-proof'
       ? '机器证据强，但仍禁止自称 95'
       : '仍在闸门内返修'
+  const startButtonLabel = running
+    ? '正在博弈'
+    : matching
+      ? '正在匹配'
+      : '开始'
+  const workflowDispatchLabel =
+    workflowDispatchStatus === 'sent'
+      ? `已自动发给工作流模块：${workflowDispatchId}`
+      : workflowDispatchStatus === 'sending'
+        ? '正在自动发给工作流模块...'
+        : workflowDispatchStatus === 'error'
+          ? `工作流投递失败：${workflowDispatchError}`
+          : '完成后会自动发一份给工作流模块'
 
   useEffect(() => {
     const length = liveTheater?.scenes.length || 0
     if (length === 0) setTheaterSceneIndex(0)
     else setTheaterSceneIndex((index) => Math.min(index, length - 1))
   }, [liveTheater?.scenes.length])
+
+  useEffect(() => {
+    setReplayIndex((index) => Math.min(index, Math.max(replayFrames.length - 1, 0)))
+  }, [replayFrames.length])
+
+  useEffect(() => {
+    if (!replayOpen || !running || replayFrames.length === 0) return
+    setReplayIndex(replayFrames.length - 1)
+  }, [replayFrames.length, replayOpen, running])
 
   useEffect(() => {
     const text = problem.trim()
@@ -452,6 +589,35 @@ export default function CouncilMacApp() {
     )
   }, [problem, result, selection])
 
+  useEffect(() => {
+    if (!result || !finalPrd) return
+    const runId = result.runtimeEvidence.runId
+    if (workflowDispatchRunId === runId) return
+    let cancelled = false
+    setWorkflowDispatchRunId(runId)
+    setWorkflowDispatchStatus('sending')
+    setWorkflowDispatchId('')
+    setWorkflowDispatchError('')
+    dispatchCouncilPrdToWorkflow({
+      problem,
+      result,
+      exportMarkdown: buildExportMarkdown(),
+    })
+      .then((receipt) => {
+        if (cancelled) return
+        setWorkflowDispatchId(receipt.workflowStudioId)
+        setWorkflowDispatchStatus('sent')
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setWorkflowDispatchStatus('error')
+        setWorkflowDispatchError(err instanceof Error ? err.message : String(err))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [finalPrd, problem, result, workflowDispatchRunId])
+
   function resetRunState() {
     setResult(null)
     setMessages([])
@@ -460,6 +626,10 @@ export default function CouncilMacApp() {
     setCopied(false)
     setError('')
     setActivated(false)
+    setWorkflowDispatchStatus('idle')
+    setWorkflowDispatchId('')
+    setWorkflowDispatchError('')
+    setWorkflowDispatchRunId('')
   }
 
   function resetMatchState() {
@@ -503,10 +673,19 @@ export default function CouncilMacApp() {
     setNuwaSourceAuditLedger(saveCouncilNuwaSourceAuditRecord(input))
   }
 
-  async function runNuwaPreflight() {
+  const nuwaPreflightScopeKey = useMemo(
+    () => selection?.seats.map((seat) => seat.persona.id).join('|') || 'all-personas',
+    [selection],
+  )
+
+  useEffect(() => {
+    void runNuwaPreflight({ silent: true })
+  }, [nuwaPreflightScopeKey])
+
+  async function runNuwaPreflight(options: { silent?: boolean } = {}) {
     const electronAPI = window.electronAPI
     if (!electronAPI?.readFile) {
-      setNuwaPreflightError('Electron 文件读取不可用，无法预检本地 Nuwa skill 包。')
+      if (!options.silent) setNuwaPreflightError('Electron 文件读取不可用，无法预检本地 Nuwa skill 包。')
       return
     }
     setNuwaPreflightRunning(true)
@@ -588,6 +767,62 @@ export default function CouncilMacApp() {
     }
   }
 
+  function buildRunStartSnapshot(current: CouncilSelection, reason = 'Boss 已点击开始，六阶段博弈已激活'): CouncilLiveRunSnapshot {
+    const now = Date.now()
+    return {
+      id: `ui-run-start-${now}`,
+      status: 'phase-start',
+      phaseId: 'run-start',
+      phaseLabel: '启动',
+      agentId: 'xiaobai-council-host',
+      agentName: '小白智囊团主持席',
+      headline: reason,
+      detail: `推荐队伍 ${current.seats.map((seat) => seat.persona.shortName).join(' / ')} 已进入会场；接下来会显示阶段推进、角色发言、质询、裁决和 PRD 成稿。`,
+      sceneCount: 0,
+      briefCount: 0,
+      relationCount: 0,
+      latestClaim: '开始不是停在等待页，而是进入可回看的真实运行记录。',
+      targetPersonaIds: current.seats.map((seat) => seat.persona.id),
+      targetNames: current.seats.map((seat) => seat.persona.name),
+      decisionSource: current.matchGate.decisionSource,
+      startedAt: now,
+      updatedAt: now,
+    }
+  }
+
+  function buildMasterRefinementProblem(): string {
+    const lowDimensions = topTierEvaluation.dimensions
+      .filter((item) => item.status !== 'pass')
+      .map((item) => `- ${item.label}: ${item.score}/100；必须补齐：${item.requiredFixes.join('；') || '需要重新举证和复验。'}`)
+      .join('\n')
+    const hardBlockers = topTierEvaluation.blockers.map((item, index) => `${index + 1}. ${item}`).join('\n')
+    return [
+      '【继续探讨直到大师级候选 PRD】',
+      '',
+      '上一轮已经完成辩论与成稿，但大师级开工判定没有通过。请重新进入完整流程：重新匹配智囊、重新六阶段辩论、重新冲突质询、重新主持裁决、重新共识成稿。',
+      '',
+      '硬规则：',
+      '1. 不允许把上一轮结果简单润色后冒充新结论。',
+      '2. 不允许跳过反方质询、市场判断、UI 落地、工程拆解、验收和人工/真实用户边界。',
+      '3. 每个缺口必须被某位角色明确提出、被另一位角色质询、由主持裁决是否吸收或裁掉。',
+      '4. 如果本轮仍不能达到大师级候选，必须继续诚实标记缺口，不得伪装成顶级。',
+      '',
+      `原始需求：${safeProblem || problem}`,
+      '',
+      `上一轮评分：${topTierEvaluation.score}/100 · ${topTierEvaluation.status}`,
+      `上一轮结论：${topTierEvaluation.summary}`,
+      '',
+      '必须优先修复的硬缺口：',
+      hardBlockers || '暂无硬阻断，但仍要用真人/审美/市场/工程 spike 复验。',
+      '',
+      '低分维度：',
+      lowDimensions || '暂无低分维度。',
+      '',
+      '上一轮 PRD 摘要，供质询与返修使用：',
+      safeFinalPrd.slice(0, 5200),
+    ].join('\n')
+  }
+
   function resetAfterManualSelection(next: CouncilSelection) {
     setSelection(refreshSelectionMatchGate(next))
     resetRunState()
@@ -607,29 +842,52 @@ export default function CouncilMacApp() {
     })
   }
 
-  async function startCouncilRun() {
-    const text = problem.trim()
+  async function startCouncilRun(options: { sourceText?: string; forceRematch?: boolean; reason?: string } = {}) {
+    const text = redactSensitiveText((options.sourceText || problem).trim())
     if (!text) {
       setError('先写下问题，再激活智囊团。')
       return
     }
-    const current = selection || await runCouncilMatchGate({
-      problem: text,
-      creativeEnhancement: creativePreview || undefined,
-      uiStyleContext,
-      preferredStyleIds,
-      runtimeWisdomContext,
-      runtimeCalibrationPlan,
-    })
-    setSelection(current)
+    let current = selection
+    if (!current || options.forceRematch) {
+      setSelection(null)
+      resetRunState()
+      setMatchEvents([])
+      setMatchError('')
+      setMatching(true)
+      try {
+        current = await runCouncilMatchGate(
+          {
+            problem: text,
+            creativeEnhancement: creativePreview || undefined,
+            uiStyleContext,
+            preferredStyleIds,
+            runtimeWisdomContext,
+            runtimeCalibrationPlan,
+          },
+          {
+            onProgress: (event) => setMatchEvents((prev) => [...prev, event]),
+          },
+        )
+        setSelection(current)
+        if (current.matchGate.decisionSource === 'local-fallback') setMatchError(current.matchGate.judgeSummary)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+        return
+      } finally {
+        setMatching(false)
+      }
+    }
     setMessages([])
-    setLiveSnapshots([])
+    setLiveSnapshots([buildRunStartSnapshot(current, options.reason)])
     setResult(null)
     setError('')
     setSaved(false)
     setCopied(false)
     setActivated(true)
     setRunning(true)
+    setReplayOpen(false)
+    setReplayIndex(0)
     try {
       const run = await runCouncilPrdWorkflow({
         problem: text,
@@ -650,14 +908,27 @@ export default function CouncilMacApp() {
       setResult(run)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
+      setActivated(false)
     } finally {
       setRunning(false)
     }
   }
 
+  async function continueTowardMasterCandidate() {
+    if (!result || !finalPrd || topTierEvaluation.masterClaimAllowed) return
+    const refinementProblem = buildMasterRefinementProblem()
+    setProblem(refinementProblem)
+    setSelection(null)
+    await startCouncilRun({
+      sourceText: refinementProblem,
+      forceRematch: true,
+      reason: 'Boss 要继续探讨直到大师级候选，已重新进入六阶段博弈',
+    })
+  }
+
   async function copyPrd() {
     if (!finalPrd) return
-    await navigator.clipboard.writeText(finalPrd)
+    await navigator.clipboard.writeText(buildExportMarkdown())
     setCopied(true)
     window.setTimeout(() => setCopied(false), 1600)
   }
@@ -678,21 +949,32 @@ export default function CouncilMacApp() {
 
   async function downloadPrd() {
     if (!finalPrd) return
-    await writeDownloadFile(`小白智囊团_PRD_${Date.now()}.md`, buildExportMarkdown(), 'text/markdown;charset=utf-8')
+    await writeDownloadFile(`${sanitizeCouncilFileBaseName(projectTitle)}_PRD_${Date.now()}.md`, buildExportMarkdown(), 'text/markdown;charset=utf-8')
+  }
+
+  async function downloadProcessMarkdown() {
+    if (!finalPrd) return
+    await writeDownloadFile(`${sanitizeCouncilFileBaseName(projectTitle)}_辩论过程与证据_${Date.now()}.md`, buildProcessMarkdown(), 'text/markdown;charset=utf-8')
   }
 
   async function downloadShareBrief() {
     if (!finalPrd && !result?.deliveryModes) return
-    await writeDownloadFile(`小白智囊团_可转发决策简报_${Date.now()}.html`, buildShareBriefHtml(), 'text/html;charset=utf-8')
+    await writeDownloadFile(`${sanitizeCouncilFileBaseName(projectTitle)}_决策简报_${Date.now()}.html`, buildShareBriefHtml(), 'text/html;charset=utf-8')
   }
 
   async function savePrd() {
     if (!finalPrd) return
     await archiveOutput({
-      question: `小白智囊团 PRD：${problem.slice(0, 100)}`,
+      question: `产品 PRD：${projectTitle}`,
       answer: buildExportMarkdown(),
       quality: 5,
-      tags: ['小白智囊团', 'PRD', '群策', '共识追溯'],
+      tags: ['小白智囊团', 'PRD', '产品文档'],
+    })
+    await archiveOutput({
+      question: `小白智囊团过程证据：${projectTitle}`,
+      answer: buildProcessMarkdown(),
+      quality: 5,
+      tags: ['小白智囊团', '辩论过程', '共识追溯', '证据'],
     })
     setSaved(true)
   }
@@ -723,6 +1005,15 @@ export default function CouncilMacApp() {
     setProfileLoading(false)
   }
 
+  function openReplay(index = Math.max(replayFrames.length - 1, 0)) {
+    setReplayIndex(Math.max(0, Math.min(index, Math.max(replayFrames.length - 1, 0))))
+    setReplayOpen(true)
+  }
+
+  function moveReplay(delta: number) {
+    setReplayIndex((index) => Math.max(0, Math.min(index + delta, Math.max(replayFrames.length - 1, 0))))
+  }
+
   function personaName(personaId: string): string {
     return COUNCIL_PERSONAS.find((persona) => persona.id === personaId)?.shortName || personaId
   }
@@ -748,106 +1039,71 @@ export default function CouncilMacApp() {
   }
 
   function buildExportMarkdown(): string {
-    const roster =
-      selection?.seats
-        .map((seat, index) => `${index + 1}. ${seat.persona.name} - ${seat.seat.label}`)
-        .join('\n') || ''
-    const traceMarkdown = result?.consensusTrace && !/##\s+共识形成追溯/.test(finalPrd)
-      ? renderCouncilConsensusTraceMarkdown(result.consensusTrace)
-      : ''
-    return `# 小白智囊团大师共识 PRD
+    return buildCouncilTopTierPrdExport({
+      projectTitle,
+      problem: safeProblem,
+      finalPrd: safeFinalPrd,
+      generatedAt: result?.runtimeEvidence.startedAt || new Date(),
+      runId: result?.runtimeEvidence.runId || latestRunId,
+      workflowDispatchLabel,
+      qualityGate: result?.qualityGate || null,
+      uiStyleContext,
+      actionPack: result?.actionPack || null,
+      consensusTrace,
+    })
+  }
 
-## 95+ 代表作首页
+  function buildProcessMarkdown(): string {
+    const auditMarkdown = [
+      result?.excellenceAudit ? renderCouncilExcellenceAuditMarkdown(result.excellenceAudit) : '## 95 分卓越审计\n\n尚未生成卓越审计。',
+      renderCouncilAcceptanceReviewMarkdown(acceptanceReview),
+      renderCouncilArtifactReviewMarkdown(artifactReviewLedger),
+      renderCouncil95CertificationMarkdown(certification95),
+      result?.runtimeEvidence ? renderCouncilRuntimeEvidenceMarkdown(result.runtimeEvidence) : '## 真实运行证据账本\n\n尚未生成运行证据。',
+      renderCouncilRuntimeWisdomMarkdown(runtimeWisdomContext),
+      renderCouncilRuntimeCalibrationMarkdown(runtimeCalibrationPlan),
+      renderCouncilUserValidationMarkdown(userValidationLedger),
+      renderCouncilRuntimeHistoryMarkdown(runtimeHistory),
+      renderCouncilNuwaEvidenceRegistryMarkdown(result?.nuwaEvidenceRegistry || nuwaEvidenceRegistry),
+      renderCouncilNuwaSourceAuditMarkdown(nuwaSourceAuditLedger),
+      nuwaPreflight ? renderCouncilNuwaLocalPreflightMarkdown(nuwaPreflight) : '## Nuwa 本地包自动预检\n\n尚未运行本地包自动预检。',
+      result?.qualityGate ? renderCouncilQualityGateMarkdown(result.qualityGate) : '## CouncilQualityGate · 质量闸门\n\n尚未生成质量闸门。',
+    ].join('\n\n')
 
-- 产品承诺：${signaturePromise}
-- 首屏裁决：${signatureHeadline}
-- 现在只做这一件事：${signaturePrimaryAction}
-- 保留：${compactDisplay(verdictKeep, 180)}
-- 裁掉：${compactDisplay(verdictCut, 180)}
-- 证据守门：${signatureReadiness}；claimAllowed=${certification95.claimAllowed ? 'yes' : 'no'}
-- 3 分钟行动：
-${signatureActions.map((item, index) => `${index + 1}. ${item}`).join('\n')}
-- 可转发导出：PRD Markdown / 共识追溯 / 一页决策简报。
-
-## 用户问题
-
-${problem}
-
-## 自动编队
-
-${roster}
-
-## CouncilMatchGate
-
-${selection?.matchGate.explanation.map((item) => `- ${item}`).join('\n') || '尚未生成匹配闸门。'}
-
-## Creative DNA / 创意增强
-
-${result?.creativeEnhancement.promptFragment || creativePreview?.promptFragment || '尚未生成创意增强。'}
-
-## UI风格馆主题
-
-- styles: ${uiStyleContext.styleNames.join(' / ')}
-- reasoning: ${uiStyleContext.reasoning}
-- tokens: ${uiStyleContext.visual.palette.join(' / ')} · ${uiStyleContext.visual.motion}
-
-## PRD
-
-${finalPrd}
-
-${traceMarkdown}
-
-${renderLiveSnapshotsMarkdown(liveSnapshots)}
-
-${liveTheater ? renderCouncilDebateTheaterMarkdown(liveTheater) : '## 小白辩论剧场\n\n尚未生成剧场场景。'}
-
-${result?.deliveryModes ? renderCouncilDeliveryModesMarkdown(result.deliveryModes) : '## 双模式结果层\n\n尚未生成 Boss 复盘 / 小白执行双模式。'}
-
-${result?.actionPack ? renderCouncilActionPackMarkdown(result.actionPack) : '## 90 分行动面板\n\n尚未生成可开工行动包。'}
-
-${result?.excellenceAudit ? renderCouncilExcellenceAuditMarkdown(result.excellenceAudit) : '## 95 分卓越审计\n\n尚未生成卓越审计。'}
-
-${renderCouncilAcceptanceReviewMarkdown(acceptanceReview)}
-
-${renderCouncilArtifactReviewMarkdown(artifactReviewLedger)}
-
-${renderCouncil95CertificationMarkdown(certification95)}
-
-${result?.runtimeEvidence ? renderCouncilRuntimeEvidenceMarkdown(result.runtimeEvidence) : '## 真实运行证据账本\n\n尚未生成运行证据。'}
-
-${renderCouncilRuntimeWisdomMarkdown(runtimeWisdomContext)}
-
-${renderCouncilRuntimeCalibrationMarkdown(runtimeCalibrationPlan)}
-
-${renderCouncilUserValidationMarkdown(userValidationLedger)}
-
-${renderCouncilRuntimeHistoryMarkdown(runtimeHistory)}
-
-${renderCouncilNuwaEvidenceRegistryMarkdown(result?.nuwaEvidenceRegistry || nuwaEvidenceRegistry)}
-
-${renderCouncilNuwaSourceAuditMarkdown(nuwaSourceAuditLedger)}
-
-${nuwaPreflight ? renderCouncilNuwaLocalPreflightMarkdown(nuwaPreflight) : '## Nuwa 本地包自动预检\n\n尚未运行本地包自动预检。'}
-
-${result?.qualityGate ? renderCouncilQualityGateMarkdown(result.qualityGate) : '## CouncilQualityGate · 质量闸门\n\n尚未生成质量闸门。'}
-`
+    return buildCouncilTopTierPrdProcessMarkdown({
+      projectTitle,
+      problem: safeProblem,
+      finalPrd: safeFinalPrd,
+      generatedAt: result?.runtimeEvidence.startedAt || new Date(),
+      runId: result?.runtimeEvidence.runId || latestRunId,
+      workflowDispatchLabel,
+      qualityGate: result?.qualityGate || null,
+      uiStyleContext,
+      actionPack: result?.actionPack || null,
+      consensusTrace,
+      liveSnapshotsMarkdown: renderLiveSnapshotsMarkdown(liveSnapshots).replace('## 实时剧本流', '## 实时运行快照'),
+      theaterMarkdown: liveTheater ? renderCouncilDebateTheaterMarkdown(liveTheater).replace(/漫画/g, '过程') : '## 小白辩论剧场\n\n尚未生成剧场场景。',
+      deliveryModesMarkdown: result?.deliveryModes ? renderCouncilDeliveryModesMarkdown(result.deliveryModes) : '## 双模式结果层\n\n尚未生成 Boss 复盘 / 小白执行双模式。',
+      actionPackMarkdown: result?.actionPack ? renderCouncilActionPackMarkdown(result.actionPack) : '## 90 分行动面板\n\n尚未生成可开工行动包。',
+      auditMarkdown,
+    })
   }
 
   function buildShareBriefHtml(): string {
     const checksHtml = signatureProofChecks.map((item) => `
       <article data-status="${item.status}">
         <span>${escapeHtml(item.status)}</span>
-        <strong>${escapeHtml(item.label)}</strong>
-        <p>${escapeHtml(item.proof)}</p>
+        <strong>${escapeHtml(redactSensitiveText(item.label))}</strong>
+        <p>${escapeHtml(redactSensitiveText(item.proof))}</p>
       </article>
     `).join('')
-    const actionsHtml = signatureActions.map((item, index) => `<li><b>${index + 1}</b>${escapeHtml(item)}</li>`).join('')
+    const actionsHtml = signatureActions.map((item, index) => `<li><b>${index + 1}</b>${escapeHtml(redactSensitiveText(item))}</li>`).join('')
     return `<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>小白智囊团可转发决策简报</title>
+<title>${escapeHtml(projectTitle)}｜小白智囊团可转发决策简报</title>
 <style>
 body{margin:0;background:#061015;color:#ecfeff;font-family:"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC",sans-serif;}
 main{max-width:1120px;margin:0 auto;padding:44px 28px 54px;}
@@ -878,26 +1134,27 @@ pre{white-space:pre-wrap;max-height:480px;overflow:auto;color:rgba(236,254,255,.
 <main>
   <div class="hero">
     <div class="mark">XIAOBAI COUNCIL / SHARE BRIEF</div>
-    <h1>${escapeHtml(signatureHeadline)}</h1>
-    <p>${escapeHtml(signaturePromise)}</p>
+    <h1>${escapeHtml(projectTitle)}</h1>
+    <p>${escapeHtml(redactSensitiveText(signatureHeadline))}</p>
+    <p>${escapeHtml(redactSensitiveText(signaturePromise))}</p>
     <div class="grid">
       <div class="panel">
         <div class="mark">3 分钟行动</div>
-        <div class="now">${escapeHtml(signaturePrimaryAction)}</div>
+        <div class="now">${escapeHtml(redactSensitiveText(signaturePrimaryAction))}</div>
         <ol>${actionsHtml}</ol>
       </div>
       <div class="panel">
         <div class="mark">证据守门</div>
         <div class="now">${escapeHtml(signatureReadiness)}</div>
-        <p>${escapeHtml(certification95.claimText)}</p>
+        <p>${escapeHtml(redactSensitiveText(certification95.claimText))}</p>
       </div>
     </div>
   </div>
   <section>
     <h2>保留 / 裁掉</h2>
     <div class="verdict">
-      <p><strong>保留</strong>${escapeHtml(compactDisplay(verdictKeep, 240))}</p>
-      <p><strong>裁掉</strong>${escapeHtml(compactDisplay(verdictCut, 240))}</p>
+      <p><strong>保留</strong>${escapeHtml(compactDisplay(redactSensitiveText(verdictKeep), 240))}</p>
+      <p><strong>裁掉</strong>${escapeHtml(compactDisplay(redactSensitiveText(verdictCut), 240))}</p>
     </div>
   </section>
   <section>
@@ -906,7 +1163,7 @@ pre{white-space:pre-wrap;max-height:480px;overflow:auto;color:rgba(236,254,255,.
   </section>
   <section>
     <h2>PRD 摘要</h2>
-    <pre>${escapeHtml(compactDisplay(finalPrd || buildExportMarkdown(), 2600))}</pre>
+    <pre>${escapeHtml(compactDisplay(safeFinalPrd || buildExportMarkdown(), 2600))}</pre>
   </section>
 </main>
 </body>
@@ -914,7 +1171,7 @@ pre{white-space:pre-wrap;max-height:480px;overflow:auto;color:rgba(236,254,255,.
   }
 
   return (
-    <div className="council-app">
+    <div className={finalPrd ? 'council-app council-app--completed' : 'council-app'}>
       <section className="council-app__signature" aria-label="小白智囊团 95+ 指挥舱">
         <div className="council-app__signature-main">
           <span className="council-app__section-kicker">95+ 指挥舱 · 36 个灵魂幕后工作</span>
@@ -930,13 +1187,35 @@ pre{white-space:pre-wrap;max-height:480px;overflow:auto;color:rgba(236,254,255,.
             <strong>{signaturePrimaryAction}</strong>
           </div>
           <div className="council-app__signature-actions">
-            <button type="button" className="council-app__primary" onClick={() => (selection ? startCouncilRun() : recommendTeam())} disabled={!problem.trim() || running || matching || Boolean(selection && activated)}>
-              {selection ? (running ? '六阶段博弈中...' : activated ? '已激活' : '开始六阶段博弈') : matching ? '正在匹配 36 个灵魂...' : '让 36 个灵魂开始挑队'}
-            </button>
-            <button type="button" onClick={downloadShareBrief} disabled={!finalPrd && !result?.deliveryModes}>
-              导出可转发决策简报
-            </button>
+            {!finalPrd ? (
+              <button type="button" className="council-app__primary" onClick={() => startCouncilRun()} disabled={!problem.trim() || running || matching}>
+                {startButtonLabel}
+              </button>
+            ) : (
+              <>
+                {!topTierEvaluation.masterClaimAllowed && (
+                  <button type="button" className="council-app__primary" onClick={continueTowardMasterCandidate} disabled={running || matching}>
+                    继续探讨到大师级候选
+                  </button>
+                )}
+                <button type="button" className="council-app__primary" onClick={copyPrd}>
+                  {copied ? '已复制' : '复制 PRD'}
+                </button>
+                <button type="button" onClick={downloadPrd}>
+                  下载 Markdown
+                </button>
+                <button type="button" onClick={downloadShareBrief}>
+                  导出决策简报
+                </button>
+                <button type="button" onClick={() => openReplay()} disabled={!replayFrames.length}>
+                  过程回看
+                </button>
+              </>
+            )}
           </div>
+          <small className={`council-app__workflow-dispatch council-app__workflow-dispatch--${workflowDispatchStatus}`}>
+            {workflowDispatchLabel}
+          </small>
         </div>
         <div className="council-app__signature-board">
           <article className="council-app__signature-steps">
@@ -992,11 +1271,8 @@ pre{white-space:pre-wrap;max-height:480px;overflow:auto;color:rgba(236,254,255,.
           <div className="council-app__composer-head">
             <div>
               <h1>隐藏思想原型，先选对人再激活</h1>
-              <p>系统会先进入 CouncilMatchGate，判断类型、难度、证据、工程、视觉、Nuwa 蒸馏可信度、dream 对齐和反方价值，再推荐最合适的团队。</p>
+              <p>Boss 只点一次开始；系统自动进入 CouncilMatchGate，判断类型、难度、证据、工程、视觉、Nuwa 蒸馏可信度、dream 对齐和反方价值，再直接开会、成稿、回写工作流。</p>
             </div>
-            <button type="button" onClick={loadSample} disabled={running || matching}>
-              载入样例
-            </button>
           </div>
           <textarea
             value={problem}
@@ -1011,12 +1287,12 @@ pre{white-space:pre-wrap;max-height:480px;overflow:auto;color:rgba(236,254,255,.
             placeholder="描述你要解决的项目或世界级难题。比如：我要做一个什么应用，它服务谁，最终要产出大师级 PRD、全栈蓝图、共识追溯还是执行路线..."
           />
           <div className="council-app__actions">
-            <button type="button" className="council-app__primary" onClick={() => recommendTeam()} disabled={!problem.trim() || running || matching}>
-              {matching ? '正在深度匹配...' : '生成推荐编队'}
+            <button type="button" className="council-app__primary" onClick={() => startCouncilRun()} disabled={!problem.trim() || running || matching || Boolean(result)}>
+              {startButtonLabel}
             </button>
-            <button type="button" onClick={startCouncilRun} disabled={!selection || running || matching}>
-              {running ? '智囊团博弈中...' : '激活推荐队伍并开始博弈'}
-            </button>
+            <span className={`council-app__workflow-dispatch council-app__workflow-dispatch--${workflowDispatchStatus}`}>
+              {workflowDispatchLabel}
+            </span>
           </div>
           {error && <div className="council-app__error">{error}</div>}
 
@@ -1045,7 +1321,7 @@ pre{white-space:pre-wrap;max-height:480px;overflow:auto;color:rgba(236,254,255,.
             </div>
           ) : (
             <div className="council-app__empty-note">
-              现在所有角色仍是隐藏角色，不会同步到副官或外部平台。生成推荐编队后，你可以看推荐理由、替换角色，再确认本地激活；Telegram 只作为以后可选绑定。
+              现在所有角色仍是隐藏角色，不会同步到副官或外部平台。点击“开始”后，系统会自动匹配、编队、本地激活、六阶段博弈、生成 PRD 并投递工作流；Telegram 只作为以后可选绑定。
             </div>
           )}
         </div>
@@ -1077,7 +1353,7 @@ pre{white-space:pre-wrap;max-height:480px;overflow:auto;color:rgba(236,254,255,.
                   ? '不是等待一个黑箱答案；每个阶段都会留下发言、质询、裁决和可回放场景。'
                   : matching
                     ? '系统正在从问题画像、Creative DNA、候选池、模型裁判和互补矩阵中挑队。'
-                    : '确认后才进入六阶段博弈，避免一秒默认编队和全员混聊。'}
+                    : '系统已完成编队，正在准备自动进入六阶段博弈；这一步不会停成“等待大师入场”。'}
             </p>
             <div className="council-app__director-metrics">
               <article>
@@ -1105,6 +1381,9 @@ pre{white-space:pre-wrap;max-height:480px;overflow:auto;color:rgba(236,254,255,.
               <div className="council-app__snapshot-head">
                 <span>实时剧本流</span>
                 <strong>{liveSnapshots.length ? `${liveSnapshots.length} 个真实快照` : '等待激活后写入'}</strong>
+                <button type="button" onClick={() => openReplay()} disabled={!replayFrames.length && !running && !matching}>
+                  过程回看
+                </button>
               </div>
               <div className="council-app__snapshot-list">
                 {visibleSnapshots.length ? (
@@ -1150,8 +1429,8 @@ pre{white-space:pre-wrap;max-height:480px;overflow:auto;color:rgba(236,254,255,.
               {latestSnapshot?.latestObjection || latestSnapshot?.latestClaim || latestSnapshot?.detail || latestRunSignal?.content || latestMatchEvent?.detail || '这里会显示最新主张、质询或裁决，不再让 Boss 只看到一个无声等待状态。'}
             </p>
             {selection && !activated && (
-              <button type="button" className="council-app__primary" onClick={startCouncilRun} disabled={running || matching}>
-                激活并进入六阶段博弈
+              <button type="button" className="council-app__primary" onClick={() => startCouncilRun()} disabled={running || matching}>
+                开始六阶段博弈并生成 PRD
               </button>
             )}
           </aside>
@@ -1159,19 +1438,41 @@ pre{white-space:pre-wrap;max-height:480px;overflow:auto;color:rgba(236,254,255,.
       )}
 
       {finalPrd && (
-        <CouncilMasterPrdView
-          markdown={finalPrd}
-          validation={masterPrdValidation}
-          trace={consensusTrace}
-          qualityScore={result?.qualityGate.score}
-          qualityStatus={result?.qualityGate.finalGateStatus}
-          runId={latestRunId}
-          onCopy={copyPrd}
-          onDownload={downloadPrd}
-          onSave={savePrd}
-          copied={copied}
-          saved={saved}
-        />
+        <>
+          <section className="council-app__handoff" aria-label="小白智囊团交付出口">
+            <div>
+              <div className="council-app__section-kicker">完成交付</div>
+              <h2>{topTierEvaluation.masterClaimAllowed ? '大师级 PRD 候选已生成，可交给团队开工复验' : 'PRD 候选稿已生成，需按大师级缺口返修'}</h2>
+              <p>{topTierEvaluation.claimLabel}。{workflowDispatchLabel}</p>
+            </div>
+            <div>
+              {!topTierEvaluation.masterClaimAllowed && (
+                <button type="button" className="council-app__primary" onClick={continueTowardMasterCandidate} disabled={running || matching}>
+                  继续探讨到大师级候选
+                </button>
+              )}
+              <button type="button" className="council-app__primary" onClick={copyPrd}>{copied ? '已复制' : '复制 PRD'}</button>
+              <button type="button" onClick={downloadPrd}>下载产品 PRD</button>
+              <button type="button" onClick={downloadProcessMarkdown}>下载过程证据</button>
+              <button type="button" onClick={downloadShareBrief}>下载决策简报</button>
+            </div>
+          </section>
+          <CouncilMasterPrdView
+            markdown={buildExportMarkdown()}
+            validation={masterPrdValidation}
+            trace={null}
+            qualityScore={result?.qualityGate.score}
+            qualityStatus={result?.qualityGate.finalGateStatus}
+            runId={latestRunId}
+            onCopy={copyPrd}
+            onDownload={downloadPrd}
+            onSave={savePrd}
+            copied={copied}
+            saved={saved}
+            mode="product"
+            topTierEvaluation={topTierEvaluation}
+          />
+        </>
       )}
 
       {selection && liveTheater && !result && (
@@ -1179,15 +1480,21 @@ pre{white-space:pre-wrap;max-height:480px;overflow:auto;color:rgba(236,254,255,.
           <div className="council-app__panel-head">
             <div>
               <div className="council-app__section-kicker">神之一手辩论剧场</div>
-              <h2>{result ? '从分歧到裁决的完整剧情' : '剧场已就位，等待大师入场'}</h2>
+              <h2>{result ? '从分歧到裁决的完整剧情' : '剧场已开机，等待第一幕写入'}</h2>
               <p>Boss 先看每一幕如何推进，再展开原始发言。支持、反对、修正和吸收关系会随当前场景联动。</p>
             </div>
+            <button type="button" onClick={() => openReplay(theaterSceneIndex)} disabled={!replayFrames.length}>
+              过程回看
+            </button>
           </div>
           <div className="council-app__theater-grid">
             <DebateTheaterView
               scenes={liveTheater.scenes}
               currentIndex={theaterSceneIndex}
               onCurrentIndexChange={setTheaterSceneIndex}
+              onStartDebate={startCouncilRun}
+              canStartDebate={Boolean(selection && !activated)}
+              startDisabled={running || matching}
             />
             <CouncilRelationMap debateMap={liveTheater.debateMap} activeSceneId={activeTheaterScene?.id} />
           </div>
@@ -1354,12 +1661,12 @@ pre{white-space:pre-wrap;max-height:480px;overflow:auto;color:rgba(236,254,255,.
           <div className="council-app__panel council-app__panel--wide">
             <div className="council-app__panel-head">
               <div>
-                <div className="council-app__section-kicker">{activated ? '已激活队伍' : '推荐编队 · 待激活'}</div>
+                <div className="council-app__section-kicker">{activated ? '已形成共识结果' : '推荐编队 · 待博弈'}</div>
                 <h2>{selection.seats.length} 位真实人类原型，按席位进入博弈</h2>
-                <p>点击“替换”可以换掉某个席位；点击激活后才会写入 custom_agents，并出现在本地副官、群策和控制面板。Telegram 默认关闭，Nuwa 产物注册为本地 skill。</p>
+                <p>点击“替换”可以换掉某个席位；点击开始后会写入 custom_agents，并进入六阶段方法论提取、反方质询、主持裁决和共识 PRD。Telegram 默认关闭，Nuwa 产物注册为本地 skill。</p>
               </div>
-              <button type="button" className="council-app__primary" onClick={startCouncilRun} disabled={running || activated || matching}>
-                {running ? '博弈中...' : activated ? '已激活' : '激活推荐队伍'}
+              <button type="button" className="council-app__primary" onClick={() => startCouncilRun()} disabled={running || activated || matching}>
+                {running ? '博弈中...' : activated ? '已形成共识结果' : '开始六阶段博弈并生成 PRD'}
               </button>
             </div>
             <div className="council-app__roster">
@@ -1581,6 +1888,79 @@ pre{white-space:pre-wrap;max-height:480px;overflow:auto;color:rgba(236,254,255,.
           </div>
         </details>
       </section>
+
+      {replayOpen && (
+        <div className="council-replay-modal" role="presentation" onClick={() => setReplayOpen(false)}>
+          <section
+            className="council-replay-modal__panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label="小白智囊团实时博弈过程回看"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="council-replay-modal__header">
+              <div>
+                <div className="council-app__section-kicker">实时博弈 · 过程回看</div>
+                <h2>{activeReplayFrame?.title || '等待第一条真实推进记录'}</h2>
+                <p>
+                  {replayFrames.length
+                    ? `${replayIndex + 1} / ${replayFrames.length} · ${activeReplayFrame?.kind || '回看'} · ${activeReplayFrame?.meta || ''}`
+                    : '激活后会自动出现匹配、快照、角色发言和剧场场景。'}
+                </p>
+              </div>
+              <button type="button" onClick={() => setReplayOpen(false)}>
+                关闭
+              </button>
+            </header>
+
+            <div className="council-replay-modal__pager">
+              <button
+                type="button"
+                className="council-replay-modal__nav"
+                onClick={() => moveReplay(-1)}
+                disabled={replayIndex <= 0}
+              >
+                上一页
+              </button>
+
+              <article className="council-replay-modal__page" data-status={activeReplayFrame?.status || 'pending'}>
+                <span>{activeReplayFrame?.label || 'ready'}</span>
+                <strong>{activeReplayFrame?.kind || '小白智囊团'}</strong>
+                <p>{activeReplayFrame?.body || '这里不会播放假动画；只有真实匹配、真实快照、真实发言或真实剧场场景出现后，才会写入这一册。'}</p>
+                <small>{activeReplayFrame?.meta || currentRunHeadline}</small>
+              </article>
+
+              <button
+                type="button"
+                className="council-replay-modal__nav"
+                onClick={() => moveReplay(1)}
+                disabled={replayIndex >= replayFrames.length - 1}
+              >
+                下一页
+              </button>
+            </div>
+
+            <footer className="council-replay-modal__filmstrip" aria-label="过程回看页码">
+              {replayFrames.length ? (
+                replayFrames.map((frame, index) => (
+                  <button
+                    key={frame.id}
+                    type="button"
+                    className={index === replayIndex ? 'council-replay-modal__thumb--active' : ''}
+                    onClick={() => setReplayIndex(index)}
+                  >
+                    <span>{String(index + 1).padStart(2, '0')}</span>
+                    <strong>{frame.kind}</strong>
+                    <small>{frame.label}</small>
+                  </button>
+                ))
+              ) : (
+                <div>等待六阶段博弈开始后生成可回看页。</div>
+              )}
+            </footer>
+          </section>
+        </div>
+      )}
 
       {profilePersona && (
         <div className="council-profile-modal" role="presentation" onClick={closePersonaProfile}>

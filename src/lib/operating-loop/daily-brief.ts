@@ -48,7 +48,10 @@ function clampPercent(value: number): number {
 }
 
 function dateLabel(date: Date): string {
-  return date.toISOString().slice(0, 10)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 function parseTime(value: string): number {
@@ -241,22 +244,22 @@ export function buildDailyBriefDeck(input: BuildDailyBriefInput): DailyBriefDeck
     sections: [
       {
         id: 'deposits',
-        eyebrow: 'yesterday',
+        eyebrow: '昨日',
         title: '昨日沉淀',
         target: 'memory',
         tone: 'success',
         items: depositItems,
       },
-      { id: 'actions', eyebrow: 'today', title: '今日行动', target: 'warroom', tone: 'accent', items: actionItems },
+      { id: 'actions', eyebrow: '今日', title: '今日行动', target: 'warroom', tone: 'accent', items: actionItems },
       {
         id: 'gaps',
-        eyebrow: 'gaps',
+        eyebrow: '缺口',
         title: '系统缺口',
         target: 'control',
         tone: 'warning',
         items: gapItems.slice(0, 3),
       },
-      { id: 'agents', eyebrow: 'agents', title: 'Agent 建议', target: 'teams', tone: 'accent', items: agentItems },
+      { id: 'agents', eyebrow: '智能体', title: 'Agent 建议', target: 'teams', tone: 'accent', items: agentItems },
     ],
   }
 }

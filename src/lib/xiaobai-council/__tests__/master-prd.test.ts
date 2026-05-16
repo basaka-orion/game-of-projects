@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildCouncilConsensusTrace,
   formatCouncilPrdDate,
+  isCouncilMasterPrdSynthesisFailure,
   normalizeCouncilMasterPrdMarkdown,
   validateCouncilMasterPrd,
 } from '../master-prd'
@@ -56,6 +57,32 @@ describe('xiaobai council master PRD', () => {
 
     expect(validation.score).toBe(100)
     expect(validation.missedLabels).toEqual([])
+  })
+
+  it('does not count a model failure report as a complete master PRD', () => {
+    const failedArtifact = [
+      '# PRD 成稿生成失败',
+      '',
+      '## 发生了什么',
+      '模型主持人没有稳定返回，所以系统没有生成可交付的「PRD 成稿」。',
+      '',
+      '## 模型错误摘要',
+      'PRD 主持人 的所有模型路由都失败：DeepSeek V4: terminated；GLM 5.1: fetch failed',
+      '',
+      '## 原始任务',
+      '请生成产品定位与北极星、目标用户与端到端旅程、P0/P1/P2、信息架构、前端、后端、数据库、API、AI、权限、部署、测试矩阵、里程碑与共识追溯。',
+      '',
+      '## 自动补齐清单：仍需人工复验的 PRD 章节',
+      '1. 产品定位与北极星',
+      '2. 目标用户与端到端旅程',
+    ].join('\n')
+
+    const validation = validateCouncilMasterPrd(failedArtifact)
+
+    expect(isCouncilMasterPrdSynthesisFailure(failedArtifact)).toBe(true)
+    expect(validation.score).toBe(0)
+    expect(validation.hitLabels).toEqual([])
+    expect(validation.missedLabels).toHaveLength(validation.sections.length)
   })
 
   it('extracts claim, challenge, absorb and cut lanes from sourced debate scenes', () => {

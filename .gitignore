@@ -6,6 +6,15 @@ dist/
 dist-electron/
 release/
 
+# Generated native build outputs / local IDE state
+deliveries/**/.build/
+deliveries/**/build/
+deliveries/**/xcuserdata/
+*.xcuserstate
+test-results/
+tools/.live-runs/
+release-whiteboard/*.dmg
+
 # Local app/runtime data
 *.db
 *.db-*
@@ -13,6 +22,7 @@ release/
 .env.*
 .env*
 !.env.example
+env.md
 
 # macOS / editor noise
 .DS_Store
@@ -30,6 +40,8 @@ package-lock 2.json
 tsconfig 2.json
 vite.config 2.ts
 vite-error.log
+scripts/* 2.mjs
+deliveries/**/* 2.swift
 
 # Local experiments and sensitive throwaway probes
 test_zhipu.py
@@ -45,6 +57,13 @@ chuangyi/
 flash-of-genius/
 mempalace-reference/
 RLJB/
+
+# Keep the restored SandboxMap child-app implementations versionable while
+# still ignoring adjacent source workspaces with the same names.
+!src/views/SandboxMap/tabs/flash-of-genius/
+!src/views/SandboxMap/tabs/flash-of-genius/**
+!src/views/SandboxMap/tabs/rljb/
+!src/views/SandboxMap/tabs/rljb/**
 
 # Raw source material / local reference corpora
 Notes-知识库+大佬/

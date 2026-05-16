@@ -2,7 +2,7 @@
  * AI Provider 单元测试
  * 验证 LLM 配置解析、角色配置解析、默认值回退等核心逻辑
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // Mock store (避免实际 localStorage 访问)
 vi.mock('../../db/store', () => {
@@ -15,13 +15,25 @@ vi.mock('../../db/store', () => {
   }
 })
 
-import { getDefaultConfig, getLLMConfig, resolveAgentConfig } from '../provider'
+import { buildElectronConfigOverride, getDefaultConfig, getLLMConfig, resolveAgentConfig } from '../provider'
 import { getSetting } from '../../db/store'
 
 describe('AI Provider', () => {
   beforeEach(async () => {
+    vi.stubEnv('VITE_OPENBASAKA_LLM_PROVIDER', '')
+    vi.stubEnv('VITE_OPENBASAKA_LLM_API_KEY', '')
+    vi.stubEnv('VITE_OPENBASAKA_LLM_BASE_URL', '')
+    vi.stubEnv('VITE_OPENBASAKA_LLM_MODEL', '')
+    vi.stubEnv('VITE_PROFILING_LLM_PROVIDER', '')
+    vi.stubEnv('VITE_PROFILING_LLM_API_KEY', '')
+    vi.stubEnv('VITE_PROFILING_LLM_BASE_URL', '')
+    vi.stubEnv('VITE_PROFILING_LLM_MODEL', '')
     const mod = vi.mocked(await import('../../db/store')) as any
     mod.__resetStore()
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
   })
 
   describe('getDefaultConfig', () => {
@@ -67,6 +79,41 @@ describe('AI Provider', () => {
       expect(config.provider).toBe('glm')
       expect(config.apiKey).toBe('test-key-123')
       expect(config.model).toBe('glm-4-plus')
+    })
+
+    it('store 无配置时可使用本机环境变量 fallback', () => {
+      vi.stubEnv('VITE_OPENBASAKA_LLM_PROVIDER', 'glm')
+      vi.stubEnv('VITE_OPENBASAKA_LLM_API_KEY', 'env-key')
+      vi.stubEnv('VITE_OPENBASAKA_LLM_BASE_URL', 'https://api.z.ai/api/paas/v4/')
+      vi.stubEnv('VITE_OPENBASAKA_LLM_MODEL', 'glm-5.1')
+
+      const config = getLLMConfig()
+      expect(config.provider).toBe('glm')
+      expect(config.apiKey).toBe('env-key')
+      expect(config.baseUrl).toBe('https://api.z.ai/api/coding/paas/v4')
+      expect(config.model).toBe('glm-5.1')
+    })
+  })
+
+  describe('buildElectronConfigOverride', () => {
+    it('遇到 safe-storage 引用时不覆盖主进程 SQLite 配置', () => {
+      const override = buildElectronConfigOverride({
+        provider: 'glm',
+        apiKey: 'safe-storage:llm_api_key',
+        baseUrl: 'https://api.z.ai/api/coding/paas/v4',
+        model: 'glm-5.1',
+      })
+      expect(override).toBeUndefined()
+    })
+
+    it('明文运行时 key 才作为显式覆盖传给主进程', () => {
+      const override = buildElectronConfigOverride({
+        provider: 'glm',
+        apiKey: 'runtime-key',
+        baseUrl: 'https://api.z.ai/api/coding/paas/v4',
+        model: 'glm-5.1',
+      })
+      expect(JSON.parse(override || '{}')).toMatchObject({ provider: 'glm', apiKey: 'runtime-key', model: 'glm-5.1' })
     })
   })
 

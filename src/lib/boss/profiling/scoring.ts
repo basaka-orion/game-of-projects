@@ -29,47 +29,33 @@ function normalize(text: string): string {
 }
 
 function buildProjectText(prd: ParsedPRD): string {
-  return normalize(
-    [
-      prd.title,
-      prd.oneLiner,
-      prd.targetAudience,
-      prd.painPoint,
-      prd.businessModel,
-      prd.uniqueValue,
-      ...prd.techStack,
-      ...prd.competitors,
-      ...prd.risks,
-      ...prd.tags,
-    ].join(' | '),
-  )
+  return normalize([
+    prd.title,
+    prd.oneLiner,
+    prd.targetAudience,
+    prd.painPoint,
+    prd.businessModel,
+    prd.uniqueValue,
+    ...prd.techStack,
+    ...prd.competitors,
+    ...prd.risks,
+    ...prd.tags,
+  ].join(' | '))
 }
 
 function buildPhraseVariants(phrase: string): string[] {
   const cleaned = normalize(phrase.trim())
   if (!cleaned) return []
-  const parts = cleaned.split(/[\s,/，、|_\-]+/).filter((part) => part.length >= 2)
-  const chineseWindows = cleaned
-    .match(/[\u4e00-\u9fff]{4,}/g)
-    ?.flatMap((segment) => {
-      const variants: string[] = []
-      for (let size = 2; size <= Math.min(4, segment.length); size++) {
-        for (let index = 0; index <= segment.length - size; index++) {
-          variants.push(segment.slice(index, index + size))
-        }
-      }
-      return variants
-    })
-    .filter((variant) => !['生意', '项目', '系统', '产品', '工具', '平台'].includes(variant))
-  return [...new Set([cleaned, ...parts, ...(chineseWindows || [])])]
+  const parts = cleaned.split(/[\s,/，、|_\-]+/).filter(part => part.length >= 2)
+  return [...new Set([cleaned, ...parts])]
 }
 
 function phraseMatches(text: string, phrase: string): boolean {
-  return buildPhraseVariants(phrase).some((variant) => text.includes(variant))
+  return buildPhraseVariants(phrase).some(variant => text.includes(variant))
 }
 
 function collectMatches(text: string, phrases: string[]): string[] {
-  return phrases.filter((phrase) => phraseMatches(text, phrase))
+  return phrases.filter(phrase => phraseMatches(text, phrase))
 }
 
 function ratioScore(matched: number, total: number, emptyFallback = 55): number {
@@ -101,19 +87,26 @@ function resourcePreference(style: BossState['resourceStyle']): number {
   }
 }
 
-export function scoreBossProjectFit(boss: BossState, prd: ParsedPRD, radar: RadarScores): BossProjectFitBreakdown {
+export function scoreBossProjectFit(
+  boss: BossState,
+  prd: ParsedPRD,
+  radar: RadarScores
+): BossProjectFitBreakdown {
   const projectText = buildProjectText(prd)
   const matchedInterests = collectMatches(projectText, boss.interests)
   const focusPhrases = [boss.currentFocus, boss.longTermVision].filter(Boolean)
   const matchedFocus = collectMatches(projectText, focusPhrases)
-  const excitementPhrases = [...boss.cognitiveProfile.excitementTriggers, ...boss.cognitiveProfile.resonanceHooks]
+  const excitementPhrases = [
+    ...boss.cognitiveProfile.excitementTriggers,
+    ...boss.cognitiveProfile.resonanceHooks,
+  ]
   const matchedExcitement = collectMatches(projectText, excitementPhrases)
 
   const interestScore = ratioScore(matchedInterests.length, boss.interests.length, 50)
   const focusScore = ratioScore(matchedFocus.length, focusPhrases.length, 58)
   const excitementScore = ratioScore(matchedExcitement.length, excitementPhrases.length, 55)
 
-  const styleHits = styleKeywords(boss.preferredStyle).filter((keyword) => projectText.includes(normalize(keyword)))
+  const styleHits = styleKeywords(boss.preferredStyle).filter(keyword => projectText.includes(normalize(keyword)))
   const styleScore = ratioScore(styleHits.length, styleKeywords(boss.preferredStyle).length, 58)
 
   const riskFitScore = clamp(100 - Math.abs(radar.risk_index - boss.riskTolerance))
@@ -121,18 +114,19 @@ export function scoreBossProjectFit(boss: BossState, prd: ParsedPRD, radar: Rada
   const resourceFitScore = clamp(100 - Math.abs(radar.resource_cost - resourcePreference(boss.resourceStyle)))
 
   const dislikeMatches = collectMatches(projectText, boss.dislikes)
-  const dislikePenalty =
-    boss.dislikes.length > 0 ? clamp((dislikeMatches.length / boss.dislikes.length) * 20, 0, 20) : 0
+  const dislikePenalty = boss.dislikes.length > 0
+    ? clamp((dislikeMatches.length / boss.dislikes.length) * 20, 0, 20)
+    : 0
 
   const structuredScore = clamp(
     interestScore * 0.24 +
-      focusScore * 0.16 +
-      excitementScore * 0.1 +
-      styleScore * 0.12 +
-      riskFitScore * 0.14 +
-      innovationFitScore * 0.14 +
-      resourceFitScore * 0.1 -
-      dislikePenalty,
+    focusScore * 0.16 +
+    excitementScore * 0.10 +
+    styleScore * 0.12 +
+    riskFitScore * 0.14 +
+    innovationFitScore * 0.14 +
+    resourceFitScore * 0.10 -
+    dislikePenalty
   )
 
   const llmScore = clamp(radar.boss_match)

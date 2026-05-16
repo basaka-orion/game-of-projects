@@ -152,6 +152,59 @@ export function getSchema(): string {
 
     CREATE INDEX IF NOT EXISTS idx_boss_profile_snapshots_created ON boss_profile_snapshots(created_at DESC);
 
+    -- Boss 自我蒸馏：所有关于 Boss 的长期结论都必须带证据、状态和确认门
+    CREATE TABLE IF NOT EXISTS boss_distillation_proposals (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL DEFAULT '',
+      rationale TEXT NOT NULL DEFAULT '',
+      proposed_by TEXT NOT NULL DEFAULT 'openbasaka',
+      source_kind TEXT DEFAULT '',
+      source_id TEXT DEFAULT '',
+      source_title TEXT DEFAULT '',
+      claim_ids_json TEXT DEFAULT '[]',
+      profile_patch_json TEXT DEFAULT '{}',
+      memory_writes_json TEXT DEFAULT '[]',
+      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected','superseded')),
+      review_note TEXT DEFAULT '',
+      approved_at TEXT DEFAULT '',
+      rejected_at TEXT DEFAULT '',
+      metadata_json TEXT DEFAULT '{}',
+      created_at TEXT DEFAULT (datetime('now','localtime')),
+      updated_at TEXT DEFAULT (datetime('now','localtime'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_boss_distillation_proposals_status
+      ON boss_distillation_proposals(status, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_boss_distillation_proposals_source
+      ON boss_distillation_proposals(source_kind, source_id);
+
+    CREATE TABLE IF NOT EXISTS boss_distillation_claims (
+      id TEXT PRIMARY KEY,
+      proposal_id TEXT DEFAULT '',
+      dimension TEXT NOT NULL DEFAULT 'preference'
+        CHECK(dimension IN ('mission','value','preference','anti_pattern','decision_pattern','emotion_weight','boundary','learning_mode','project_taste')),
+      claim TEXT NOT NULL DEFAULT '',
+      evidence_tier TEXT NOT NULL DEFAULT 'derived_inference'
+        CHECK(evidence_tier IN ('boss_verbatim','boss_action','boss_assessment','derived_inference','external_context')),
+      evidence_refs_json TEXT DEFAULT '[]',
+      confidence REAL DEFAULT 0.5,
+      temporal_scope TEXT NOT NULL DEFAULT 'stage' CHECK(temporal_scope IN ('momentary','stage','long_term')),
+      status TEXT NOT NULL DEFAULT 'proposed' CHECK(status IN ('raw','proposed','approved','rejected','superseded','approved_legacy')),
+      affects_profile_keys_json TEXT DEFAULT '[]',
+      source_kind TEXT DEFAULT '',
+      source_id TEXT DEFAULT '',
+      metadata_json TEXT DEFAULT '{}',
+      created_at TEXT DEFAULT (datetime('now','localtime')),
+      updated_at TEXT DEFAULT (datetime('now','localtime'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_boss_distillation_claims_status
+      ON boss_distillation_claims(status, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_boss_distillation_claims_dimension
+      ON boss_distillation_claims(dimension, status, confidence DESC);
+    CREATE INDEX IF NOT EXISTS idx_boss_distillation_claims_source
+      ON boss_distillation_claims(source_kind, source_id);
+
     -- 突触连接（项目间的关系）
     CREATE TABLE IF NOT EXISTS synapses (
       id TEXT PRIMARY KEY,
@@ -345,6 +398,43 @@ export function getSchema(): string {
       status TEXT DEFAULT 'running',
       created_at TEXT DEFAULT (datetime('now','localtime'))
     );
+
+    CREATE TABLE IF NOT EXISTS openbasaka_runs (
+      id TEXT PRIMARY KEY,
+      module_id TEXT NOT NULL,
+      module_name TEXT DEFAULT '',
+      boss_demand TEXT DEFAULT '',
+      title TEXT DEFAULT '',
+      status TEXT DEFAULT 'queued',
+      current_step_id TEXT DEFAULT '',
+      result_preview TEXT DEFAULT '',
+      error TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now','localtime')),
+      updated_at TEXT DEFAULT (datetime('now','localtime')),
+      completed_at TEXT DEFAULT ''
+    );
+
+    CREATE TABLE IF NOT EXISTS openbasaka_run_steps (
+      id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      node_id TEXT DEFAULT '',
+      target_tab TEXT DEFAULT '',
+      title TEXT DEFAULT '',
+      detail TEXT DEFAULT '',
+      status TEXT DEFAULT 'queued',
+      started_at TEXT DEFAULT '',
+      completed_at TEXT DEFAULT '',
+      output_preview TEXT DEFAULT '',
+      order_index INTEGER DEFAULT 0,
+      metadata_json TEXT DEFAULT '{}',
+      created_at TEXT DEFAULT (datetime('now','localtime')),
+      updated_at TEXT DEFAULT (datetime('now','localtime'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_openbasaka_runs_status
+      ON openbasaka_runs(status, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_openbasaka_run_steps_run
+      ON openbasaka_run_steps(run_id, order_index ASC);
 
     CREATE TABLE IF NOT EXISTS workflow_studio_items (
       id TEXT PRIMARY KEY,
@@ -857,6 +947,32 @@ export function getSchema(): string {
     CREATE INDEX IF NOT EXISTS idx_operating_events_created
       ON operating_events(created_at DESC);
 
+    -- 白板：沙盘内的零摩擦灵感采样器
+    CREATE TABLE IF NOT EXISTS whiteboard_trials (
+      id TEXT PRIMARY KEY,
+      title TEXT DEFAULT '',
+      text TEXT DEFAULT '',
+      images_json TEXT DEFAULT '[]',
+      ai_result_json TEXT DEFAULT '',
+      exported_path TEXT DEFAULT '',
+      save_kind TEXT DEFAULT '',
+      is_starred INTEGER DEFAULT 0,
+      is_pinned INTEGER DEFAULT 0,
+      priority_level TEXT DEFAULT 'normal',
+      is_draft INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now','localtime')),
+      updated_at TEXT DEFAULT (datetime('now','localtime'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_whiteboard_trials_draft
+      ON whiteboard_trials(is_draft, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_whiteboard_trials_created
+      ON whiteboard_trials(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_whiteboard_trials_kind
+      ON whiteboard_trials(save_kind, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_whiteboard_trials_attention
+      ON whiteboard_trials(is_pinned DESC, is_starred DESC, priority_level, updated_at DESC);
+
     -- ═══ 知识库：文本分块（Karpathy LLM Wiki Chunking）═══
 
     CREATE TABLE IF NOT EXISTS wiki_chunks (
@@ -982,12 +1098,19 @@ export function getMigrations(): string[] {
     'ALTER TABLE archive_candidates ADD COLUMN suggested_targets_json TEXT DEFAULT "[]"',
     'ALTER TABLE archive_candidates ADD COLUMN archived_source_id TEXT DEFAULT ""',
     'ALTER TABLE archive_candidates ADD COLUMN archived_page_id TEXT DEFAULT ""',
+    'ALTER TABLE whiteboard_trials ADD COLUMN title TEXT DEFAULT ""',
+    'ALTER TABLE whiteboard_trials ADD COLUMN save_kind TEXT DEFAULT ""',
+    'ALTER TABLE whiteboard_trials ADD COLUMN is_starred INTEGER DEFAULT 0',
+    'ALTER TABLE whiteboard_trials ADD COLUMN is_pinned INTEGER DEFAULT 0',
+    'ALTER TABLE whiteboard_trials ADD COLUMN priority_level TEXT DEFAULT "normal"',
     'CREATE INDEX IF NOT EXISTS idx_wiki_sources_folder ON wiki_sources(folder_path)',
     'CREATE INDEX IF NOT EXISTS idx_wiki_pages_folder ON wiki_pages(folder_path)',
     'CREATE INDEX IF NOT EXISTS idx_drawers_folder ON mempalace_drawers(folder_path)',
     'CREATE INDEX IF NOT EXISTS idx_chunks_folder ON wiki_chunks(folder_path)',
     'CREATE INDEX IF NOT EXISTS idx_projects_attention ON projects(is_pinned DESC, is_starred DESC, priority_level, updated_at DESC)',
     'CREATE INDEX IF NOT EXISTS idx_team_sessions_attention ON team_sessions(team_id, is_pinned DESC, is_starred DESC, updated_at DESC)',
+    'CREATE INDEX IF NOT EXISTS idx_whiteboard_trials_kind ON whiteboard_trials(save_kind, updated_at DESC)',
+    'CREATE INDEX IF NOT EXISTS idx_whiteboard_trials_attention ON whiteboard_trials(is_pinned DESC, is_starred DESC, priority_level, updated_at DESC)',
     `CREATE TABLE IF NOT EXISTS team_actions (
       id TEXT PRIMARY KEY,
       session_id TEXT NOT NULL REFERENCES team_sessions(id) ON DELETE CASCADE,
@@ -1059,6 +1182,49 @@ export function getMigrations(): string[] {
       metadata_json TEXT DEFAULT '{}',
       updated_at TEXT DEFAULT (datetime('now','localtime'))
     )`,
+    `CREATE TABLE IF NOT EXISTS boss_distillation_proposals (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL DEFAULT '',
+      rationale TEXT NOT NULL DEFAULT '',
+      proposed_by TEXT NOT NULL DEFAULT 'openbasaka',
+      source_kind TEXT DEFAULT '',
+      source_id TEXT DEFAULT '',
+      source_title TEXT DEFAULT '',
+      claim_ids_json TEXT DEFAULT '[]',
+      profile_patch_json TEXT DEFAULT '{}',
+      memory_writes_json TEXT DEFAULT '[]',
+      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected','superseded')),
+      review_note TEXT DEFAULT '',
+      approved_at TEXT DEFAULT '',
+      rejected_at TEXT DEFAULT '',
+      metadata_json TEXT DEFAULT '{}',
+      created_at TEXT DEFAULT (datetime('now','localtime')),
+      updated_at TEXT DEFAULT (datetime('now','localtime'))
+    )`,
+    'CREATE INDEX IF NOT EXISTS idx_boss_distillation_proposals_status ON boss_distillation_proposals(status, updated_at DESC)',
+    'CREATE INDEX IF NOT EXISTS idx_boss_distillation_proposals_source ON boss_distillation_proposals(source_kind, source_id)',
+    `CREATE TABLE IF NOT EXISTS boss_distillation_claims (
+      id TEXT PRIMARY KEY,
+      proposal_id TEXT DEFAULT '',
+      dimension TEXT NOT NULL DEFAULT 'preference'
+        CHECK(dimension IN ('mission','value','preference','anti_pattern','decision_pattern','emotion_weight','boundary','learning_mode','project_taste')),
+      claim TEXT NOT NULL DEFAULT '',
+      evidence_tier TEXT NOT NULL DEFAULT 'derived_inference'
+        CHECK(evidence_tier IN ('boss_verbatim','boss_action','boss_assessment','derived_inference','external_context')),
+      evidence_refs_json TEXT DEFAULT '[]',
+      confidence REAL DEFAULT 0.5,
+      temporal_scope TEXT NOT NULL DEFAULT 'stage' CHECK(temporal_scope IN ('momentary','stage','long_term')),
+      status TEXT NOT NULL DEFAULT 'proposed' CHECK(status IN ('raw','proposed','approved','rejected','superseded','approved_legacy')),
+      affects_profile_keys_json TEXT DEFAULT '[]',
+      source_kind TEXT DEFAULT '',
+      source_id TEXT DEFAULT '',
+      metadata_json TEXT DEFAULT '{}',
+      created_at TEXT DEFAULT (datetime('now','localtime')),
+      updated_at TEXT DEFAULT (datetime('now','localtime'))
+    )`,
+    'CREATE INDEX IF NOT EXISTS idx_boss_distillation_claims_status ON boss_distillation_claims(status, updated_at DESC)',
+    'CREATE INDEX IF NOT EXISTS idx_boss_distillation_claims_dimension ON boss_distillation_claims(dimension, status, confidence DESC)',
+    'CREATE INDEX IF NOT EXISTS idx_boss_distillation_claims_source ON boss_distillation_claims(source_kind, source_id)',
   ]
 }
 

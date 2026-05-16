@@ -38,12 +38,16 @@
 }
 
 .sandbox-map__workspace {
+  position: relative;
   flex: 1;
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background:
+    radial-gradient(circle at 16% 0%, rgba(0, 212, 170, 0.1), transparent 30%),
+    linear-gradient(180deg, rgba(8, 33, 29, 0.98), rgba(5, 18, 16, 0.98));
 }
 
 .sandbox-map__workspace-body {
@@ -144,6 +148,52 @@
 .sandbox-map__module-guide-cta:hover {
   border-color: rgba(245, 211, 122, 0.62);
   background: rgba(245, 211, 122, 0.16);
+}
+
+.sandbox-map--simplify .sandbox-map__workspace {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(0, 212, 170, 0.13), transparent 34%),
+    linear-gradient(180deg, rgba(4, 23, 20, 0.98), rgba(4, 20, 18, 0.96));
+}
+
+.sandbox-map--simplify .sandbox-map__module-guide {
+  background: rgba(4, 22, 19, 0.62);
+  backdrop-filter: blur(18px);
+}
+
+.sandbox-map__simplify-layer {
+  position: absolute;
+  inset: 14px 18px 18px;
+  z-index: 30;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at 50% 8%, rgba(255, 255, 255, 0.16), transparent 36%),
+    rgba(1, 12, 12, 0.42);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+.sandbox-map__simplify-dialog {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid rgba(222, 232, 246, 0.72);
+  border-radius: 28px;
+  background: #fff;
+  box-shadow:
+    0 36px 94px rgba(0, 0, 0, 0.34),
+    0 0 0 1px rgba(255, 255, 255, 0.32);
+}
+
+.sandbox-map__simplify-dialog .simplify-frame {
+  width: 100%;
+  height: 100%;
 }
 
 /* Tab 内容区通用容器 */
@@ -297,14 +347,18 @@ select.sandbox-map__input {
 /* 右侧主区域 */
 .sandbox-map__main {
   flex: 1;
+  min-width: 0;
+  min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: var(--hd-space-lg);
 }
 
 .sandbox-map__grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--hd-space-md);
+  min-width: 0;
 }
 
 .sandbox-map__stage-view {
@@ -312,6 +366,24 @@ select.sandbox-map__input {
   flex-direction: column;
   gap: var(--hd-space-lg);
   padding: var(--hd-space-lg);
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.sandbox-map__main .sandbox-map__stage-view {
+  padding: clamp(14px, 1.45vw, 24px);
+}
+
+.sandbox-map__main .system-stage__title {
+  font-size: clamp(1.46rem, 2vw, 2.65rem);
+}
+
+.sandbox-map__main .system-stage__panel {
+  border-radius: 18px;
+}
+
+.sandbox-map__main .system-stage__matrix {
+  grid-template-columns: 1fr;
 }
 
 .sandbox-map__overview {
@@ -566,6 +638,7 @@ select.sandbox-map__input {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--hd-space-md);
+  min-width: 0;
 }
 
 .sandbox-map__stage-chip-cloud {
@@ -1573,7 +1646,44 @@ select.sandbox-map__input {
 .sandbox-map__profiling-hub-view {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: var(--hd-space-lg);
+}
+
+.sandbox-map__profiling-hub-view.sandbox-map__stage-view {
+  padding: clamp(14px, 1.55vw, 24px);
+}
+
+.sandbox-map__profiling-hub-view .system-stage__matrix {
+  align-items: start;
+}
+
+.sandbox-map__profiling-hub-view .system-stage__footer {
+  position: relative;
+  z-index: 0;
+  margin-top: 2px;
+}
+
+.sandbox-map__profiling-footer-stack {
+  display: grid;
+  gap: var(--hd-space-md);
+  min-width: 0;
+}
+
+.sandbox-map__profiling-growth-panel {
+  border-color: rgba(0, 212, 170, 0.22);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(0, 212, 170, 0.12), transparent 36%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.026), rgba(255, 255, 255, 0.014)),
+    rgba(5, 18, 19, 0.94);
+}
+
+.sandbox-map__profiling-growth-panel .sandbox-map__profiling-metrics-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.sandbox-map__profiling-footer-grid {
+  align-items: start;
 }
 
 .sandbox-map__profiling-run,
@@ -1809,6 +1919,10 @@ select.sandbox-map__input {
   .sandbox-map__profiling-hub-grid {
     grid-template-columns: 1fr;
   }
+
+  .sandbox-map__profiling-growth-panel .sandbox-map__profiling-metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 920px) {
@@ -1829,6 +1943,10 @@ select.sandbox-map__input {
   }
 
   .sandbox-map__profiling-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sandbox-map__profiling-growth-panel .sandbox-map__profiling-metrics-grid {
     grid-template-columns: 1fr;
   }
 

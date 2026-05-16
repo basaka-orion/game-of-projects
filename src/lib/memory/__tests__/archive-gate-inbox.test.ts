@@ -8,7 +8,7 @@ const mocked = vi.hoisted(() => {
   }
 
   function findCandidateById(id: string) {
-    return Array.from(state.archiveCandidates.values()).find((row) => row.id === id)
+    return Array.from(state.archiveCandidates.values()).find(row => row.id === id)
   }
 
   function filterDrawers(params: unknown[]) {
@@ -17,7 +17,7 @@ const mocked = vi.hoisted(() => {
     const content = strings[1] || ''
     const excludeId = strings[2] || ''
 
-    return state.drawers.filter((row) => {
+    return state.drawers.filter(row => {
       if (excludeId && row.id === excludeId) return false
       return (title && row.title === title) || (content && row.raw_content === content)
     })
@@ -26,15 +26,16 @@ const mocked = vi.hoisted(() => {
   const queryMock = vi.fn(async (sql: string, params: unknown[] = []) => {
     if (sql.includes('FROM archive_candidates') && sql.includes(`status = 'pending'`)) {
       let nextParamIndex = 0
-      let rows = Array.from(state.archiveCandidates.values()).filter((row) => row.status === 'pending')
+      let rows = Array.from(state.archiveCandidates.values())
+        .filter(row => row.status === 'pending')
 
       if (sql.includes('source_surface = ?')) {
-        rows = rows.filter((row) => row.source_surface === params[nextParamIndex])
+        rows = rows.filter(row => row.source_surface === params[nextParamIndex])
         nextParamIndex += 1
       }
 
       if (sql.includes(`json_extract(metadata_json, '$.batchSessionId') = ?`)) {
-        rows = rows.filter((row) => {
+        rows = rows.filter(row => {
           const metadata = JSON.parse(String(row.metadata_json || '{}')) as Record<string, unknown>
           return metadata.batchSessionId === params[nextParamIndex]
         })
@@ -57,11 +58,7 @@ const mocked = vi.hoisted(() => {
       return row ? [row] : []
     }
 
-    if (
-      sql.includes('SELECT id') &&
-      sql.includes('FROM mempalace_drawers') &&
-      sql.includes("source_type = 'conversation'")
-    ) {
+    if (sql.includes('SELECT id') && sql.includes("FROM mempalace_drawers") && sql.includes("source_type = 'conversation'")) {
       return []
     }
 
@@ -70,16 +67,14 @@ const mocked = vi.hoisted(() => {
     }
 
     if (sql.includes('SELECT id, title, wing, hall, room, source_type') && sql.includes('FROM mempalace_drawers')) {
-      return filterDrawers(params)
-        .slice(0, 3)
-        .map((row) => ({
-          id: row.id,
-          title: row.title,
-          wing: row.wing,
-          hall: row.hall,
-          room: row.room,
-          source_type: row.source_type,
-        }))
+      return filterDrawers(params).slice(0, 3).map(row => ({
+        id: row.id,
+        title: row.title,
+        wing: row.wing,
+        hall: row.hall,
+        room: row.room,
+        source_type: row.source_type,
+      }))
     }
 
     return []
@@ -97,12 +92,11 @@ const mocked = vi.hoisted(() => {
     }
 
     if (sql.includes("SET status = 'archived'")) {
-      const [drawerId, sourceId, metadata, id] = params
+      const [drawerId, metadata, id] = params
       const row = findCandidateById(String(id))
       if (!row) return
       row.status = 'archived'
       row.archived_drawer_id = drawerId
-      row.archived_source_id = sourceId
       row.metadata_json = metadata
       row.updated_at = '2026-04-22T13:00:00.000Z'
     }
@@ -121,23 +115,17 @@ const mocked = vi.hoisted(() => {
     })
     return 'drawer-new'
   })
-  const createSourceMock = vi.fn(async () => 'source-new')
 
-  return { state, queryMock, runMock, createDrawerMock, createSourceMock }
+  return { state, queryMock, runMock, createDrawerMock }
 })
 
 vi.mock('../../db/repository', () => ({
-  dbSaveOperatingEvent: vi.fn(async () => 'event-1'),
   query: mocked.queryMock,
   run: mocked.runMock,
 }))
 
 vi.mock('../../knowledge/drawer', () => ({
   createDrawer: mocked.createDrawerMock,
-}))
-
-vi.mock('../../knowledge/wiki', () => ({
-  createSource: mocked.createSourceMock,
 }))
 
 import {
@@ -183,75 +171,57 @@ describe('archive inbox lifecycle', () => {
   })
 
   it('lists pending candidates and removes dismissed rows from the inbox', async () => {
-    mocked.state.archiveCandidates.set(
-      'conv-1::msg-1',
-      makeCandidateRow({
-        id: 'cand-1',
-        updated_at: '2026-04-22T10:00:00.000Z',
-      }),
-    )
-    mocked.state.archiveCandidates.set(
-      'conv-2::msg-2',
-      makeCandidateRow({
-        id: 'cand-2',
-        conversation_id: 'conv-2',
-        message_id: 'msg-2',
-        title: '世界观笔记',
-        suggested_room: '世界观-时代判断',
-        updated_at: '2026-04-22T11:00:00.000Z',
-      }),
-    )
-    mocked.state.archiveCandidates.set(
-      'conv-3::msg-3',
-      makeCandidateRow({
-        id: 'cand-3',
-        conversation_id: 'conv-3',
-        message_id: 'msg-3',
-        status: 'dismissed',
-        updated_at: '2026-04-22T12:00:00.000Z',
-      }),
-    )
+    mocked.state.archiveCandidates.set('conv-1::msg-1', makeCandidateRow({
+      id: 'cand-1',
+      updated_at: '2026-04-22T10:00:00.000Z',
+    }))
+    mocked.state.archiveCandidates.set('conv-2::msg-2', makeCandidateRow({
+      id: 'cand-2',
+      conversation_id: 'conv-2',
+      message_id: 'msg-2',
+      title: '世界观笔记',
+      suggested_room: '世界观-时代判断',
+      updated_at: '2026-04-22T11:00:00.000Z',
+    }))
+    mocked.state.archiveCandidates.set('conv-3::msg-3', makeCandidateRow({
+      id: 'cand-3',
+      conversation_id: 'conv-3',
+      message_id: 'msg-3',
+      status: 'dismissed',
+      updated_at: '2026-04-22T12:00:00.000Z',
+    }))
 
     const pending = await listPendingArchiveCandidates(10)
-    expect(pending.map((candidate) => candidate.id)).toEqual(['cand-2', 'cand-1'])
+    expect(pending.map(candidate => candidate.id)).toEqual(['cand-2', 'cand-1'])
 
     const dismissed = await dismissConversationArchiveCandidate('cand-2')
     expect(dismissed?.status).toBe('dismissed')
     expect(dismissed?.metadata.dismissedBy).toBe('click-preview-dismiss')
 
     const refreshed = await listPendingArchiveCandidates(10)
-    expect(refreshed.map((candidate) => candidate.id)).toEqual(['cand-1'])
+    expect(refreshed.map(candidate => candidate.id)).toEqual(['cand-1'])
   })
 
   it('supports paging and batch-scoped counts for pending candidates', async () => {
-    mocked.state.archiveCandidates.set(
-      'conv-1::msg-1',
-      makeCandidateRow({
-        id: 'cand-1',
-        updated_at: '2026-04-22T13:00:00.000Z',
-        metadata_json: JSON.stringify({ batchSessionId: 'batch-a' }),
-      }),
-    )
-    mocked.state.archiveCandidates.set(
-      'conv-2::msg-2',
-      makeCandidateRow({
-        id: 'cand-2',
-        conversation_id: 'conv-2',
-        message_id: 'msg-2',
-        updated_at: '2026-04-22T12:00:00.000Z',
-        metadata_json: JSON.stringify({ batchSessionId: 'batch-a' }),
-      }),
-    )
-    mocked.state.archiveCandidates.set(
-      'conv-3::msg-3',
-      makeCandidateRow({
-        id: 'cand-3',
-        conversation_id: 'conv-3',
-        message_id: 'msg-3',
-        updated_at: '2026-04-22T11:00:00.000Z',
-        metadata_json: JSON.stringify({ batchSessionId: 'batch-b' }),
-      }),
-    )
+    mocked.state.archiveCandidates.set('conv-1::msg-1', makeCandidateRow({
+      id: 'cand-1',
+      updated_at: '2026-04-22T13:00:00.000Z',
+      metadata_json: JSON.stringify({ batchSessionId: 'batch-a' }),
+    }))
+    mocked.state.archiveCandidates.set('conv-2::msg-2', makeCandidateRow({
+      id: 'cand-2',
+      conversation_id: 'conv-2',
+      message_id: 'msg-2',
+      updated_at: '2026-04-22T12:00:00.000Z',
+      metadata_json: JSON.stringify({ batchSessionId: 'batch-a' }),
+    }))
+    mocked.state.archiveCandidates.set('conv-3::msg-3', makeCandidateRow({
+      id: 'cand-3',
+      conversation_id: 'conv-3',
+      message_id: 'msg-3',
+      updated_at: '2026-04-22T11:00:00.000Z',
+      metadata_json: JSON.stringify({ batchSessionId: 'batch-b' }),
+    }))
 
     const page = await listPendingArchiveCandidates({
       limit: 1,
@@ -260,7 +230,7 @@ describe('archive inbox lifecycle', () => {
       batchSessionId: 'batch-a',
     })
 
-    expect(page.map((candidate) => candidate.id)).toEqual(['cand-2'])
+    expect(page.map(candidate => candidate.id)).toEqual(['cand-2'])
     expect(await countPendingArchiveCandidates({ sourceSurface: 'all', batchSessionId: 'batch-a' })).toBe(2)
     expect(await countPendingArchiveCandidates('all')).toBe(3)
   })
@@ -280,17 +250,7 @@ describe('archive inbox lifecycle', () => {
       room: '项目-个人智能系统',
       sourceType: 'conversation',
       tags: ['启蒙', '系统'],
-      metadata: expect.objectContaining({
-        sourceId: 'source-new',
-      }),
     })
-    expect(mocked.createSourceMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: '系统草案',
-        sourceType: 'auto',
-        folderPath: '启蒙/openbasaka/technical/项目-个人智能系统',
-      }),
-    )
 
     const pending = await listPendingArchiveCandidates(10)
     expect(pending).toHaveLength(0)

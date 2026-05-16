@@ -13,18 +13,14 @@ import type {
 } from './types'
 import { detectBibiPlatform } from './platforms'
 import { createLocalWanxiangResult, normalizeWanxiangResult } from './wanxiang'
+import { BILI_EXAMPLE_TRANSCRIPT, getBiliUsableSourceText } from './source-content'
+import { refreshSourceAsset } from './source-asset'
 
 export const BILI_HELPER_STORAGE_KEY = 'openbasaka-bili-helper-mac-state-v1'
 
 export const BILI_SAMPLE_URL = 'https://www.bilibili.com/video/BV1xx411c7mD/'
 
-export const BILI_DEFAULT_TRANSCRIPT = `00:00 开场说明：这个视频要解决什么问题，以及为什么值得看。
-01:24 背景铺垫：作者解释现有方法的限制。
-03:10 核心观点一：先把复杂任务拆成可验证的小步骤。
-06:42 核心观点二：不要只收藏视频，要把它转成自己的行动清单。
-09:18 示例演示：从一个真实输入开始整理素材。
-12:40 复盘：哪些内容应该进入笔记，哪些只作为参考。
-15:05 结尾：下一步练习和延伸资料。`
+export const BILI_DEFAULT_TRANSCRIPT = BILI_EXAMPLE_TRANSCRIPT
 
 export const BILI_ARTIFACT_MODES: Array<{
   id: BiliArtifactMode
@@ -70,28 +66,23 @@ export function createLocalVideoInfo(url: string, overrides: Partial<BiliVideoIn
     sourceKind: overrides.sourceKind || detected.kind,
     inputType: overrides.inputType || (/^https?:\/\//i.test(url) ? 'url' : 'manual'),
     title,
-    owner: overrides.owner || 'Bilibili Creator',
+    owner: overrides.owner || '未知来源',
     cover: overrides.cover,
     avatar: overrides.avatar,
     description:
       overrides.description ||
       `${detected.label} 已作为来源接入。系统会先保留链接/文件信息，后续可用公开元信息、字幕、OCR、转写或手动补充正文继续生成资料包。`,
-    durationSeconds: overrides.durationSeconds || 965,
+    durationSeconds: overrides.durationSeconds ?? 0,
     tags: overrides.tags || [detected.label, '学习', '知识整理'],
     stats: overrides.stats || {
-      views: 128000,
-      danmaku: 3420,
-      likes: 18800,
-      coins: 5200,
-      favorites: 26600,
-      shares: 1180,
+      views: 0,
+      danmaku: 0,
+      likes: 0,
+      coins: 0,
+      favorites: 0,
+      shares: 0,
     },
-    pages:
-      overrides.pages ||
-      [
-        { index: 1, title: '主视频', durationSeconds: 965 },
-        { index: 2, title: '补充示例', durationSeconds: 420 },
-      ],
+    pages: overrides.pages || [],
     contentText: overrides.contentText,
     filePath: overrides.filePath,
     siteName: overrides.siteName,
@@ -124,19 +115,13 @@ export function createSampleBiliWorkspace(): BiliVideoWorkspace {
     inputType: 'url',
     subtitleStatus: 'found',
   })
-  return {
+  return refreshSourceAsset({
     video,
     transcript: BILI_DEFAULT_TRANSCRIPT,
-    wanxiang: createLocalWanxiangResult({
-      video,
-      transcript: BILI_DEFAULT_TRANSCRIPT,
-      goal: '把视频变成资料地图、双教程、Openbasaka 融合 prompt 和清晰思维导图',
-    }),
-    pack: createLocalLearningPack(video, BILI_DEFAULT_TRANSCRIPT, '把视频变成资料地图、学习包和行动清单'),
     chat: [
-      createBiliChatMessage('assistant', '我已准备好围绕这个视频回答问题。可以问“这个视频最值得做的行动是什么？”'),
+      createBiliChatMessage('assistant', '样例来源和真实转写已载入。点击任一产物、三结果或问答后，我会基于这份转写生成结果。'),
     ],
-  }
+  })
 }
 
 export function createBiliChatMessage(role: BiliChatMessage['role'], content: string): BiliChatMessage {
@@ -159,34 +144,18 @@ export function createLocalArtifactPack(
   mode: BiliArtifactMode,
   depth: number,
 ): BiliLearningPack {
-  const timeline = parseTranscriptTimeline(transcript)
-  const outline = [
-    '先确认来源解决的问题，不急着收藏。',
-    '把内容拆成背景、核心观点、示例、复盘四层。',
-    '把能马上执行的步骤写成行动清单。',
-    '把无法确认的部分标成待追问，而不是混入结论。',
-  ]
-  const keyPoints = [
-    '来源价值不在“看过”，而在转成自己的下一步。',
-    '同名字幕或手动转写应优先于直接网页抓取。',
-    '学习包要同时保留摘要、时间线、问题和行动。',
-    '适合进入知识库的内容必须有来源链。',
-  ]
-  const actionList = [
-    '粘贴链接或选择本地文件，确认来源卡片信息。',
-    '添加字幕、网页正文、OCR、转写或手动笔记。',
-    '生成资料地图和学习包。',
-    '挑 1 个动作进入今天的任务。',
-  ]
-  const questions = [
-    '这个来源真正解决的痛点是什么？',
-    '哪些观点需要回到原来源核对？',
-    '我能在 30 分钟内复现哪一个步骤？',
-    '这个来源应该归档到哪个项目或知识主题？',
-  ]
+  const sourceText = getBiliUsableSourceText(video, transcript)
+  if (!sourceText) return createPendingSourcePack(video, goal, mode, depth)
+
+  const timeline = parseTranscriptTimeline(sourceText)
   const modeLabel = BILI_ARTIFACT_MODES.find((item) => item.id === mode)?.label || '学习包'
+  const modePack = buildModeSpecificPack(sourceText, mode)
+  const outline = modePack.outline
+  const keyPoints = modePack.keyPoints
+  const actionList = modePack.actionList
+  const questions = modePack.questions
   const summary = `「${video.title}」已被整理为围绕“${goal || '学习与复用'}”的${modeLabel}。核心是把 ${video.platformName} 来源从一次性观看/浏览转成可复查的资料地图、可追问的知识点和可执行的下一步。`
-  const tutorial = buildTutorial(video, outline, actionList, mode, depth)
+  const tutorial = buildTutorial(video, outline, actionList, mode, depth, modePack.body)
   const markdown = buildPackMarkdown(video, summary, outline, timeline, keyPoints, tutorial, actionList, questions)
   return {
     id: createBiliId('pack'),
@@ -204,6 +173,91 @@ export function createLocalArtifactPack(
     markdown,
     createdAt: Date.now(),
     generatedBy: 'local',
+  }
+}
+
+function buildModeSpecificPack(sourceText: string, mode: BiliArtifactMode): {
+  outline: string[]
+  keyPoints: string[]
+  actionList: string[]
+  questions: string[]
+  body: string[]
+} {
+  const firstLines = sourceText
+    .split(/\n+/)
+    .map((line) => line.replace(/^\d{1,2}:\d{2}(?::\d{2})?\s*/, '').trim())
+    .filter(Boolean)
+    .slice(0, 6)
+  const anchors = firstLines.length ? firstLines : ['来源正文', '关键证据', '待核对点']
+  if (mode === 'mindmap') {
+    return {
+      outline: ['中心主题', '背景与问题', '关键证据', '可行动作', '待核对分支'],
+      keyPoints: anchors.slice(0, 4).map((item) => `导图节点：${item.slice(0, 42)}`),
+      actionList: ['把一级节点合并成 3-5 个主题。', '给每个主题绑定一个原文证据。', '把待核对分支留给来源对话。'],
+      questions: ['哪个节点最适合作为中心主题？', '哪些分支缺证据？', '导图应该归档到哪个知识主题？'],
+      body: ['## Markdown 导图', '- 中心主题', '  - 背景与问题', '  - 关键证据', '  - 可行动作', '  - 待核对'],
+    }
+  }
+  if (mode === 'quiz') {
+    return {
+      outline: ['概念题', '事实核对题', '迁移应用题', '反例题'],
+      keyPoints: anchors.slice(0, 4).map((item) => `考点：${item.slice(0, 42)}`),
+      actionList: ['先答 3 道事实题。', '再答 2 道应用题。', '把答错点回到原文证据复查。'],
+      questions: ['这段内容最容易误解的点是什么？', '如何设计一道反例题？', '哪些题需要回看原来源？'],
+      body: ['## 练习题', '1. 用一句话复述来源要解决的问题。', '2. 找出一个证据并说明它支持什么判断。', '3. 把结论迁移到你的一个真实任务。'],
+    }
+  }
+  if (mode === 'tldr') {
+    return {
+      outline: ['一句话结论', '三个要点', '一个风险', '一个下一步'],
+      keyPoints: anchors.slice(0, 4).map((item) => `精华：${item.slice(0, 48)}`),
+      actionList: ['复制一句话结论。', '保留 3 个证据点。', '删除无证据的泛化表达。'],
+      questions: ['如果只能保留一句话，应该是什么？', '哪个结论证据最弱？', '这条来源和当前项目有什么关系？'],
+      body: ['## 极简版', '- 一句话：先基于证据复述来源问题。', '- 三要点：事实、判断、行动。', '- 风险：不要把标题当内容。'],
+    }
+  }
+  if (mode === 'debate') {
+    return {
+      outline: ['正方观点', '反方观点', '共同证据', '争议焦点', '暂定结论'],
+      keyPoints: anchors.slice(0, 4).map((item) => `可辩论点：${item.slice(0, 42)}`),
+      actionList: ['列出支持证据。', '列出反对问题。', '把无法判定的点放入来源对话。'],
+      questions: ['最强反方问题是什么？', '哪些证据能支撑正方？', '最终结论需要什么额外来源？'],
+      body: ['## 正反辩论', '- 正方：来源提供了可复用线索。', '- 反方：证据可能不足或上下文缺失。', '- 共识：只吸收有证据的部分。'],
+    }
+  }
+  if (mode === 'timeline') {
+    return {
+      outline: ['开端', '展开', '关键转折', '结论', '后续动作'],
+      keyPoints: anchors.slice(0, 4).map((item) => `时间线线索：${item.slice(0, 42)}`),
+      actionList: ['补齐缺失时间戳。', '给每段写一句笔记。', '把关键时间点加入问答索引。'],
+      questions: ['哪个时间点最关键？', '哪段需要回看原文？', '是否存在跳跃或断层？'],
+      body: ['## 时间线复盘', '按原始时间顺序保留证据，不把未标时内容伪造成时间点。'],
+    }
+  }
+  if (mode === 'actionable') {
+    return {
+      outline: ['今天可做', '本周可做', '需要他人/工具', '先别做'],
+      keyPoints: anchors.slice(0, 4).map((item) => `行动依据：${item.slice(0, 42)}`),
+      actionList: ['选 1 个 30 分钟内可完成的动作。', '写出完成标准。', '完成后把结果归档回资料库。'],
+      questions: ['哪个动作今天能完成？', '完成标准是什么？', '哪些动作证据不足应暂缓？'],
+      body: ['## 行动化', '- 最小动作：选一个可验证任务。', '- 验收：有产物、有证据、有复盘。'],
+    }
+  }
+  if (mode === 'roast') {
+    return {
+      outline: ['值得保留', '明显废话', '证据不足', '可改进动作'],
+      keyPoints: anchors.slice(0, 4).map((item) => `点评依据：${item.slice(0, 42)}`),
+      actionList: ['删掉没有证据的结论。', '保留能改变行动的句子。', '把存疑点丢给来源对话追问。'],
+      questions: ['这条来源最空泛的表达是什么？', '哪些判断经不起证据追问？', '真正值得留下的是什么？'],
+      body: ['## 犀利点评', '只批评有证据支撑的问题，不为了好玩编造立场。'],
+    }
+  }
+  return {
+    outline: ['先确认来源解决的问题，不急着收藏。', '把内容拆成背景、核心观点、示例、复盘四层。', '把能马上执行的步骤写成行动清单。', '把无法确认的部分标成待追问，而不是混入结论。'],
+    keyPoints: ['来源价值不在“看过”，而在转成自己的下一步。', '同名字幕或手动转写应优先于直接网页抓取。', '学习包要同时保留摘要、时间线、问题和行动。', '适合进入知识库的内容必须有来源链。'],
+    actionList: ['粘贴链接或选择本地文件，确认来源卡片信息。', '添加字幕、网页正文、OCR、转写或手动笔记。', '生成资料地图和学习包。', '挑 1 个动作进入今天的任务。'],
+    questions: ['这个来源真正解决的痛点是什么？', '哪些观点需要回到原来源核对？', '我能在 30 分钟内复现哪一个步骤？', '这个来源应该归档到哪个项目或知识主题？'],
+    body: [],
   }
 }
 
@@ -227,14 +281,67 @@ export function parseTranscriptTimeline(transcript: string): BiliLearningPack['t
     .filter(Boolean) as BiliLearningPack['timeline']
 
   if (parsed.length > 0) return parsed
-  return [
-    { time: '00:00', title: '视频开场', note: '先补充字幕或转写，系统会生成更准确的时间线。' },
-    { time: '03:00', title: '核心观点', note: '根据视频标题和目标生成临时学习节点。' },
-    { time: '08:00', title: '行动整理', note: '把视频内容转成自己的下一步。' },
-  ]
+  const clean = transcript.replace(/\s+/g, ' ').trim()
+  if (!clean) return []
+  return [{ time: '未标时', title: '正文片段', note: clean.slice(0, 160) }]
 }
 
-function buildTutorial(video: BiliVideoInfo, outline: string[], actionList: string[], mode: BiliArtifactMode, depth: number): string {
+function createPendingSourcePack(
+  video: BiliVideoInfo,
+  goal: string,
+  mode: BiliArtifactMode,
+  depth: number,
+): BiliLearningPack {
+  const summary = `当前只识别到「${video.title}」的来源卡片，还没有拿到真实字幕、正文、OCR 或转写。系统不能判断视频里的观点，也不能生成可信时间线或教程。`
+  const outline = [
+    `已确认来源：${video.platformName} / ${video.bvid}`,
+    '已确认信息：标题、链接、平台和来源卡片',
+    '缺失内容：真实字幕、正文、OCR、音频转写或手动笔记',
+    '处理原则：补齐内容前，只能暂存来源，不能把模板当成结论',
+  ]
+  const keyPoints = [
+    '这还不是学习包，只是待补内容的来源诊断。',
+    '不能根据标题推断视频观点、立场或完整事实。',
+    '补充字幕或转写后，才能生成资料地图、时间线、关键点和行动清单。',
+  ]
+  const actionList = [
+    '粘贴视频字幕、新闻原文或人工摘录。',
+    '如果有本地视频/音频文件，走本地转写后重新生成。',
+    '重新生成学习包前，先确认识别诊断里有正文字符数。',
+  ]
+  const questions = [
+    '这个来源的真实字幕或新闻原文在哪里？',
+    '哪些内容是视频里说的，哪些只是标题或来源卡片？',
+    '补齐正文后，这条材料应该归入哪个知识主题？',
+  ]
+  const tutorial = `# ${video.title} 内容不足诊断
+
+这份来源目前不能被教程化复盘。
+
+原因：万象学习只拿到了来源卡片，没有拿到真实字幕、正文、OCR 或转写。继续生成会把系统模板伪装成视频内容，这对知识库没有价值。
+
+下一步：补充字幕、正文、转写或手动笔记后再生成。`
+  const markdown = buildPackMarkdown(video, summary, outline, [], keyPoints, tutorial, actionList, questions)
+  return {
+    id: createBiliId('pack'),
+    videoId: video.id,
+    goal,
+    mode,
+    depth,
+    summary,
+    outline,
+    timeline: [],
+    keyPoints,
+    tutorial,
+    actionList,
+    questions,
+    markdown,
+    createdAt: Date.now(),
+    generatedBy: 'local',
+  }
+}
+
+function buildTutorial(video: BiliVideoInfo, outline: string[], actionList: string[], mode: BiliArtifactMode, depth: number, extraBody: string[] = []): string {
   const modeLabel = BILI_ARTIFACT_MODES.find((item) => item.id === mode)?.label || '学习包'
   return `# ${video.title} 教程化复盘
 
@@ -258,7 +365,9 @@ ${actionList.map((item, index) => `${index + 1}. ${item}`).join('\n')}
 
 - 是否能说清来源的一个核心问题。
 - 是否能定位至少三个关键时间点。
-- 是否产出一个今天能执行的动作。`
+- 是否产出一个今天能执行的动作。
+
+${extraBody.join('\n')}`
 }
 
 function buildPackMarkdown(
@@ -271,6 +380,10 @@ function buildPackMarkdown(
   actionList: string[],
   questions: string[],
 ): string {
+  const listOrEmpty = (items: string[], empty: string) => (items.length ? items.map((item) => `- ${item}`).join('\n') : `- ${empty}`)
+  const timelineText = timeline.length
+    ? timeline.map((item) => `- ${item.time} ${item.title}: ${item.note}`).join('\n')
+    : '- 暂无真实时间线。请先补充字幕、OCR、转写或正文。'
   return `# ${video.title}
 
 Source: ${video.url}
@@ -285,15 +398,15 @@ ${summary}
 
 ## 资料地图
 
-${outline.map((item) => `- ${item}`).join('\n')}
+${listOrEmpty(outline, '暂无资料地图。')}
 
 ## 时间线
 
-${timeline.map((item) => `- ${item.time} ${item.title}: ${item.note}`).join('\n')}
+${timelineText}
 
 ## 关键点
 
-${keyPoints.map((item) => `- ${item}`).join('\n')}
+${listOrEmpty(keyPoints, '暂无关键点。')}
 
 ## 教程
 
@@ -301,11 +414,11 @@ ${tutorial}
 
 ## 行动清单
 
-${actionList.map((item) => `- [ ] ${item}`).join('\n')}
+${actionList.length ? actionList.map((item) => `- [ ] ${item}`).join('\n') : '- [ ] 补充真实来源内容后重新生成。'}
 
 ## 可追问问题
 
-${questions.map((item) => `- ${item}`).join('\n')}`
+${listOrEmpty(questions, '暂无可追问问题。')}`
 }
 
 export function createDownloadTask(video: BiliVideoInfo, format: BiliDownloadFormat): BiliDownloadTask {
@@ -313,15 +426,21 @@ export function createDownloadTask(video: BiliVideoInfo, format: BiliDownloadFor
     video: '视频文件',
     audio: '音频提取',
     subtitle: '字幕/转写',
+    vtt: '字幕 VTT',
     cover: '封面图',
     markdown: '学习包 Markdown',
+    json: 'SourceAsset JSON',
+    mindmap: '导图 Markdown',
   }
   const extensions: Record<BiliDownloadFormat, string> = {
     video: 'mp4',
     audio: 'm4a',
     subtitle: 'srt',
+    vtt: 'vtt',
     cover: 'jpg',
     markdown: 'md',
+    json: 'json',
+    mindmap: 'md',
   }
   return {
     id: createBiliId('download'),
@@ -351,6 +470,7 @@ export function normalizeBiliState(input: Partial<BiliHelperState>): BiliHelperS
 function normalizeWorkspace(input: Partial<BiliVideoWorkspace>): BiliVideoWorkspace {
   const video = normalizeVideoInfo(input.video || createLocalVideoInfo(BILI_SAMPLE_URL))
   const pack = input.pack ? normalizePack(input.pack, video.id) : undefined
+  const modePacks = normalizeModePacks(input.modePacks, video.id, pack)
   const fallbackWanxiang = createLocalWanxiangResult({
     video,
     transcript: input.transcript || video.contentText || '',
@@ -361,15 +481,17 @@ function normalizeWorkspace(input: Partial<BiliVideoWorkspace>): BiliVideoWorksp
     : Array.isArray(pack?.visualArtifacts)
       ? pack.visualArtifacts.map(normalizeVisualArtifact)
       : []
-  return {
+  return refreshSourceAsset({
     video,
     transcript: input.transcript || '',
+    sourceAsset: input.sourceAsset,
     wanxiang: input.wanxiang ? normalizeWanxiangResult(input.wanxiang, fallbackWanxiang, video, input.transcript || video.contentText || '') : undefined,
     pack,
+    modePacks,
     visualArtifacts,
     archive: input.archive ? normalizeArchiveState(input.archive) : undefined,
     chat: Array.isArray(input.chat) ? input.chat.map(normalizeChat) : [],
-  }
+  } satisfies BiliVideoWorkspace)
 }
 
 function normalizeVideoInfo(input: Partial<BiliVideoInfo>): BiliVideoInfo {
@@ -395,6 +517,21 @@ function normalizePack(input: Partial<BiliLearningPack>, videoId: string): BiliL
     depth: Number.isFinite(input.depth) ? Number(input.depth) : 70,
     generatedBy: input.generatedBy || 'local',
   }
+}
+
+function normalizeModePacks(
+  input: Partial<Record<BiliArtifactMode, Partial<BiliLearningPack>>> | undefined,
+  videoId: string,
+  currentPack?: BiliLearningPack,
+): Partial<Record<BiliArtifactMode, BiliLearningPack>> | undefined {
+  const entries = Object.entries(input || {}) as Array<[BiliArtifactMode, Partial<BiliLearningPack>]>
+  const next: Partial<Record<BiliArtifactMode, BiliLearningPack>> = {}
+  for (const [mode, pack] of entries) {
+    if (!pack) continue
+    next[mode] = normalizePack({ ...pack, mode }, videoId)
+  }
+  if (currentPack) next[currentPack.mode] = currentPack
+  return Object.keys(next).length ? next : undefined
 }
 
 function normalizeVisualArtifact(input: Partial<BaoyuVisualArtifact>): BaoyuVisualArtifact {
@@ -487,6 +624,15 @@ export function activeWorkspace(state: BiliHelperState): BiliVideoWorkspace | nu
   return state.workspaces.find((item) => item.video.id === state.activeVideoId) || state.workspaces[0] || null
 }
 
+function subtitleStatusFromMethod(input: { kind: string; method: string }): BiliVideoInfo['subtitleStatus'] {
+  const method = input.method.toLowerCase()
+  if (method.includes('ocr') || method.includes('vision')) return 'ocr'
+  if (method.includes('whisper') || method.includes('transcribed')) return 'transcribed'
+  if (method.includes('sidecar') || method.includes('transcript') || method.includes('transcription')) return 'sidecar'
+  if (input.kind === 'video' || input.kind === 'audio') return 'missing'
+  return 'metadata'
+}
+
 export function createFileSourceWorkspace(input: {
   filePath: string
   fileName: string
@@ -514,28 +660,22 @@ export function createFileSourceWorkspace(input: {
     pages: [{ index: 1, title: input.fileName, durationSeconds: 0 }],
     contentText: input.rawContent || input.content,
     filePath: input.filePath,
-    subtitleStatus:
-      input.method.includes('ocr')
-        ? 'ocr'
-        : input.method.includes('transcript') || input.method.includes('transcription')
-          ? 'sidecar'
-          : input.kind === 'video' || input.kind === 'audio'
-            ? 'missing'
-            : 'metadata',
+    subtitleStatus: subtitleStatusFromMethod({ kind: input.kind, method: input.method }),
     capabilities: [detected.intake, detected.organize, detected.chat],
     warnings: input.warnings || [],
     resolvedBy: 'local',
   })
-  return {
+  const sourceText = getBiliUsableSourceText(video, input.rawContent || input.content)
+  return refreshSourceAsset({
     video,
     transcript: input.rawContent || input.content,
-    wanxiang: createLocalWanxiangResult({
-      video,
-      transcript: input.rawContent || input.content,
-      goal: '把这个本地来源转成双教程、Openbasaka 融合 prompt 和清晰思维导图',
-    }),
     chat: [
-      createBiliChatMessage('assistant', `${input.fileName} 已接入。可以直接生成万象学习三结果。`),
+      createBiliChatMessage(
+        'assistant',
+        sourceText
+          ? `${input.fileName} 已接入，并拿到 ${sourceText.length} 字可学习文本。可以生成学习包、万象三结果或继续问答。`
+          : `${input.fileName} 已接入，但还没有真实字幕、正文、OCR 或转写。点击生成时我会继续尝试本地抽取/转写；补同名 .srt/.vtt/.txt 后效果最好。`,
+      ),
     ],
-  }
+  })
 }

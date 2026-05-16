@@ -7,6 +7,11 @@ import { generateId } from './schema'
 import type { OperatingLoopRecord, OperatingLoopRecordDraft } from '../operating-loop'
 
 const OPERATING_EVENTS_KEY = 'gop_operating_events'
+const LOCAL_SQL_TABLE_PREFIX = 'gop_sql_table_'
+const LOCAL_SQL_ROW_LIMIT = 1200
+
+type LocalSqlRow = Record<string, unknown>
+const memoryLocalStorage = new Map<string, string>()
 
 // ─── 模式检测 ─────────────────────────────────────────────
 // 注意：不能在模块顶层固定为 const，因为 Vite dev 模式下
@@ -17,13 +22,55 @@ function isElectron(): boolean {
 }
 
 function canUseLocalStorage(): boolean {
-  return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
+  return true
+}
+
+function getLocalStorageApi(): Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | null {
+  const storage =
+    typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
+      ? window.localStorage
+      : typeof globalThis !== 'undefined' && typeof (globalThis as { localStorage?: Storage }).localStorage !== 'undefined'
+        ? (globalThis as { localStorage?: Storage }).localStorage
+        : null
+  if (
+    storage &&
+    typeof storage.getItem === 'function' &&
+    typeof storage.setItem === 'function'
+  ) {
+    return storage
+  }
+  return null
+}
+
+function localStorageGet(key: string): string | null {
+  const storage = getLocalStorageApi()
+  if (storage) {
+    try {
+      return storage.getItem(key)
+    } catch {
+      return memoryLocalStorage.get(key) ?? null
+    }
+  }
+  return memoryLocalStorage.get(key) ?? null
+}
+
+function localStorageSet(key: string, value: string): void {
+  const storage = getLocalStorageApi()
+  if (storage) {
+    try {
+      storage.setItem(key, value)
+      return
+    } catch {
+      // fall through to in-memory fallback
+    }
+  }
+  memoryLocalStorage.set(key, value)
 }
 
 function loadLocalOperatingEvents(): OperatingEventRow[] {
   if (!canUseLocalStorage()) return []
   try {
-    const rows = JSON.parse(localStorage.getItem(OPERATING_EVENTS_KEY) || '[]') as OperatingEventRow[]
+    const rows = JSON.parse(localStorageGet(OPERATING_EVENTS_KEY) || '[]') as OperatingEventRow[]
     return Array.isArray(rows) ? rows : []
   } catch {
     return []
@@ -32,7 +79,600 @@ function loadLocalOperatingEvents(): OperatingEventRow[] {
 
 function saveLocalOperatingEvents(rows: OperatingEventRow[]) {
   if (!canUseLocalStorage()) return
-  localStorage.setItem(OPERATING_EVENTS_KEY, JSON.stringify(rows.slice(0, 250)))
+  localStorageSet(OPERATING_EVENTS_KEY, JSON.stringify(rows.slice(0, 250)))
+}
+
+function nowIso(): string {
+  return new Date().toISOString()
+}
+
+function localSqlTableKey(table: string): string {
+  return `${LOCAL_SQL_TABLE_PREFIX}${table}`
+}
+
+function safeParseArray<T>(raw: string | null, fallback: T[] = []): T[] {
+  if (!raw) return fallback
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    return Array.isArray(parsed) ? (parsed as T[]) : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function safeParseObject(raw: string | null): Record<string, string> {
+  if (!raw) return {}
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, string>) : {}
+  } catch {
+    return {}
+  }
+}
+
+function projectRowsFromLocalStorage(): LocalSqlRow[] {
+  return safeParseArray<{
+    id: string
+    title: string
+    oneLiner?: string
+    one_liner?: string
+    tags?: string[]
+    radar?: unknown
+    radar_json?: string
+    survivalRate?: number
+    survival_rate?: number
+    survivalGrade?: string
+    survival_grade?: string
+    summary?: string
+    recommendation?: string
+    warLogs?: unknown[]
+    war_logs_json?: string
+    rawContent?: string
+    raw_content?: string
+    isPinned?: boolean
+    is_pinned?: number
+    isStarred?: boolean
+    is_starred?: number
+    priorityLevel?: string
+    priority_level?: string
+    createdAt?: string
+    created_at?: string
+    updatedAt?: string
+    updated_at?: string
+  }>(localStorageGet('gop_projects')).map((project) => ({
+    id: project.id,
+    title: project.title || '',
+    one_liner: project.one_liner || project.oneLiner || '',
+    tags: JSON.stringify(project.tags || []),
+    radar_json: project.radar_json || JSON.stringify(project.radar || {}),
+    survival_rate: project.survival_rate ?? project.survivalRate ?? 0,
+    survival_grade: project.survival_grade || project.survivalGrade || '',
+    summary: project.summary || '',
+    recommendation: project.recommendation || '',
+    war_logs_json: project.war_logs_json || JSON.stringify(project.warLogs || []),
+    raw_content: project.raw_content || project.rawContent || '',
+    is_pinned: project.is_pinned ?? (project.isPinned ? 1 : 0),
+    is_starred: project.is_starred ?? (project.isStarred ? 1 : 0),
+    priority_level: project.priority_level || project.priorityLevel || 'normal',
+    created_at: project.created_at || project.createdAt || nowIso(),
+    updated_at: project.updated_at || project.updatedAt || project.created_at || project.createdAt || nowIso(),
+  }))
+}
+
+function saveProjectRowsToLocalStorage(rows: LocalSqlRow[]): void {
+  const projects = rows.map((row) => ({
+    id: String(row.id || ''),
+    title: String(row.title || ''),
+    oneLiner: String(row.one_liner || ''),
+    tags: safeParseArray<string>(String(row.tags || '[]')),
+    radar: safeParseObject(String(row.radar_json || '{}')),
+    survivalRate: Number(row.survival_rate || 0),
+    survivalGrade: String(row.survival_grade || ''),
+    summary: String(row.summary || ''),
+    recommendation: String(row.recommendation || ''),
+    warLogs: safeParseArray(String(row.war_logs_json || '[]')),
+    rawContent: String(row.raw_content || ''),
+    isPinned: Boolean(row.is_pinned),
+    isStarred: Boolean(row.is_starred),
+    priorityLevel: String(row.priority_level || 'normal'),
+    createdAt: String(row.created_at || nowIso()),
+    updatedAt: String(row.updated_at || row.created_at || nowIso()),
+  }))
+  localStorageSet('gop_projects', JSON.stringify(projects))
+}
+
+function loadLocalSqlTable(table: string): LocalSqlRow[] {
+  if (!canUseLocalStorage()) return []
+  if (table === 'operating_events') return loadLocalOperatingEvents() as unknown as LocalSqlRow[]
+  if (table === 'settings') {
+    return Object.entries(safeParseObject(localStorageGet('gop_settings'))).map(([key, value]) => ({ key, value }))
+  }
+  if (table === 'boss_profile') {
+    return Object.entries(safeParseObject(localStorageGet('gop_boss_profile'))).map(([key, value]) => ({ key, value }))
+  }
+  if (table === 'projects') return projectRowsFromLocalStorage()
+  return safeParseArray<LocalSqlRow>(localStorageGet(localSqlTableKey(table)))
+}
+
+function saveLocalSqlTable(table: string, rows: LocalSqlRow[]): void {
+  if (!canUseLocalStorage()) return
+  if (table === 'operating_events') {
+    saveLocalOperatingEvents(rows as unknown as OperatingEventRow[])
+    return
+  }
+  if (table === 'settings') {
+    localStorageSet(
+      'gop_settings',
+      JSON.stringify(Object.fromEntries(rows.map((row) => [String(row.key || ''), String(row.value || '')]))),
+    )
+    return
+  }
+  if (table === 'boss_profile') {
+    localStorageSet(
+      'gop_boss_profile',
+      JSON.stringify(Object.fromEntries(rows.map((row) => [String(row.key || ''), String(row.value || '')]))),
+    )
+    return
+  }
+  if (table === 'projects') {
+    saveProjectRowsToLocalStorage(rows)
+    return
+  }
+  localStorageSet(localSqlTableKey(table), JSON.stringify(rows.slice(0, LOCAL_SQL_ROW_LIMIT)))
+}
+
+function defaultLocalRow(table: string): LocalSqlRow {
+  const now = nowIso()
+  const defaults: Record<string, LocalSqlRow> = {
+    projects: {
+      one_liner: '',
+      tags: '[]',
+      radar_json: '{}',
+      survival_rate: 0,
+      survival_grade: '',
+      summary: '',
+      recommendation: '',
+      war_logs_json: '[]',
+      raw_content: '',
+      is_pinned: 0,
+      is_starred: 0,
+      priority_level: 'normal',
+      created_at: now,
+      updated_at: now,
+    },
+    boss_memory: { source: '', confidence: 0.5, created_at: now, updated_at: now },
+    boss_decisions: { reasoning: '', created_at: now },
+    boss_assessment_runs: {
+      source: 'multi_dimension_profiling',
+      profile_version: 'v1',
+      status: 'completed',
+      title: '',
+      raw_result_json: '{}',
+      normalized_result_json: '{}',
+      summary_json: '{}',
+      confidence: 0.7,
+      created_at: now,
+      updated_at: now,
+    },
+    boss_profile_snapshots: { run_id: null, profile_json: '{}', diff_json: '{}', source: 'profiling_apply', created_at: now },
+    project_taxonomy: {
+      taxonomy_json: '{}',
+      analysis_json: '{}',
+      industry: '',
+      sub_industry: '',
+      innovation_type: 'incremental',
+      era_relevance: 50,
+      breakthrough_potential: 50,
+      created_at: now,
+    },
+    synapses: { type: '', strength: 0, reason: '', action_items_json: '[]', created_at: now },
+    custom_agents: {
+      name_en: '',
+      icon: '◈',
+      avatar_style: 'default',
+      system_prompt_en: '',
+      temperature: 0.7,
+      personality: '',
+      skills: '[]',
+      color: '#00d4aa',
+      soul_json: '',
+      memory_json: '',
+      bot_token: '',
+      platform_config_json: '{}',
+      created_at: now,
+      updated_at: now,
+    },
+    agent_souls: { soul_json: '{}', created_at: now, updated_at: now },
+    workflows: { name_en: '', steps_json: '[]', agents_json: '[]', status: 'draft', created_at: now, updated_at: now },
+    workflow_studio_items: {
+      goal: '',
+      workflow_type: 'custom',
+      team_id: '',
+      prompt_template: '',
+      steps_json: '[]',
+      target_consumers_json: '[]',
+      status: 'draft',
+      last_test_status: 'idle',
+      last_test_input: '',
+      last_test_output: '',
+      last_optimization_feedback: '',
+      last_optimization_output: '',
+      published_targets_json: '[]',
+      publish_configs_json: '{}',
+      created_at: now,
+      updated_at: now,
+    },
+    teams: {
+      description: '',
+      agents_json: '[]',
+      project_id: null,
+      config_json: '{}',
+      status: 'active',
+      created_at: now,
+      updated_at: now,
+    },
+    team_sessions: {
+      title: '',
+      topic: '',
+      messages_json: '[]',
+      summary: '',
+      tags_json: '[]',
+      is_pinned: 0,
+      is_starred: 0,
+      status: 'active',
+      created_at: now,
+      updated_at: now,
+    },
+    team_actions: {
+      owner_agent_id: '',
+      owner_agent_name: '',
+      capability: 'review',
+      tool_id: 'manual_review',
+      title: '',
+      description: '',
+      params_json: '{}',
+      risk: 'medium',
+      requires_approval: 1,
+      status: 'proposed',
+      result_json: '',
+      created_at: now,
+      updated_at: now,
+    },
+    scheduled_tasks: {
+      task_config_json: '{}',
+      agent_id: '',
+      platform_config_json: '[]',
+      last_run: '',
+      next_run: '',
+      enabled: 1,
+      created_at: now,
+    },
+    cron_execution_log: { message: '', duration_ms: 0, created_at: now },
+    openbasaka_runs: {
+      module_name: '',
+      boss_demand: '',
+      title: '',
+      status: 'queued',
+      current_step_id: '',
+      result_preview: '',
+      error: '',
+      created_at: now,
+      updated_at: now,
+      completed_at: '',
+    },
+    openbasaka_run_steps: {
+      node_id: '',
+      target_tab: '',
+      title: '',
+      detail: '',
+      status: 'queued',
+      started_at: '',
+      completed_at: '',
+      output_preview: '',
+      order_index: 0,
+      metadata_json: '{}',
+      created_at: now,
+      updated_at: now,
+    },
+    skill_evolution: { usage_count: 0, success_count: 0, last_used: '', improved_prompt: '', updated_at: now },
+  }
+  return { ...(defaults[table] || { created_at: now, updated_at: now }) }
+}
+
+function splitSqlList(input: string): string[] {
+  const out: string[] = []
+  let current = ''
+  let quote: "'" | '"' | null = null
+  let depth = 0
+  for (let i = 0; i < input.length; i += 1) {
+    const char = input[i]
+    if (quote) {
+      current += char
+      if (char === quote && input[i - 1] !== '\\') quote = null
+      continue
+    }
+    if (char === "'" || char === '"') {
+      quote = char
+      current += char
+      continue
+    }
+    if (char === '(') depth += 1
+    if (char === ')') depth = Math.max(0, depth - 1)
+    if (char === ',' && depth === 0) {
+      out.push(current.trim())
+      current = ''
+      continue
+    }
+    current += char
+  }
+  if (current.trim()) out.push(current.trim())
+  return out
+}
+
+function parseSqlLiteral(token: string, params: unknown[], cursor: { value: number }): unknown {
+  const trimmed = token.trim()
+  if (trimmed === '?') {
+    const value = params[cursor.value]
+    cursor.value += 1
+    return value
+  }
+  if (/^datetime\s*\(/i.test(trimmed)) return nowIso()
+  if (/^null$/i.test(trimmed)) return null
+  if (/^''$/.test(trimmed)) return ''
+  if ((trimmed.startsWith("'") && trimmed.endsWith("'")) || (trimmed.startsWith('"') && trimmed.endsWith('"'))) {
+    return trimmed.slice(1, -1).replace(/''/g, "'")
+  }
+  if (/^-?\d+(\.\d+)?$/.test(trimmed)) return Number(trimmed)
+  return trimmed
+}
+
+function normalizeSql(sql: string): string {
+  return sql.replace(/\s+/g, ' ').trim()
+}
+
+function sqlTableFrom(sql: string, keyword: 'from' | 'into' | 'update' | 'table'): string | null {
+  const patterns = {
+    from: /\bfrom\s+([a-z_][a-z0-9_]*)/i,
+    into: /\binto\s+([a-z_][a-z0-9_]*)/i,
+    update: /^\s*update\s+([a-z_][a-z0-9_]*)/i,
+    table: /\btable\s+(?:if\s+not\s+exists\s+)?([a-z_][a-z0-9_]*)/i,
+  }
+  return sql.match(patterns[keyword])?.[1] || null
+}
+
+function uniqueKeyForTable(table: string): string {
+  if (table === 'settings' || table === 'boss_profile') return 'key'
+  if (table === 'skill_evolution') return 'skill_id'
+  if (table === 'agent_memories') return 'created_at'
+  return 'id'
+}
+
+function rowMatchesWhere(row: LocalSqlRow, whereSql: string, params: unknown[]): boolean {
+  let where = whereSql
+    .replace(/\border\s+by\b[\s\S]*$/i, '')
+    .replace(/\blimit\b[\s\S]*$/i, '')
+    .trim()
+  if (!where) return true
+  if (where.startsWith('(') && where.endsWith(')')) where = where.slice(1, -1)
+
+  const inMatch = where.match(/^([a-z_][a-z0-9_]*)\s+in\s*\(([^)]*)\)$/i)
+  if (inMatch) {
+    const values = splitSqlList(inMatch[2]).map((token) => {
+      const cursor = { value: 0 }
+      return token.trim() === '?' ? params.shift() : parseSqlLiteral(token, [], cursor)
+    })
+    return values.map(String).includes(String(row[inMatch[1]] ?? ''))
+  }
+
+  const orParts = where.split(/\s+or\s+/i)
+  if (orParts.length > 1) {
+    let offset = 0
+    return orParts.some((part) => {
+      const consumed = countPlaceholders(part)
+      const result = rowMatchesWhere(row, part, params.slice(offset, offset + consumed))
+      offset += consumed
+      return result
+    })
+  }
+
+  const andParts = where.split(/\s+and\s+/i)
+  if (andParts.length > 1) {
+    let offset = 0
+    return andParts.every((part) => {
+      const consumed = countPlaceholders(part)
+      const result = rowMatchesWhere(row, part, params.slice(offset, offset + consumed))
+      offset += consumed
+      return result
+    })
+  }
+
+  const equalParam = where.match(/^([a-z_][a-z0-9_]*)\s*=\s*\?$/i)
+  if (equalParam) return String(row[equalParam[1]] ?? '') === String(params[0] ?? '')
+
+  const equalLiteral = where.match(/^([a-z_][a-z0-9_]*)\s*=\s*('.*?'|".*?"|[a-z0-9_.-]+)$/i)
+  if (equalLiteral) {
+    const cursor = { value: 0 }
+    return String(row[equalLiteral[1]] ?? '') === String(parseSqlLiteral(equalLiteral[2], [], cursor) ?? '')
+  }
+
+  const notEmpty = where.match(/^([a-z_][a-z0-9_]*)\s*!=\s*""$/i)
+  if (notEmpty) return String(row[notEmpty[1]] || '') !== ''
+
+  const likeLiteral = where.match(/^([a-z_][a-z0-9_]*)\s+like\s+('.*?'|".*?")$/i)
+  if (likeLiteral) {
+    const cursor = { value: 0 }
+    const pattern = String(parseSqlLiteral(likeLiteral[2], [], cursor) || '')
+      .replace(/^%/, '')
+      .replace(/%$/, '')
+    return pattern ? String(row[likeLiteral[1]] || '').includes(pattern) : true
+  }
+
+  if (/^created_at\s*>\s*datetime/i.test(where)) return true
+  return false
+}
+
+function countPlaceholders(sql: string): number {
+  return (sql.match(/\?/g) || []).length
+}
+
+function applyOrder(rows: LocalSqlRow[], orderSql: string): LocalSqlRow[] {
+  const orderMatch = orderSql.match(/\border\s+by\s+([\s\S]*?)(?:\blimit\b|$)/i)
+  if (!orderMatch) return rows
+  const parts = splitSqlList(orderMatch[1]).filter((part) => !/^case\b/i.test(part))
+  if (parts.length === 0) return rows
+  return [...rows].sort((a, b) => {
+    for (const part of parts) {
+      const match = part.trim().match(/^([a-z_][a-z0-9_\.]*)(?:\s+(asc|desc))?/i)
+      if (!match) continue
+      const column = match[1].split('.').pop() || match[1]
+      const direction = (match[2] || 'asc').toLowerCase() === 'desc' ? -1 : 1
+      const av = a[column]
+      const bv = b[column]
+      const an = typeof av === 'number' ? av : Number(av)
+      const bn = typeof bv === 'number' ? bv : Number(bv)
+      let cmp = 0
+      if (Number.isFinite(an) && Number.isFinite(bn)) cmp = an === bn ? 0 : an > bn ? 1 : -1
+      else cmp = String(av ?? '').localeCompare(String(bv ?? ''))
+      if (cmp !== 0) return cmp * direction
+    }
+    return 0
+  })
+}
+
+function applyLimit(rows: LocalSqlRow[], sql: string, params: unknown[]): LocalSqlRow[] {
+  const match = sql.match(/\blimit\s+(\?|\d+)/i)
+  if (!match) return rows
+  const limit = match[1] === '?' ? Number(params[params.length - 1] ?? rows.length) : Number(match[1])
+  return rows.slice(0, Number.isFinite(limit) ? limit : rows.length)
+}
+
+function projectColumns(row: LocalSqlRow, columnsSql: string): LocalSqlRow {
+  const columns = columnsSql.trim()
+  if (columns === '*' || columns.endsWith('.*')) return row
+  const out: LocalSqlRow = {}
+  for (const raw of splitSqlList(columns)) {
+    const part = raw.trim()
+    const aliasMatch = part.match(/^count\(\*\)\s+as\s+([a-z_][a-z0-9_]*)$/i)
+    if (aliasMatch) {
+      out[aliasMatch[1]] = 0
+      continue
+    }
+    const match = part.match(/^([a-z_][a-z0-9_\.]*)(?:\s+as\s+([a-z_][a-z0-9_]*))?$/i)
+    if (!match) continue
+    const source = match[1].split('.').pop() || match[1]
+    out[match[2] || source] = row[source]
+  }
+  return out
+}
+
+function localPragmaTableInfo(table: string): LocalSqlRow[] {
+  const columns = Object.keys(defaultLocalRow(table))
+  const existing = loadLocalSqlTable(table)[0]
+  for (const key of Object.keys(existing || {})) if (!columns.includes(key)) columns.push(key)
+  return columns.map((name, index) => ({ cid: index, name, type: 'TEXT', notnull: 0, dflt_value: null, pk: index === 0 ? 1 : 0 }))
+}
+
+function localQuery<T = unknown>(sql: string, params: unknown[] = []): T[] {
+  if (!canUseLocalStorage()) return []
+  const normalized = normalizeSql(sql)
+  const pragma = normalized.match(/^pragma\s+table_info\(([^)]+)\)/i)
+  if (pragma) return localPragmaTableInfo(pragma[1].trim()) as T[]
+  if (/^select\s+name\s+from\s+sqlite_master/i.test(normalized)) {
+    return params[0] ? ([{ name: params[0] }] as T[]) : []
+  }
+  if (/\bunion(?:\s+all)?\b/i.test(normalized)) {
+    const parts = normalized.split(/\s+union(?:\s+all)?\s+/i)
+    return parts.flatMap((part) => localQuery<T>(part, params))
+  }
+
+  const table = sqlTableFrom(normalized, 'from')
+  if (!table) return []
+
+  const countAlias = normalized.match(/^select\s+count\(\*\)\s+as\s+([a-z_][a-z0-9_]*)\s+from/i)
+  if (countAlias) {
+    const where = normalized.match(/\bwhere\s+([\s\S]*?)(?:\border\s+by\b|\blimit\b|$)/i)?.[1] || ''
+    const count = loadLocalSqlTable(table).filter((row) => rowMatchesWhere(row, where, [...params])).length
+    return [{ [countAlias[1]]: count }] as T[]
+  }
+
+  const selectColumns = normalized.match(/^select\s+([\s\S]*?)\s+from/i)?.[1] || '*'
+  const where = normalized.match(/\bwhere\s+([\s\S]*?)(?:\border\s+by\b|\blimit\b|$)/i)?.[1] || ''
+  let rows = loadLocalSqlTable(table).filter((row) => rowMatchesWhere(row, where, [...params]))
+  rows = applyOrder(rows, normalized)
+  rows = applyLimit(rows, normalized, params)
+  return rows.map((row) => projectColumns(row, selectColumns)) as T[]
+}
+
+function localInsert(sql: string, params: unknown[]): boolean {
+  const normalized = normalizeSql(sql)
+  const match = normalized.match(/^insert\s+(or\s+(replace|ignore)\s+)?into\s+([a-z_][a-z0-9_]*)\s*\(([\s\S]*?)\)\s*values\s*\(([\s\S]*)\)$/i)
+  if (!match) return false
+  const mode = (match[2] || '').toLowerCase()
+  const table = match[3]
+  const columns = splitSqlList(match[4]).map((column) => column.replace(/["`]/g, '').trim())
+  const values = splitSqlList(match[5])
+  const cursor = { value: 0 }
+  const row = { ...defaultLocalRow(table) }
+  columns.forEach((column, index) => {
+    row[column] = parseSqlLiteral(values[index] || '?', params, cursor)
+  })
+  if ('updated_at' in row && !row.updated_at) row.updated_at = nowIso()
+  if ('created_at' in row && !row.created_at) row.created_at = nowIso()
+
+  const key = uniqueKeyForTable(table)
+  const rows = loadLocalSqlTable(table)
+  const existingIndex = rows.findIndex((item) => String(item[key] ?? '') === String(row[key] ?? ''))
+  if (existingIndex >= 0) {
+    if (mode === 'ignore') return true
+    rows[existingIndex] = mode === 'replace' ? { ...rows[existingIndex], ...row } : { ...row }
+  } else {
+    rows.unshift(row)
+  }
+  saveLocalSqlTable(table, rows)
+  return true
+}
+
+function localUpdate(sql: string, params: unknown[]): boolean {
+  const normalized = normalizeSql(sql)
+  const match = normalized.match(/^update\s+([a-z_][a-z0-9_]*)\s+set\s+([\s\S]*?)\s+where\s+([\s\S]*)$/i)
+  if (!match) return false
+  const table = match[1]
+  const setParts = splitSqlList(match[2])
+  const cursor = { value: 0 }
+  const patch: LocalSqlRow = {}
+  for (const part of setParts) {
+    const setMatch = part.match(/^([a-z_][a-z0-9_]*)\s*=\s*([\s\S]*)$/i)
+    if (!setMatch) continue
+    patch[setMatch[1]] = parseSqlLiteral(setMatch[2], params, cursor)
+  }
+  const whereParams = params.slice(cursor.value)
+  const rows = loadLocalSqlTable(table)
+  const next = rows.map((row) => (rowMatchesWhere(row, match[3], [...whereParams]) ? { ...row, ...patch } : row))
+  saveLocalSqlTable(table, next)
+  return true
+}
+
+function localDelete(sql: string, params: unknown[]): boolean {
+  const normalized = normalizeSql(sql)
+  const match = normalized.match(/^delete\s+from\s+([a-z_][a-z0-9_]*)(?:\s+where\s+([\s\S]*))?$/i)
+  if (!match) return false
+  const table = match[1]
+  const where = match[2] || ''
+  const rows = where ? loadLocalSqlTable(table).filter((row) => !rowMatchesWhere(row, where, [...params])) : []
+  saveLocalSqlTable(table, rows)
+  return true
+}
+
+function localRun(sql: string, params: unknown[] = []): boolean {
+  const normalized = normalizeSql(sql)
+  if (/^(create\s+table|create\s+index|alter\s+table|drop\s+index|pragma)\b/i.test(normalized)) {
+    const table = sqlTableFrom(normalized, 'table')
+    if (table && !localStorageGet(localSqlTableKey(table)) && table !== 'settings' && table !== 'boss_profile' && table !== 'projects') {
+      saveLocalSqlTable(table, loadLocalSqlTable(table))
+    }
+    return true
+  }
+  return localInsert(normalized, params) || localUpdate(normalized, params) || localDelete(normalized, params)
 }
 
 // ─── 底层查询接口 ─────────────────────────────────────────
@@ -42,9 +682,7 @@ export async function query<T = unknown>(sql: string, params: unknown[] = []): P
   if (isElectron() && window.electronAPI) {
     return window.electronAPI.dbQuery(sql, params) as Promise<T[]>
   }
-  // localStorage fallback：不支持的查询返回空数组
-  console.warn('[repository] localStorage mode does not support SQL queries:', sql)
-  return []
+  return localQuery<T>(sql, params)
 }
 
 /** INSERT / UPDATE / DELETE */
@@ -52,7 +690,9 @@ export async function run(sql: string, params: unknown[] = []): Promise<void> {
   if (isElectron() && window.electronAPI) {
     return window.electronAPI.dbRun(sql, params)
   }
-  console.warn('[repository] localStorage mode does not support SQL run:', sql)
+  if (!localRun(sql, params)) {
+    console.warn('[repository] localStorage SQL fallback skipped unsupported run:', sql)
+  }
 }
 
 // ─── Operating Loop Event Ledger ───────────────────────────
@@ -774,7 +1414,7 @@ export async function migrateFromLocalStorage(): Promise<boolean> {
 
   try {
     // 迁移项目
-    const projectsRaw = localStorage.getItem('gop_projects')
+    const projectsRaw = localStorageGet('gop_projects')
     if (projectsRaw) {
       const projects = JSON.parse(projectsRaw) as Array<{
         id: string
@@ -808,7 +1448,7 @@ export async function migrateFromLocalStorage(): Promise<boolean> {
     }
 
     // 迁移设置
-    const settingsRaw = localStorage.getItem('gop_settings')
+    const settingsRaw = localStorageGet('gop_settings')
     if (settingsRaw) {
       const settings = JSON.parse(settingsRaw) as Record<string, string>
       for (const [key, value] of Object.entries(settings)) {
@@ -819,7 +1459,7 @@ export async function migrateFromLocalStorage(): Promise<boolean> {
     }
 
     // 迁移 Boss Profile
-    const bossRaw = localStorage.getItem('gop_boss_profile')
+    const bossRaw = localStorageGet('gop_boss_profile')
     if (bossRaw) {
       const profile = JSON.parse(bossRaw) as Record<string, string>
       await dbSetBossProfile(profile)

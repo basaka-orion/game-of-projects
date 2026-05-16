@@ -23,14 +23,14 @@ export interface QuickProfilingAnswers {
 }
 
 export interface ExternalProfilingResult {
-  source: 'multi_dimension_profiling' | 'creative_profile' | 'matrix_reasoning' | 'self_agent_distillation'
+  source: 'multi_dimension_profiling' | 'matrix_reasoning' | 'creative_profile' | 'human_map'
   mode: ProfilingMode
   profileVersion: string
   raw: Record<string, unknown>
 }
 
 export interface ProfilingEvidenceTrace {
-  source: 'quick' | 'human_map' | 'cat' | 'games' | 'matrix_reasoning' | 'dialogue' | 'self_agent_distillation' | 'openbasaka_export'
+  source: string
   reference: string
   insight: string
   confidence: number

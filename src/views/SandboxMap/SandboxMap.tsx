@@ -32,6 +32,8 @@ import WorkflowTab from './tabs/WorkflowTab'
 import TeamsTab from './tabs/TeamsTab'
 import ProfilingStudioTab from './tabs/ProfilingStudioTab'
 import OverviewTab from './tabs/OverviewTab'
+import SimplifyTab from './tabs/SimplifyTab'
+import SystemSelfAuditTab from './tabs/SystemSelfAuditTab'
 import { isSandboxTabId, SANDBOX_NAVIGATE_EVENT, type SandboxTabId } from './navigation'
 import { SIDEBAR_ITEMS } from './sidebar'
 import './SandboxMap.css'
@@ -72,6 +74,13 @@ function hasUnsupportedSandboxTabHash(): boolean {
 function clearUnsupportedSandboxTabHash() {
   if (!hasUnsupportedSandboxTabHash()) return
   window.history.replaceState(null, '', '#/sandbox')
+}
+
+function writeSandboxTabToHash(tab: SandboxTabId) {
+  if (typeof window === 'undefined') return
+  const nextHash = `#/sandbox?tab=${tab}`
+  if (window.location.hash === nextHash) return
+  window.history.replaceState(null, '', nextHash)
 }
 
 export default function SandboxMap() {
@@ -163,8 +172,13 @@ export default function SandboxMap() {
     setPendingArchiveCount(await countPendingArchiveCandidates('all'))
   }, [])
 
+  const selectSandboxTab = useCallback((tab: SandboxTabId) => {
+    setActiveTab(tab)
+    writeSandboxTabToHash(tab)
+  }, [])
+
   useEffect(() => {
-    if (activeTab !== 'boss' && activeTab !== 'overview') return
+    if (activeTab !== 'boss' && activeTab !== 'overview' && activeTab !== 'system-audit') return
     loadBoss()
   }, [activeTab, loadBoss])
 
@@ -172,12 +186,12 @@ export default function SandboxMap() {
     function handleNavigate(event: Event) {
       const customEvent = event as CustomEvent<{ tab?: SandboxTabId }>
       const nextTab = customEvent.detail?.tab
-      if (nextTab) setActiveTab(nextTab)
+      if (nextTab) selectSandboxTab(nextTab)
     }
 
     window.addEventListener(SANDBOX_NAVIGATE_EVENT, handleNavigate)
     return () => window.removeEventListener(SANDBOX_NAVIGATE_EVENT, handleNavigate)
-  }, [])
+  }, [selectSandboxTab])
 
   useEffect(() => {
     clearUnsupportedSandboxTabHash()
@@ -213,6 +227,12 @@ export default function SandboxMap() {
     const archiveText = pendingArchiveCount > 0 ? `，${pendingArchiveCount} 条待归档` : ''
 
     const guides: Record<SandboxTabId, ModuleGuide> = {
+      simplify: {
+        title: '化繁为简',
+        intent: '把 Boss 的一句话压缩成路线、执行、证据和可继续推进的结果。',
+        status: operatingEvents.length > 0 ? `${operatingEvents.length} 条系统行动可用于判断路径` : '等待 Boss 输入一个真实需求',
+        next: '直接写一句复杂需求，让它决定自动路线或专家顺序。',
+      },
       overview: {
         title: '总控',
         intent: '看今天整个系统最重要的状态。',
@@ -283,6 +303,12 @@ export default function SandboxMap() {
         status: '适合每日简报、资料更新、定时提醒和 agent 任务。',
         next: '先试跑任务，再打开自动执行。',
       },
+      'system-audit': {
+        title: '系统自省',
+        intent: '让 OpenBasaka 检查自己的学习、进化、失败模式、安全边界和修复队列。',
+        status: operatingEvents.length > 0 ? `${operatingEvents.length} 条运行记录可用于自省` : '等待更多运行记录或手动生成晨报',
+        next: '先生成系统自省晨报；涉及代码、数据、权限或外发的修复必须等 Boss 确认。',
+      },
       teams: {
         title: '群策',
         intent: '让多个角色围绕一个问题协作，最后产出可留存成果。',
@@ -298,14 +324,17 @@ export default function SandboxMap() {
     }
 
     return guides[activeTab]
-  }, [activeTab, bossDecisions.length, bossMemories.length, bossState, neurons.length, pendingArchiveCount, synapses.length])
+  }, [activeTab, bossDecisions.length, bossMemories.length, bossState, neurons.length, operatingEvents.length, pendingArchiveCount, synapses.length])
 
   function handleModuleGuideAction() {
-    if (activeModuleGuide.ctaTab) setActiveTab(activeModuleGuide.ctaTab)
+    if (activeModuleGuide.ctaTab) selectSandboxTab(activeModuleGuide.ctaTab)
   }
 
+  const simplifyOverlayOpen = activeTab === 'simplify'
+  const showOverviewTab = activeTab === 'overview' || simplifyOverlayOpen
+
   return (
-    <div className="sandbox-map">
+    <div className={`sandbox-map sandbox-map--${activeTab}`}>
       {/* 标题栏 — 仅拖拽用 */}
       <div className="sandbox-map__titlebar">
         <span className="sandbox-map__titlebar-text">openbasaka</span>
@@ -313,7 +342,7 @@ export default function SandboxMap() {
 
       <div className="sandbox-map__content">
         {/* 左侧边栏导航 */}
-        <SidebarNav items={sidebarItems} activeId={activeTab} onSelect={(id) => setActiveTab(id as SandboxTabId)} />
+        <SidebarNav items={sidebarItems} activeId={activeTab} onSelect={(id) => selectSandboxTab(id as SandboxTabId)} />
 
         {/* 主内容区 */}
         <main className="sandbox-map__workspace">
@@ -341,7 +370,7 @@ export default function SandboxMap() {
           </section>
 
           <div className="sandbox-map__workspace-body">
-            {activeTab === 'overview' && (
+            {showOverviewTab && (
               <OverviewTab
                 neurons={neurons}
                 loading={loading}
@@ -351,7 +380,7 @@ export default function SandboxMap() {
                 bossDecisions={bossDecisions}
                 operatingEvents={operatingEvents}
                 pendingArchiveCount={pendingArchiveCount}
-                onNavigate={setActiveTab}
+                onNavigate={selectSandboxTab}
                 onReload={loadNeurons}
                 onRefreshBoss={loadBoss}
               />
@@ -409,9 +438,36 @@ export default function SandboxMap() {
 
             {activeTab === 'scheduler' && <SchedulerTab />}
 
+            {activeTab === 'system-audit' && (
+              <SystemSelfAuditTab
+                neurons={neurons}
+                synapses={synapses}
+                bossState={bossState}
+                bossMemoryCount={bossMemories.length}
+                decisionCount={bossDecisions.length}
+                pendingArchiveCount={pendingArchiveCount}
+                operatingEvents={operatingEvents}
+              />
+            )}
+
             {activeTab === 'teams' && <TeamsTab />}
 
             {activeTab === 'xiaobai' && <XiaoBaiTab />}
+
+            {simplifyOverlayOpen && (
+              <div className="sandbox-map__simplify-layer" role="presentation">
+                <div className="sandbox-map__simplify-dialog" role="dialog" aria-modal="true" aria-label="化繁为简驾驶舱">
+                  <SimplifyTab
+                    operatingEvents={operatingEvents}
+                    projectCount={neurons.length}
+                    synapseCount={synapses.length}
+                    bossMemoryCount={bossMemories.length}
+                    pendingArchiveCount={pendingArchiveCount}
+                    onNavigate={selectSandboxTab}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </main>
       </div>

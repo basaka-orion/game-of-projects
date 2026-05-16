@@ -14,16 +14,13 @@ const ALLOWED_COMMANDS = [
   'head',
   'tail',
   'find',
-  'mkdir',
   'wc',
   'du',
   'which',
   'file',
-	  'stat',
-	  'rg',
-	  'sed',
-	  // 包管理（安装/更新）
-	  'npm',
+  'stat',
+  // 包管理（安装/更新）
+  'npm',
   'npx',
   'pnpm',
   'yarn',
@@ -35,6 +32,7 @@ const ALLOWED_COMMANDS = [
   'python3',
   'pip',
   'pip3',
+  'bash',
   // 系统信息
   'uname',
   'sw_vers',
@@ -42,16 +40,7 @@ const ALLOWED_COMMANDS = [
   'hostname',
   'date',
   'echo',
-	  'printf',
-	  'ps',
-	  'kill',
-	  // Xcode / Swift 工具链（用于受控构建与验证）
-	  'xcodebuild',
-	  'xcode-select',
-	  'xcrun',
-	  'swift',
-	  'swiftc',
-	  'screencapture',
+  'printf',
   // 网络
   'curl',
   'wget',
@@ -59,6 +48,8 @@ const ALLOWED_COMMANDS = [
   // Electron 相关
   'electron',
   'electron-builder',
+  // Apple developer tools
+  'xcodebuild',
 ] as const
 
 /** 绝对禁止的命令和关键词 */

@@ -186,7 +186,7 @@ export function buildProjectNeuralNetwork(input: BuildProjectNeuralNetworkInput)
       nodes.push({
         id: nodeId,
         type: 'agent',
-        title: event.source_title || event.title || 'Agent 行动',
+        title: event.source_title || event.title || '执行行动',
         subtitle: truncate(event.summary || '执行结果等待复盘。'),
         score: clampScore((event.confidence ?? 0.62) * 100),
         target: 'teams',

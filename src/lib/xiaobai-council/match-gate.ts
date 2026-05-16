@@ -100,18 +100,230 @@ function parseJudgeJson(source: string): JudgeResponse {
   return JSON.parse(source) as JudgeResponse
 }
 
+function findBalancedJsonObjectEnd(source: string, start: number): number {
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (let index = start; index < source.length; index += 1) {
+    const char = source[index]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (char === '\\') escaped = true
+      else if (char === '"') inString = false
+      continue
+    }
+    if (char === '"') {
+      inString = true
+      continue
+    }
+    if (char === '{') depth += 1
+    if (char === '}') {
+      depth -= 1
+      if (depth === 0) return index + 1
+    }
+  }
+  return -1
+}
+
 function sliceLikelyJsonObject(raw: string): string {
   const trimmed = raw.trim()
   const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]?.trim()
   const source = fenced || trimmed
   const start = source.indexOf('{')
-  const end = source.lastIndexOf('}')
-  if (start >= 0 && end > start) return source.slice(start, end + 1)
+  if (start >= 0) {
+    const balancedEnd = findBalancedJsonObjectEnd(source, start)
+    return source.slice(start, balancedEnd > start ? balancedEnd : undefined)
+  }
   return source
 }
 
+type JsonRepairTokenType = 'string' | 'number' | 'literal' | 'objectStart' | 'objectEnd' | 'arrayStart' | 'arrayEnd' | 'colon' | 'comma'
+type JsonRepairFrame = {
+  type: 'array' | 'object'
+  expecting: 'value' | 'commaOrEnd' | 'keyOrEnd' | 'colon' | 'objectValue'
+}
+
+function findJsonStringEnd(source: string, start: number): number {
+  let escaped = false
+  for (let index = start + 1; index < source.length; index += 1) {
+    const char = source[index]
+    if (escaped) {
+      escaped = false
+      continue
+    }
+    if (char === '\\') {
+      escaped = true
+      continue
+    }
+    if (char === '"') return index + 1
+  }
+  return source.length
+}
+
+function classifyJsonToken(source: string, start: number): { type: JsonRepairTokenType; end: number } | null {
+  const char = source[start]
+  if (char === '"') return { type: 'string', end: findJsonStringEnd(source, start) }
+  if (char === '{') return { type: 'objectStart', end: start + 1 }
+  if (char === '}') return { type: 'objectEnd', end: start + 1 }
+  if (char === '[') return { type: 'arrayStart', end: start + 1 }
+  if (char === ']') return { type: 'arrayEnd', end: start + 1 }
+  if (char === ':') return { type: 'colon', end: start + 1 }
+  if (char === ',') return { type: 'comma', end: start + 1 }
+  if (/[0-9-]/.test(char)) {
+    const match = source.slice(start).match(/^-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/)
+    if (match?.[0]) return { type: 'number', end: start + match[0].length }
+  }
+  if (source.startsWith('true', start) || source.startsWith('null', start)) {
+    return { type: 'literal', end: start + 4 }
+  }
+  if (source.startsWith('false', start)) return { type: 'literal', end: start + 5 }
+  return null
+}
+
+function markJsonRepairValueComplete(stack: JsonRepairFrame[]): void {
+  const parent = stack[stack.length - 1]
+  if (!parent) return
+  if (parent.type === 'array') {
+    parent.expecting = 'commaOrEnd'
+    return
+  }
+  if (parent.expecting === 'objectValue') parent.expecting = 'commaOrEnd'
+}
+
+function shouldInsertMissingComma(stack: JsonRepairFrame[], tokenType: JsonRepairTokenType): boolean {
+  const frame = stack[stack.length - 1]
+  if (!frame || frame.expecting !== 'commaOrEnd') return false
+  if (frame.type === 'array') {
+    return tokenType === 'string' || tokenType === 'number' || tokenType === 'literal' || tokenType === 'objectStart' || tokenType === 'arrayStart'
+  }
+  return tokenType === 'string'
+}
+
+function repairMissingCommasByJsonContext(source: string): string {
+  const stack: JsonRepairFrame[] = []
+  let output = ''
+  let index = 0
+
+  while (index < source.length) {
+    const token = classifyJsonToken(source, index)
+    if (!token) {
+      output += source[index]
+      index += 1
+      continue
+    }
+
+    const frame = stack[stack.length - 1]
+    if (shouldInsertMissingComma(stack, token.type)) output += ','
+
+    const text = source.slice(index, token.end)
+    output += text
+
+    switch (token.type) {
+      case 'objectStart':
+        stack.push({ type: 'object', expecting: 'keyOrEnd' })
+        break
+      case 'arrayStart':
+        stack.push({ type: 'array', expecting: 'value' })
+        break
+      case 'objectEnd':
+      case 'arrayEnd':
+        stack.pop()
+        markJsonRepairValueComplete(stack)
+        break
+      case 'colon':
+        if (frame?.type === 'object' && frame.expecting === 'colon') frame.expecting = 'objectValue'
+        break
+      case 'comma':
+        if (frame?.type === 'array') frame.expecting = 'value'
+        if (frame?.type === 'object') frame.expecting = 'keyOrEnd'
+        break
+      case 'string':
+        if (frame?.type === 'object' && (frame.expecting === 'keyOrEnd' || frame.expecting === 'commaOrEnd')) {
+          frame.expecting = 'colon'
+        } else {
+          markJsonRepairValueComplete(stack)
+        }
+        break
+      case 'number':
+      case 'literal':
+        markJsonRepairValueComplete(stack)
+        break
+    }
+
+    index = token.end
+  }
+
+  return output
+}
+
+function repairTruncatedJsonStructure(source: string): string {
+  let repaired = source.trim()
+  const stack: Array<'}' | ']'> = []
+  let inString = false
+  let escaped = false
+
+  for (let index = 0; index < repaired.length; index += 1) {
+    const char = repaired[index]
+    if (inString) {
+      if (escaped) {
+        escaped = false
+      } else if (char === '\\') {
+        escaped = true
+      } else if (char === '"') {
+        inString = false
+      }
+      continue
+    }
+    if (char === '"') {
+      inString = true
+      continue
+    }
+    if (char === '{') stack.push('}')
+    else if (char === '[') stack.push(']')
+    else if ((char === '}' || char === ']') && stack[stack.length - 1] === char) stack.pop()
+  }
+
+  if (inString) {
+    if (escaped && repaired.endsWith('\\')) repaired = repaired.slice(0, -1)
+    repaired += '"'
+  }
+
+  repaired = repaired.replace(/,\s*$/g, '')
+  for (let index = stack.length - 1; index >= 0; index -= 1) {
+    repaired += stack[index]
+  }
+  return repaired.replace(/,\s*([}\]])/g, '$1')
+}
+
+function buildTruncatedJsonRepairCandidates(source: string): string[] {
+  const candidates = new Set<string>()
+  const trimmed = source.trim()
+  if (!trimmed) return []
+  candidates.add(repairTruncatedJsonStructure(trimmed))
+
+  for (let index = trimmed.length - 1; index >= 0 && candidates.size < 12; index -= 1) {
+    const char = trimmed[index]
+    if (char !== ',' && char !== '}' && char !== ']') continue
+    const slice = trimmed.slice(0, char === ',' ? index : index + 1).trim()
+    if (slice.length < 2) continue
+    candidates.add(repairTruncatedJsonStructure(slice))
+  }
+
+  return Array.from(candidates).filter((candidate) => candidate !== trimmed)
+}
+
+function isLikelyTruncatedJsonError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return /Unexpected end of JSON input|unterminated|end of data|EOF|Expected ',' or '}' after property value/i.test(message)
+}
+
+function isUnbalancedJsonObjectSource(source: string): boolean {
+  const start = source.indexOf('{')
+  return start >= 0 && findBalancedJsonObjectEnd(source, start) < 0
+}
+
 function repairCommonJudgeJsonIssues(source: string): string {
-  return source
+  const repaired = source
     .replace(/^\uFEFF/, '')
     .replace(/[“”]/g, '"')
     .replace(/[‘’]/g, "'")
@@ -120,6 +332,7 @@ function repairCommonJudgeJsonIssues(source: string): string {
     .replace(/([}\]])\s*(?="[^"]+"\s*:)/g, '$1,')
     .replace(/("(?:\\.|[^"\\])*"|\b\d+(?:\.\d+)?\b|true|false|null)\s*(?="[^"]+"\s*:)/g, '$1,')
     .replace(/("(?:\\.|[^"\\])*")\s*(?="(?:\\.|[^"\\])*"\s*[,}\]])/g, '$1,')
+  return repairMissingCommasByJsonContext(repaired)
 }
 
 function normalizeJudgeResponse(value: JudgeResponse): JudgeResponse {
@@ -148,10 +361,30 @@ function extractJsonObject(raw: string): JudgeResponse {
     try {
       return normalizeJudgeResponse(parseJudgeJson(repairCommonJudgeJsonIssues(source)))
     } catch {
+      if (isLikelyTruncatedJsonError(firstError) || isUnbalancedJsonObjectSource(source)) {
+        for (const candidate of buildTruncatedJsonRepairCandidates(source)) {
+          try {
+            const parsed = normalizeJudgeResponse(parseJudgeJson(repairCommonJudgeJsonIssues(candidate)))
+            return {
+              ...parsed,
+              judgeSummary: parsed.judgeSummary
+                ? `${parsed.judgeSummary}（模型输出截断，已从完整 JSON 片段恢复。）`
+                : '模型输出截断，已从完整 JSON 片段恢复。',
+            }
+          } catch {}
+        }
+      }
       const message = firstError instanceof Error ? firstError.message : '未知解析错误'
       throw new Error(`模型裁判没有返回有效 JSON：${message}`)
     }
   }
+}
+
+function ensureUsableJudgeTeam(judge: JudgeResponse): JudgeResponse {
+  const finalTeamCount = Array.isArray(judge.finalTeam) ? judge.finalTeam.length : 0
+  const finalPersonaCount = Array.isArray(judge.finalPersonaIds) ? judge.finalPersonaIds.length : 0
+  if (finalTeamCount > 0 || finalPersonaCount > 0) return judge
+  throw new Error('模型裁判没有返回可用编队。')
 }
 
 function findCandidate(
@@ -352,8 +585,8 @@ ${candidateRows}
 }`
 }
 
-async function callJudge(prompt: string, options?: CouncilMatchGateRunOptions): Promise<JudgeResponse> {
-  const raw = options?.judgeCompletion
+async function completeJudgePrompt(prompt: string, maxTokens: number, options?: CouncilMatchGateRunOptions): Promise<string> {
+  return options?.judgeCompletion
     ? await options.judgeCompletion(prompt)
     : await chatCompletion(
         getLLMConfig(),
@@ -362,9 +595,29 @@ async function callJudge(prompt: string, options?: CouncilMatchGateRunOptions): 
           { role: 'user', content: prompt },
         ],
         0.26,
-        2200,
+        maxTokens,
       )
-  return extractJsonObject(raw)
+}
+
+async function callJudge(prompt: string, options?: CouncilMatchGateRunOptions): Promise<JudgeResponse> {
+  const raw = await completeJudgePrompt(prompt, 3600, options)
+  try {
+    return ensureUsableJudgeTeam(extractJsonObject(raw))
+  } catch (firstError) {
+    const retryPrompt = `${prompt}
+
+上一次模型裁判输出无法被 JSON.parse 解析。请重新输出完整 JSON：
+- 只输出一个完整 JSON object，不要 Markdown，不要解释。
+- finalTeam 必须 5-7 个对象，每个对象都有 seatId、personaId、reasons。
+- 所有数组和对象必须闭合，禁止省略尾部字段，禁止输出半截 JSON。`
+    try {
+      return ensureUsableJudgeTeam(extractJsonObject(await completeJudgePrompt(retryPrompt, 4200, options)))
+    } catch (secondError) {
+      const firstMessage = firstError instanceof Error ? firstError.message : String(firstError)
+      const secondMessage = secondError instanceof Error ? secondError.message : String(secondError)
+      throw new Error(`${firstMessage}；已自动重试模型裁判仍失败：${secondMessage}`)
+    }
+  }
 }
 
 export async function runCouncilMatchGate(

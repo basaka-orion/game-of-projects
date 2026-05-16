@@ -4,6 +4,7 @@ import type { CouncilQualityGate } from './quality-gate'
 import type { CouncilRuntimeCalibrationPlan } from './runtime-calibration'
 import type { CouncilRuntimeEvidenceLedger } from './runtime-evidence'
 import type { CouncilSelection } from './selector'
+import type { CouncilNuwaLocalPreflightReport } from './source-preflight'
 import {
   getCouncilNuwaPersonaSourceAudit,
   type CouncilNuwaSourceAuditLedger,
@@ -56,6 +57,7 @@ interface Council95CertificationInput {
   userValidationLedger: CouncilUserValidationLedger
   artifactReviewLedger: CouncilArtifactReviewLedger
   nuwaEvidenceRegistry: CouncilNuwaEvidenceRegistry
+  nuwaLocalPreflight?: CouncilNuwaLocalPreflightReport | null
   sourceAuditLedger: CouncilNuwaSourceAuditLedger
   generatedAt?: string
 }
@@ -139,6 +141,53 @@ function auditedSelectedPersonas(selection: CouncilSelection | null | undefined,
   }
 }
 
+function nuwaLocalPreflightReadiness(
+  selection: CouncilSelection | null | undefined,
+  report?: CouncilNuwaLocalPreflightReport | null,
+): {
+  selectedCount: number
+  readyCount: number
+  averageScore: number
+  missingNames: string[]
+  evidenceRefs: string[]
+  proof: string
+} {
+  const selectedPersonas = selection?.seats.map((seat) => seat.persona) || []
+  if (!report) {
+    return {
+      selectedCount: selectedPersonas.length || 0,
+      readyCount: 0,
+      averageScore: 0,
+      missingNames: selectedPersonas.map((persona) => persona.name),
+      evidenceRefs: [],
+      proof: '尚未运行本地 Nuwa skill 包自动预检，不能证明这些智者已经以独立技能包形式存在。',
+    }
+  }
+  const byPersona = new Map(report.reports.map((item) => [item.personaId, item]))
+  const scopedReports = selectedPersonas.length
+    ? selectedPersonas.map((persona) => byPersona.get(persona.id)).filter((item): item is NonNullable<typeof item> => Boolean(item))
+    : report.reports
+  const selectedCount = selectedPersonas.length || report.personaCount
+  const readyReports = scopedReports.filter((item) => item.canUseAsLocalSkill)
+  const missingNames = scopedReports
+    .filter((item) => !item.canUseAsLocalSkill)
+    .map((item) => item.personaName)
+  const missingSelected = selectedPersonas
+    .filter((persona) => !byPersona.has(persona.id))
+    .map((persona) => persona.name)
+  const averageScore = scopedReports.length
+    ? clampScore(scopedReports.reduce((sum, item) => sum + item.localPackageScore, 0) / scopedReports.length)
+    : 0
+  return {
+    selectedCount,
+    readyCount: readyReports.length,
+    averageScore,
+    missingNames: [...missingNames, ...missingSelected],
+    evidenceRefs: scopedReports.slice(0, 8).map((item) => item.packagePath),
+    proof: `${readyReports.length}/${selectedCount} 位通过本地 Nuwa skill 包预检；平均本地包分 ${averageScore}；sourceDepth=${report.averageSourceIndexDepthScore}；templateOnlyResearch=${report.templateOnlyResearchFileCount}。`,
+  }
+}
+
 function deepRunPassed(runtime?: CouncilRuntimeEvidenceLedger | null): boolean {
   if (!runtime) return false
   return (
@@ -157,6 +206,7 @@ export function buildCouncil95CertificationGate(input: Council95CertificationInp
   const runtime = input.runtimeEvidence
   const selectedIds = selectedPersonaIds(input.selection)
   const selectedAudit = auditedSelectedPersonas(input.selection, input.sourceAuditLedger)
+  const localNuwa = nuwaLocalPreflightReadiness(input.selection, input.nuwaLocalPreflight)
   const deepRunOk = deepRunPassed(runtime)
   const qualityFromGate =
     Boolean(input.qualityGate) &&
@@ -174,9 +224,28 @@ export function buildCouncil95CertificationGate(input: Council95CertificationInp
   const userOk = hasCouncilUserValidationCertification(input.userValidationLedger)
   const artifactOk = hasCouncilArtifactReviewCertification(input.artifactReviewLedger)
   const sourceOk = selectedAudit.selectedCount > 0 && selectedAudit.auditedCount === selectedAudit.selectedCount
+  const localNuwaOk = localNuwa.selectedCount > 0 && localNuwa.readyCount === localNuwa.selectedCount
   const calibrationOk = input.runtimeCalibrationPlan.status === 'candidate-95' && input.runtimeCalibrationPlan.score >= 90
   const debateOk = Boolean(runtime && runtime.sceneCount >= 18 && runtime.relationCount >= 12 && runtime.verdictLedgerCount >= 8)
   const checks: Council95CertificationCheck[] = [
+    check({
+      id: 'nuwa-local-skills',
+      label: 'Nuwa-skill 独立蒸馏包',
+      passed: localNuwaOk,
+      score: localNuwaOk
+        ? Math.max(95, localNuwa.averageScore)
+        : localNuwa.selectedCount
+          ? Math.min(89, Math.round((localNuwa.readyCount / localNuwa.selectedCount) * 88))
+          : 46,
+      proof: localNuwaOk
+        ? localNuwa.proof
+        : localNuwa.missingNames.length
+          ? `${localNuwa.proof} 仍缺 ${localNuwa.missingNames.slice(0, 4).join(' / ')}。`
+          : localNuwa.proof,
+      requiredProof: '本轮每位智者都必须有独立 Nuwa skill 包：SKILL.md、PROFILE.json、EVIDENCE.md、六路 research、3+ 心智模型、5+ 启发式、5+ 验证题、诚实边界和无授权暗示。',
+      evidenceRefs: localNuwa.evidenceRefs,
+      hardGate: true,
+    }),
     check({
       id: 'deep-model-long-run',
       label: '真实 deep-model 深度长跑',
@@ -305,6 +374,7 @@ export function buildCouncil95CertificationGate(input: Council95CertificationInp
     nextProof,
     proofChain: [
       `selectedPersonas=${selectedIds.length}`,
+      `nuwaLocal=${localNuwa.readyCount}/${localNuwa.selectedCount}/avg=${localNuwa.averageScore}`,
       `sourceAudit=${selectedAudit.auditedCount}/${selectedAudit.selectedCount}`,
       `nuwaManual=${input.nuwaEvidenceRegistry.manualSourceAuditedCount}/${input.nuwaEvidenceRegistry.personaCount}`,
       `runtime=${runtime ? `${runtime.runId}/${runtime.decisionSource}/${runtime.durationMs}ms/${runtime.deepRunCertification.status}` : 'missing'}`,

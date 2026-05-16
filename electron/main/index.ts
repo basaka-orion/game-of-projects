@@ -7,6 +7,7 @@ import {
   Menu,
   nativeImage,
   dialog,
+  safeStorage,
   type IpcMainInvokeEvent,
   type MessageBoxSyncOptions,
   type OpenDialogOptions,
@@ -16,8 +17,10 @@ import path from 'node:path'
 import fs from 'node:fs'
 import os from 'node:os'
 import { exec, execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { bundle as bundleRemotion } from '@remotion/bundler'
 import { renderMedia, selectComposition } from '@remotion/renderer'
+import { ProxyAgent } from 'undici'
 import { query, run, exportDatabase, importDatabase, getDatabase } from './database'
 import { validateCommand } from '../../src/lib/security/command-guard'
 import { extractFetchedUrlMetadata } from '../../src/lib/bili-helper/web-metadata'
@@ -69,6 +72,190 @@ interface BraveSearchResult {
   age?: string
 }
 
+const execFileAsync = promisify(execFile)
+const proxyAgentCache = new Map<string, ProxyAgent>()
+let proxyUrlCache: { value: string; expiresAt: number } | null = null
+
+function normalizeProxyUrl(value: string): string {
+  const trimmed = String(value || '').trim()
+  if (!trimmed) return ''
+  if (/^https?:\/\//i.test(trimmed)) return trimmed
+  if (/^socks/i.test(trimmed)) return ''
+  if (/^[\w.-]+:\d+$/.test(trimmed)) return `http://${trimmed}`
+  return ''
+}
+
+function parseMacProxyUrl(stdout: string): string {
+  const valueFor = (key: string) => stdout.match(new RegExp(`${key}\\s*:\\s*([^\\n]+)`))?.[1]?.trim() || ''
+  const httpsEnabled = valueFor('HTTPSEnable') === '1'
+  const httpEnabled = valueFor('HTTPEnable') === '1'
+  const httpsHost = valueFor('HTTPSProxy')
+  const httpsPort = valueFor('HTTPSPort')
+  const httpHost = valueFor('HTTPProxy')
+  const httpPort = valueFor('HTTPPort')
+  if (httpsEnabled && httpsHost && httpsPort) return normalizeProxyUrl(`${httpsHost}:${httpsPort}`)
+  if (httpEnabled && httpHost && httpPort) return normalizeProxyUrl(`${httpHost}:${httpPort}`)
+  return ''
+}
+
+async function getSystemProxyUrl(): Promise<string> {
+  const now = Date.now()
+  if (proxyUrlCache && proxyUrlCache.expiresAt > now) return proxyUrlCache.value
+  const envProxy = normalizeProxyUrl(
+    process.env.HTTPS_PROXY ||
+    process.env.https_proxy ||
+    process.env.HTTP_PROXY ||
+    process.env.http_proxy ||
+    process.env.ALL_PROXY ||
+    process.env.all_proxy ||
+    '',
+  )
+  if (envProxy) {
+    proxyUrlCache = { value: envProxy, expiresAt: now + 30000 }
+    return envProxy
+  }
+  if (process.platform !== 'darwin') {
+    proxyUrlCache = { value: '', expiresAt: now + 30000 }
+    return ''
+  }
+  try {
+    const { stdout } = await execFileAsync('/usr/sbin/scutil', ['--proxy'], { timeout: 1500 })
+    const proxyUrl = parseMacProxyUrl(stdout)
+    proxyUrlCache = { value: proxyUrl, expiresAt: now + 30000 }
+    return proxyUrl
+  } catch {
+    proxyUrlCache = { value: '', expiresAt: now + 5000 }
+    return ''
+  }
+}
+
+function isExternalHttpUrl(input: RequestInfo | URL): boolean {
+  try {
+    const parsed = new URL(typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false
+    return !['localhost', '127.0.0.1', '::1'].includes(parsed.hostname)
+  } catch {
+    return false
+  }
+}
+
+function getProxyAgent(proxyUrl: string): ProxyAgent {
+  const cached = proxyAgentCache.get(proxyUrl)
+  if (cached) return cached
+  const agent = new ProxyAgent(proxyUrl)
+  proxyAgentCache.set(proxyUrl, agent)
+  return agent
+}
+
+async function fetchWithNetworkProxy(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  const proxyUrl = isExternalHttpUrl(input) ? await getSystemProxyUrl() : ''
+  if (!proxyUrl) return fetch(input, init)
+  return fetch(input, {
+    ...init,
+    dispatcher: getProxyAgent(proxyUrl),
+  } as RequestInit & { dispatcher: ProxyAgent })
+}
+
+function decodeHtmlEntities(value: string): string {
+  const named: Record<string, string> = {
+    amp: '&',
+    lt: '<',
+    gt: '>',
+    quot: '"',
+    apos: "'",
+    '#39': "'",
+    nbsp: ' ',
+  }
+  return value.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (match, entity: string) => {
+    const key = entity.toLowerCase()
+    if (key in named) return named[key]
+    if (key.startsWith('#x')) {
+      const codePoint = Number.parseInt(key.slice(2), 16)
+      return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : match
+    }
+    if (key.startsWith('#')) {
+      const codePoint = Number.parseInt(key.slice(1), 10)
+      return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : match
+    }
+    return match
+  })
+}
+
+function stripSearchHtml(value: string): string {
+  return decodeHtmlEntities(
+    value
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim(),
+  )
+}
+
+function normalizeDuckDuckGoUrl(href: string): string {
+  const decoded = decodeHtmlEntities(href).trim()
+  if (!decoded) return ''
+  try {
+    const parsed = new URL(decoded, 'https://duckduckgo.com')
+    const uddg = parsed.searchParams.get('uddg')
+    if (uddg) return decodeURIComponent(uddg)
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return parsed.toString()
+  } catch {
+    /* fall through */
+  }
+  return /^https?:\/\//i.test(decoded) ? decoded : ''
+}
+
+function parseDuckDuckGoResults(html: string, count: number): BraveSearchResult[] {
+  const anchors = Array.from(html.matchAll(/<a\b[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi))
+  const results: BraveSearchResult[] = []
+  for (let index = 0; index < anchors.length && results.length < count; index += 1) {
+    const match = anchors[index]
+    const nextMatch = anchors[index + 1]
+    const block = html.slice(match.index || 0, nextMatch?.index || html.length)
+    const url = normalizeDuckDuckGoUrl(match[1])
+    const title = stripSearchHtml(match[2]).slice(0, 180)
+    if (!url || !title) continue
+    const snippetMatch =
+      block.match(/class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/(?:a|div)>/i) ||
+      block.match(/class="[^"]*result__body[^"]*"[^>]*>([\s\S]*?)<\/div>/i)
+    results.push({
+      title,
+      url,
+      description: snippetMatch ? stripSearchHtml(snippetMatch[1]).slice(0, 360) : '',
+      age: '',
+    })
+  }
+  return results
+}
+
+async function searchWithDuckDuckGo(
+  queryText: string,
+  count: number,
+  options: { endpoint?: 'web' | 'news'; freshness?: 'pd' | 'pw' | 'pm' | 'py' } = {},
+): Promise<BraveSearchResult[]> {
+  const query = [
+    queryText,
+    options.endpoint === 'news' ? 'news' : '',
+    options.freshness === 'pd' ? 'past day' : '',
+    options.freshness === 'pw' ? 'past week' : '',
+    options.freshness === 'pm' ? 'past month' : '',
+    options.freshness === 'py' ? 'past year' : '',
+  ].filter(Boolean).join(' ')
+  const url = new URL('https://html.duckduckgo.com/html/')
+  url.searchParams.set('q', query)
+  const response = await fetchWithNetworkProxy(url, {
+    headers: {
+      Accept: 'text/html,application/xhtml+xml',
+      'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 OpenBasaka/1.0',
+    },
+    signal: AbortSignal.timeout(12000),
+  })
+  if (!response.ok) throw new Error(`DuckDuckGo HTTP ${response.status}`)
+  return parseDuckDuckGoResults(await response.text(), count)
+}
+
 function getLLMConfigFromDB(): LLMConfigMain | null {
   const providerRow = query('SELECT value FROM settings WHERE key = ?', ['llm_provider']) as Array<{ value: string }>
   const apiKeyRow = query('SELECT value FROM settings WHERE key = ?', ['llm_api_key']) as Array<{ value: string }>
@@ -83,6 +270,17 @@ function getLLMConfigFromDB(): LLMConfigMain | null {
 
   if (!apiKey && provider !== 'ollama') return null
   return { provider, apiKey, baseUrl, model }
+}
+
+async function resolveLLMConfigSecrets(config: LLMConfigMain | null): Promise<LLMConfigMain | null> {
+  if (!config) return null
+  let apiKey = config.apiKey
+  if (apiKey.startsWith('safe-storage:')) {
+    const refKey = apiKey.slice('safe-storage:'.length).trim()
+    apiKey = refKey ? await safeStorageGetValue(refKey) : ''
+  }
+  if (!apiKey && config.provider !== 'ollama') return null
+  return { ...config, apiKey }
 }
 
 function isAnthropicFormat(baseUrl: string): boolean {
@@ -150,7 +348,7 @@ function buildOpenAIChatBody(
 
 async function fetchLLM(config: LLMConfigMain, url: string, init: RequestInit, maxTokens: number): Promise<Response> {
   try {
-    return await fetch(url, {
+    return await fetchWithNetworkProxy(url, {
       ...init,
       signal: init.signal || AbortSignal.timeout(getLLMTimeoutMs(config, maxTokens)),
     })
@@ -246,7 +444,7 @@ function getGeminiApiKey(): string {
 
 async function generateOneGeminiImage(apiKey: string, payload: GeminiGeneratePayload, attempt = 0): Promise<string> {
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${encodeURIComponent(apiKey)}`
-  const response = await fetch(endpoint, {
+  const response = await fetchWithNetworkProxy(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -314,35 +512,55 @@ async function searchWithBrave(
   const endpoint = options.endpoint === 'news' ? 'news/search' : 'web/search'
 
   if (!safeQuery) return { success: false, error: 'empty query' }
-  if (!apiKey) return { success: false, error: 'missing brave_api_key' }
 
-  const url = new URL(`https://api.search.brave.com/res/v1/${endpoint}`)
-  url.searchParams.set('q', safeQuery)
-  url.searchParams.set('count', String(safeCount))
-  if (options.freshness) url.searchParams.set('freshness', options.freshness)
-  if (options.country) url.searchParams.set('country', options.country)
-  if (options.searchLang) url.searchParams.set('search_lang', options.searchLang)
+  const errors: string[] = []
+  if (apiKey) {
+    const url = new URL(`https://api.search.brave.com/res/v1/${endpoint}`)
+    url.searchParams.set('q', safeQuery)
+    url.searchParams.set('count', String(safeCount))
+    if (options.freshness) url.searchParams.set('freshness', options.freshness)
+    if (options.country) url.searchParams.set('country', options.country)
+    if (options.searchLang) url.searchParams.set('search_lang', options.searchLang)
 
-  const response = await fetch(url, {
-    headers: { 'X-Subscription-Token': apiKey, Accept: 'application/json' },
-    signal: AbortSignal.timeout(10000),
-  })
+    try {
+      const response = await fetchWithNetworkProxy(url, {
+        headers: { 'X-Subscription-Token': apiKey, Accept: 'application/json' },
+        signal: AbortSignal.timeout(10000),
+      })
 
-  if (!response.ok) return { success: false, error: `HTTP ${response.status}` }
-
-  const data = (await response.json()) as {
-    results?: Array<BraveSearchResult>
-    web?: { results?: Array<BraveSearchResult> }
+      if (!response.ok) {
+        errors.push(`Brave HTTP ${response.status}`)
+      } else {
+        const data = (await response.json()) as {
+          results?: Array<BraveSearchResult>
+          web?: { results?: Array<BraveSearchResult> }
+        }
+        const rawResults = endpoint === 'news/search' ? data.results || [] : data.web?.results || []
+        const results = rawResults.map((result) => ({
+          title: result.title,
+          url: result.url,
+          description: result.description || '',
+          age: result.age || '',
+        }))
+        if (results.length > 0) return { success: true, data: results }
+        errors.push('Brave returned empty results')
+      }
+    } catch (err) {
+      errors.push(`Brave failed: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  } else {
+    errors.push('missing brave_api_key')
   }
-  const rawResults = endpoint === 'news/search' ? data.results || [] : data.web?.results || []
-  const results = rawResults.map((result) => ({
-    title: result.title,
-    url: result.url,
-    description: result.description || '',
-    age: result.age || '',
-  }))
 
-  return { success: true, data: results }
+  try {
+    const fallbackResults = await searchWithDuckDuckGo(safeQuery, safeCount, options)
+    if (fallbackResults.length > 0) return { success: true, data: fallbackResults }
+    errors.push('public search returned empty results')
+  } catch (err) {
+    errors.push(`public search failed: ${err instanceof Error ? err.message : String(err)}`)
+  }
+
+  return { success: false, error: errors.join('; ') || 'search unavailable' }
 }
 
 // vite-plugin-electron 注入 __dirname
@@ -351,6 +569,233 @@ const DIST_ELECTRON = path.join(__dirname, '..')
 const PRELOAD = path.join(DIST_ELECTRON, 'preload/index.js')
 const INDEX_HTML = path.join(DIST, 'index.html')
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
+
+const BIBIGPT_API_BASE = 'https://api.bibigpt.co/api'
+const BIBIGPT_SAFE_STORAGE_KEY = 'bibigpt_api_key'
+
+type SafeSecretRecord = {
+  encrypted: boolean
+  value: string
+}
+
+type BibiGptRequestPayload = {
+  action?: string
+  url?: string
+  taskId?: string
+  contentId?: string
+  apiKey?: string
+  summary?: string
+  customPrompt?: string
+  keyword?: string
+  includeDetail?: boolean
+  enabledSpeaker?: boolean
+  limit?: number
+}
+
+function safeSecretFilePath(key: string): string {
+  const safeKey = key.replace(/[^a-zA-Z0-9_.-]/g, '_')
+  return path.join(app.getPath('userData'), 'safe-storage', `${safeKey}.json`)
+}
+
+async function safeStorageSetValue(key: string, value: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    await fs.promises.mkdir(path.dirname(safeSecretFilePath(key)), { recursive: true })
+    const encrypted = safeStorage.isEncryptionAvailable()
+    if (!encrypted) return { success: false, error: 'Electron safeStorage 当前不可用，已拒绝明文保存。' }
+    const payload: SafeSecretRecord = {
+      encrypted,
+      value: safeStorage.encryptString(value).toString('base64'),
+    }
+    await fs.promises.writeFile(safeSecretFilePath(key), JSON.stringify(payload), 'utf-8')
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+async function safeStorageGetValue(key: string): Promise<string> {
+  try {
+    const payload = JSON.parse(await fs.promises.readFile(safeSecretFilePath(key), 'utf-8')) as SafeSecretRecord
+    const buffer = Buffer.from(payload.value || '', 'base64')
+    if (payload.encrypted) return safeStorage.decryptString(buffer)
+    return buffer.toString('utf-8')
+  } catch {
+    return ''
+  }
+}
+
+function getSettingsValue(key: string): string {
+  try {
+    const rows = query('SELECT value FROM settings WHERE key = ?', [key]) as Array<{ value?: unknown }>
+    return String(rows[0]?.value || '').trim()
+  } catch {
+    return ''
+  }
+}
+
+async function readConfiguredSecret(keys: string[]): Promise<string> {
+  for (const key of keys) {
+    const fromSafeStorage = await safeStorageGetValue(key)
+    if (fromSafeStorage.trim()) return fromSafeStorage.trim()
+  }
+
+  for (const key of keys) {
+    const value = getSettingsValue(key)
+    if (!value || /^\[redacted\]$/i.test(value)) continue
+    if (value.startsWith('safe-storage:')) {
+      const refKey = value.slice('safe-storage:'.length).trim()
+      const fromRef = refKey ? await safeStorageGetValue(refKey) : ''
+      if (fromRef.trim()) return fromRef.trim()
+      continue
+    }
+    return value
+  }
+
+  return ''
+}
+
+async function saveBibiGptApiKeyValue(apiKey: string): Promise<{ success: boolean; error?: string }> {
+  const trimmed = String(apiKey || '').trim()
+  if (!trimmed) return { success: false, error: 'BibiGPT API Key 为空。' }
+  const saved = await safeStorageSetValue(BIBIGPT_SAFE_STORAGE_KEY, trimmed)
+  if (!saved.success) return saved
+  try {
+    run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['bibigpt_api_key', `safe-storage:${BIBIGPT_SAFE_STORAGE_KEY}`])
+  } catch {
+    /* The safeStorage file is still the source of truth. */
+  }
+  return { success: true }
+}
+
+async function getBibiGptApiKey(): Promise<string> {
+  return (
+    (await readConfiguredSecret([
+      BIBIGPT_SAFE_STORAGE_KEY,
+      'bibigpt_api_key',
+      'bibi_gpt_api_key',
+      'bibigpt_token',
+      'bibi_gpt_token',
+      'BIBIGPT_API_KEY',
+    ])) ||
+    process.env.BIBIGPT_API_KEY?.trim() ||
+    process.env.BIBIGPT_API_TOKEN?.trim() ||
+    process.env.BIBIGPT_TOKEN?.trim() ||
+    ''
+  )
+}
+
+function bibiGptQuery(params: Record<string, unknown>): string {
+  const query = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === '') continue
+    query.set(key, String(value))
+  }
+  const result = query.toString()
+  return result ? `?${result}` : ''
+}
+
+async function callBibiGpt(pathname: string, init: RequestInit = {}, auth = true): Promise<{ success: boolean; data?: unknown; configured: boolean; status?: number; error?: string }> {
+  const apiKey = await getBibiGptApiKey()
+  if (auth && !apiKey) {
+    return { success: false, configured: false, error: 'BibiGPT API Key 未配置。' }
+  }
+  try {
+    const response = await fetchWithNetworkProxy(`${BIBIGPT_API_BASE}${pathname}`, {
+      ...init,
+      signal: AbortSignal.timeout(45000),
+      headers: {
+        Accept: 'application/json',
+        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(auth ? { Authorization: `Bearer ${apiKey}` } : {}),
+        ...(init.headers || {}),
+      },
+    })
+    const text = await response.text()
+    let data: unknown = text
+    try {
+      data = text ? JSON.parse(text) : {}
+    } catch {
+      data = text
+    }
+    if (!response.ok) {
+      const message =
+        typeof data === 'object' && data && 'message' in data
+          ? String((data as { message?: unknown }).message)
+          : `BibiGPT HTTP ${response.status}`
+      return { success: false, configured: Boolean(apiKey), status: response.status, error: message }
+    }
+    return { success: true, configured: Boolean(apiKey), status: response.status, data }
+  } catch (err) {
+    return { success: false, configured: Boolean(apiKey), error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+async function handleBibiGptRequest(payload: BibiGptRequestPayload): Promise<{ success: boolean; data?: unknown; configured?: boolean; status?: number; error?: string }> {
+  const action = String(payload?.action || 'health')
+  if (action === 'configure') {
+    const saved = await saveBibiGptApiKeyValue(String(payload.apiKey || ''))
+    if (!saved.success) return { success: false, configured: false, error: saved.error || 'BibiGPT API Key 保存失败。' }
+    return { success: true, configured: true, data: { saved: true } }
+  }
+  if (action === 'health') {
+    const key = await getBibiGptApiKey()
+    if (!key) return { success: false, configured: false, error: 'BibiGPT API Key 未配置。' }
+    return callBibiGpt('/version', {}, true)
+  }
+  if (action === 'summarize') {
+    return callBibiGpt(`/v1/summarize${bibiGptQuery({ url: payload.url, includeDetail: payload.includeDetail ?? true })}`)
+  }
+  if (action === 'summarizeWithConfig') {
+    return callBibiGpt('/v1/summarizeWithConfig', {
+      method: 'POST',
+      body: JSON.stringify({
+        url: payload.url,
+        includeDetail: payload.includeDetail ?? true,
+        promptConfig: {
+          outputLanguage: 'zh-CN',
+          showTimestamp: true,
+          detailLevel: 900,
+          sentenceNumber: 8,
+        },
+      }),
+    })
+  }
+  if (action === 'createSummaryTask') {
+    return callBibiGpt(`/v1/createSummaryTask${bibiGptQuery({ url: payload.url })}`)
+  }
+  if (action === 'taskStatus') {
+    return callBibiGpt(`/v1/getSummaryTaskStatus${bibiGptQuery({ taskId: payload.taskId, includeDetail: payload.includeDetail ?? true })}`)
+  }
+  if (action === 'getSubtitle') {
+    return callBibiGpt(`/v1/getSubtitle${bibiGptQuery({ url: payload.url, enabledSpeaker: payload.enabledSpeaker ?? true })}`)
+  }
+  if (action === 'summaryByPrompt') {
+    return callBibiGpt('/v1/summary/byPrompt', {
+      method: 'POST',
+      body: JSON.stringify({
+        contentId: payload.contentId,
+        customPrompt: payload.customPrompt,
+        outputLanguage: 'zh-CN',
+      }),
+    })
+  }
+  if (action === 'mindmap') {
+    return callBibiGpt('/v1/video/mindmap', {
+      method: 'POST',
+      body: JSON.stringify({
+        contentId: payload.contentId,
+        summary: payload.summary,
+      }),
+    })
+  }
+  if (action === 'libraryList') {
+    return callBibiGpt(`/v1/library/list${bibiGptQuery({ limit: payload.limit || 20 })}`)
+  }
+  if (action === 'librarySearch') {
+    return callBibiGpt(`/v1/library/search${bibiGptQuery({ keyword: payload.keyword, limit: payload.limit || 10 })}`)
+  }
+  return { success: false, configured: Boolean(await getBibiGptApiKey()), error: `未知 BibiGPT action: ${action}` }
+}
 
 let ghostWindow: BrowserWindow | null = null
 let sandboxWindow: BrowserWindow | null = null
@@ -398,6 +843,11 @@ type ExtractedFileContent = {
 type MediaTranscriptionResult = ExtractedFileContent & {
   transcriptPath?: string
   missingProvider?: boolean
+}
+
+type ImageClassificationLabel = {
+  identifier: string
+  confidence: number
 }
 
 const TEXT_INTAKE_EXTENSIONS = new Set([
@@ -721,6 +1171,50 @@ print(lines.joined(separator: "\\n"))
   await fs.promises.writeFile(scriptPath, script, 'utf-8')
   const { stdout } = await runFileTool('xcrun', ['swift', scriptPath, filePath], 60000)
   return stdout.trim()
+}
+
+async function runAppleVisionImageClassification(filePath: string): Promise<ImageClassificationLabel[]> {
+  const script = `
+import Foundation
+import Vision
+import AppKit
+
+let path = CommandLine.arguments.dropFirst().first ?? ""
+let url = URL(fileURLWithPath: path)
+guard let image = NSImage(contentsOf: url) else {
+  exit(2)
+}
+var rect = CGRect(origin: .zero, size: image.size)
+guard let cgImage = image.cgImage(forProposedRect: &rect, context: nil, hints: nil) else {
+  exit(3)
+}
+
+let request = VNClassifyImageRequest()
+let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+try handler.perform([request])
+let rows = (request.results ?? []).prefix(8).map { observation in
+  [
+    "identifier": observation.identifier,
+    "confidence": Double(observation.confidence)
+  ] as [String : Any]
+}
+let data = try JSONSerialization.data(withJSONObject: rows, options: [])
+FileHandle.standardOutput.write(data)
+`
+  const dir = path.join(os.tmpdir(), 'openbasaka-intake')
+  await fs.promises.mkdir(dir, { recursive: true })
+  const scriptPath = path.join(dir, 'vision-classify.swift')
+  await fs.promises.writeFile(scriptPath, script, 'utf-8')
+  const { stdout } = await runFileTool('xcrun', ['swift', scriptPath, filePath], 60000)
+  if (!stdout.trim()) return []
+  const parsed = JSON.parse(stdout) as Array<Partial<ImageClassificationLabel>>
+  return parsed
+    .map((item) => ({
+      identifier: String(item.identifier || '').trim(),
+      confidence: Number(item.confidence) || 0,
+    }))
+    .filter((item) => item.identifier && item.confidence >= 0.08)
+    .slice(0, 8)
 }
 
 type DesktopCapturePayload = {
@@ -1082,34 +1576,76 @@ async function extractFileContent(filePath: string): Promise<ExtractedFileConten
   }
 
   if (kind === 'image') {
+    let visualLabels: ImageClassificationLabel[] = []
     try {
       const spotlightText = await readSpotlightText(filePath)
       if (spotlightText) {
+        try {
+          visualLabels = await runAppleVisionImageClassification(filePath)
+        } catch {
+          /* Image classification is an optional local enhancement. */
+        }
+        const visualText = visualLabels.length
+          ? `\n\n## 图片视觉标签\n${visualLabels.map((item) => `- ${item.identifier} (${Math.round(item.confidence * 100)}%)`).join('\n')}`
+          : ''
         const content = buildExtractedMediaContent({
           filePath,
           title: metadata.fileName,
-          sectionTitle: '图片 OCR 文本',
-          body: spotlightText,
+          sectionTitle: visualLabels.length ? '图片 OCR 文本 + 视觉标签' : '图片 OCR 文本',
+          body: `${spotlightText}${visualText}`,
         })
-        return { success: true, kind, method: 'spotlight-image-text', content, rawContent: spotlightText, warnings, metadata }
+        return {
+          success: true,
+          kind,
+          method: visualLabels.length ? 'spotlight-image-text+apple-vision-classify' : 'spotlight-image-text',
+          content,
+          rawContent: `${spotlightText}${visualText}`,
+          warnings,
+          metadata,
+        }
       }
     } catch {
       /* Spotlight OCR is opportunistic. */
     }
+    let ocrText = ''
     try {
-      const ocrText = await runAppleVisionOcr(filePath)
-      if (ocrText) {
-        const content = buildExtractedMediaContent({
-          filePath,
-          title: metadata.fileName,
-          sectionTitle: '图片 OCR 文本',
-          body: ocrText,
-        })
-        return { success: true, kind, method: 'apple-vision-ocr', content, rawContent: ocrText, warnings, metadata }
-      }
-      warnings.push('本机 OCR 没有识别出稳定文字。')
+      ocrText = await runAppleVisionOcr(filePath)
     } catch (err) {
       warnings.push(`本机 OCR 暂不可用：${err instanceof Error ? err.message : String(err)}`)
+    }
+    try {
+      visualLabels = await runAppleVisionImageClassification(filePath)
+    } catch (err) {
+      warnings.push(`本机图片分类暂不可用：${err instanceof Error ? err.message : String(err)}`)
+    }
+    if (ocrText || visualLabels.length) {
+      const visualText = visualLabels.length
+        ? `## 图片视觉标签\n${visualLabels.map((item) => `- ${item.identifier} (${Math.round(item.confidence * 100)}%)`).join('\n')}`
+        : ''
+      const body = [ocrText ? `## 图片 OCR 文本\n${ocrText}` : '', visualText].filter(Boolean).join('\n\n')
+      const content = buildExtractedMediaContent({
+        filePath,
+        title: metadata.fileName,
+        sectionTitle: ocrText && visualLabels.length ? '图片 OCR 文本 + 视觉标签' : ocrText ? '图片 OCR 文本' : '图片视觉标签',
+        body,
+      })
+      return {
+        success: true,
+        kind,
+        method:
+          ocrText && visualLabels.length
+            ? 'apple-vision-ocr-classify'
+            : ocrText
+              ? 'apple-vision-ocr'
+              : 'apple-vision-classify',
+        content,
+        rawContent: body,
+        warnings,
+        metadata,
+      }
+    }
+    if (!ocrText) {
+      warnings.push('本机 OCR 没有识别出稳定文字。')
     }
     warnings.push('图片已接收；如果它是截图、海报或图表，可以补充更清晰版本，或在旁边放同名 .txt 文字稿。')
     const content = buildMediaPlaceholder({ filePath, kind, size: stat.size, warnings })
@@ -1414,6 +1950,18 @@ function registerIPC() {
   }))
   ipcMain.handle('get-app-data', () => app.getPath('userData'))
 
+  ipcMain.handle('safe-storage-set', async (_event, key: string, value: string) => {
+    return safeStorageSetValue(String(key || ''), String(value || ''))
+  })
+
+  ipcMain.handle('safe-storage-get', async (_event, key: string) => {
+    return safeStorageGetValue(String(key || ''))
+  })
+
+  ipcMain.handle('bibigpt-request', async (_event, payload: BibiGptRequestPayload) => {
+    return handleBibiGptRequest(payload || {})
+  })
+
   // ── SQLite 数据库 ──
   ipcMain.handle('db-query', (_event, sql: string, params: unknown[] = []) => {
     return query(sql, params)
@@ -1453,6 +2001,7 @@ function registerIPC() {
         }
       }
       if (!config) config = getLLMConfigFromDB()
+      config = await resolveLLMConfigSecrets(config)
       if (!config) return { error: 'API key not configured' }
 
       const messages: Array<{ role: string; content: string }> = []
@@ -1491,6 +2040,7 @@ function registerIPC() {
           }
         }
         if (!config) config = getLLMConfigFromDB()
+        config = await resolveLLMConfigSecrets(config)
         if (!config) {
           console.error('[stream-ai] No config from DB')
           event.sender.send(channel, '[ERROR] API key not configured')
@@ -1533,7 +2083,7 @@ function registerIPC() {
           })
           const url = `${config.baseUrl}/v1/messages`
           console.log(`[stream-ai] Anthropic fetch → ${url}`)
-          const response = await fetch(url, {
+          const response = await fetchWithNetworkProxy(url, {
             method: 'POST',
             headers: buildHeaders(config),
             body: JSON.stringify({
@@ -1588,7 +2138,7 @@ function registerIPC() {
           }
         } else {
           // OpenAI SSE format
-          const response = await fetch(`${config.baseUrl}/chat/completions`, {
+          const response = await fetchWithNetworkProxy(`${config.baseUrl}/chat/completions`, {
             method: 'POST',
             headers: buildHeaders(config),
             body: JSON.stringify({ model: config.model, messages, stream: true, temperature: 0.7, max_tokens: 4096 }),
@@ -1886,7 +2436,7 @@ function registerIPC() {
   // ── URL 抓取（知识库用，Node.js 无 CORS 限制） ──
   ipcMain.handle('fetch-url', async (_event, url: string) => {
     try {
-      const response = await fetch(url, {
+      const response = await fetchWithNetworkProxy(url, {
         signal: AbortSignal.timeout(15000),
         headers: { 'User-Agent': 'Mozilla/5.0 (compatible; OpenBasaka/1.0)' },
       })
@@ -2046,7 +2596,7 @@ updated: "${updatedAt}"
 
   ipcMain.handle('telegram-agent-verify', async (_event, token: string) => {
     try {
-      const res = await fetch(`https://api.telegram.org/bot${token}/getMe`, {
+      const res = await fetchWithNetworkProxy(`https://api.telegram.org/bot${token}/getMe`, {
         signal: AbortSignal.timeout(5000),
       })
       const data = await res.json()
@@ -2204,7 +2754,7 @@ updated: "${updatedAt}"
         const headers: Record<string, string> = { 'Content-Type': 'application/json' }
         if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
 
-        const response = await fetch(endpoint, {
+        const response = await fetchWithNetworkProxy(endpoint, {
           method: 'POST',
           headers,
           body,

@@ -65,6 +65,8 @@ export interface TeamAgent {
   role: string
   skills: string[]
   systemPromptOverride?: string
+  personaId?: string
+  personaName?: string
 }
 
 export interface TeamConfig {

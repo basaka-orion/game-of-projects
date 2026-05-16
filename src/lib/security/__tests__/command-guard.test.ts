@@ -31,6 +31,15 @@ describe('Command Guard', () => {
       expect(validateCommand('node --version').allowed).toBe(true)
     })
 
+    it('允许 xcodebuild 做本地构建验证', () => {
+      expect(validateCommand('xcodebuild -project /tmp/App.xcodeproj -target App build').allowed).toBe(true)
+    })
+
+    it('允许 bash 执行本地生成的 macOS Run 脚本', () => {
+      const result = validateCommand("bash '/Users/apple/Desktop/【项目的游戏】/deliveries/obr_x/macos-app/script/build_and_run.sh' --verify")
+      expect(result.allowed).toBe(true)
+    })
+
     // ❌ 应该拒绝
     it('拒绝 rm -rf /', () => {
       const result = validateCommand('rm -rf /')

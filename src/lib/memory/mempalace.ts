@@ -131,26 +131,19 @@ export async function memorize(params: {
   title?: string
   wing?: string
   hall?: string
-  room?: string
   source?: string
-  sourceUrl?: string
-  metadata?: Record<string, unknown>
   tags?: string[]
 }): Promise<string> {
   // 自动推断翼楼（基于简单规则）
   const wing = params.wing || inferWing(params.content, params.source)
   const hall = params.hall || 'inbox'
-  const room = params.room || 'inbox'
 
   return createDrawer({
     title: params.title || params.content.slice(0, 50),
     wing,
     hall,
-    room,
     rawContent: params.content,
     sourceType: params.source || 'paste',
-    sourceUrl: params.sourceUrl || '',
-    metadata: params.metadata || {},
     tags: params.tags || [],
   })
 }

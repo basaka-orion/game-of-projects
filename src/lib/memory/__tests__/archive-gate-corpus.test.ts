@@ -6,7 +6,7 @@ const mocked = vi.hoisted(() => {
   }
 
   function findCandidateById(id: string) {
-    return Array.from(state.archiveCandidates.values()).find((row) => row.id === id)
+    return Array.from(state.archiveCandidates.values()).find(row => row.id === id)
   }
 
   const queryMock = vi.fn(async (sql: string, params: unknown[] = []) => {
@@ -15,11 +15,7 @@ const mocked = vi.hoisted(() => {
       return row ? [row] : []
     }
 
-    if (
-      sql.includes('FROM mempalace_drawers') &&
-      sql.includes("source_type = 'file'") &&
-      sql.includes('file_path = ?')
-    ) {
+    if (sql.includes("FROM mempalace_drawers") && sql.includes("source_type = 'file'") && sql.includes('file_path = ?')) {
       return []
     }
 
@@ -47,23 +43,17 @@ const mocked = vi.hoisted(() => {
   })
 
   const createDrawerMock = vi.fn(async (_drawer: Record<string, unknown>) => 'drawer-file')
-  const createSourceMock = vi.fn(async () => 'source-file')
 
-  return { state, queryMock, runMock, createDrawerMock, createSourceMock }
+  return { state, queryMock, runMock, createDrawerMock }
 })
 
 vi.mock('../../db/repository', () => ({
-  dbSaveOperatingEvent: vi.fn(async () => 'event-1'),
   query: mocked.queryMock,
   run: mocked.runMock,
 }))
 
 vi.mock('../../knowledge/drawer', () => ({
   createDrawer: mocked.createDrawerMock,
-}))
-
-vi.mock('../../knowledge/wiki', () => ({
-  createSource: mocked.createSourceMock,
 }))
 
 import { archivePendingArchiveCandidate } from '../archive-gate'
@@ -123,16 +113,6 @@ describe('archive corpus candidate', () => {
       filePath: '/Users/apple/Documents/Openbasaka_Brain/Wiki/20190802_-3-5-启蒙与此时-md.md',
       author: 'apple-notes',
       tags: ['启蒙', '世界模型'],
-      metadata: expect.objectContaining({
-        sourceId: 'source-file',
-      }),
     })
-    expect(mocked.createSourceMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: '启蒙与此时',
-        sourceType: 'file',
-        folderPath: '启蒙/worldview/consciousness/世界观-时代判断',
-      }),
-    )
   })
 })

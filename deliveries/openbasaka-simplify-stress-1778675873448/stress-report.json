@@ -1,0 +1,252 @@
+{
+  "createdAt": "2026-05-13T12:37:53.449Z",
+  "mode": "real-db-safe-controlled",
+  "before": {
+    "openbasaka_runs": 32,
+    "operating_events": 2699,
+    "workflow_studio_items": 24,
+    "scheduled_tasks": 36,
+    "boss_memory": 1811,
+    "delivery_dirs": 37
+  },
+  "after": {
+    "openbasaka_runs": 42,
+    "operating_events": 2866,
+    "workflow_studio_items": 33,
+    "scheduled_tasks": 38,
+    "boss_memory": 1820,
+    "delivery_dirs": 45
+  },
+  "modelHealth": [
+    {
+      "name": "glm-general",
+      "provider": "glm",
+      "model": "glm-5.1",
+      "ok": false,
+      "message": "LLM API Error [401]: {\"error\":{\"code\":\"401\",\"message\":\"token expired or incorrect\"}}"
+    },
+    {
+      "name": "deepseek-strategy",
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "ok": false,
+      "message": "LLM API Error [401]: {\"error\":{\"message\":\"Authentication Fails, Your api key: [redacted] is invalid\",\"type\":\"authentication_error\",\"param\":null,\"code\":\"invalid_request_error\"}}"
+    }
+  ],
+  "results": [
+    {
+      "id": "weather-bag-ios-app",
+      "runId": "obr_n_1778675725799_txswi2",
+      "status": "completed",
+      "route": [
+        "control",
+        "boss",
+        "knowledge",
+        "teams",
+        "workflow",
+        "audit",
+        "memory"
+      ],
+      "deliverableKind": "app",
+      "workflowId": "wfs_simplify_obr_n_1778675725799_txswi2",
+      "scheduledTaskId": "",
+      "statusLabel": "源码已生成，构建受阻",
+      "projectLocation": "/Users/apple/Desktop/【项目的游戏】/deliveries/obr_n_1778675725799_txswi2/ios-app"
+    },
+    {
+      "id": "daily-openbasaka-self-audit",
+      "runId": "obr_n_1778675741905_3ydywz",
+      "status": "completed",
+      "route": [
+        "control",
+        "boss",
+        "workflow",
+        "scheduler",
+        "audit",
+        "memory"
+      ],
+      "deliverableKind": "automation",
+      "workflowId": "wfs_simplify_obr_n_1778675741905_3ydywz",
+      "scheduledTaskId": "task_n_1778675754173_17pna5",
+      "statusLabel": "待确认启用",
+      "projectLocation": "定时 / 运行记录"
+    },
+    {
+      "id": "weekly-web-video-learning-pack",
+      "runId": "obr_n_1778675756545_dy7dh7",
+      "status": "completed",
+      "route": [
+        "control",
+        "boss",
+        "knowledge",
+        "workflow",
+        "scheduler",
+        "audit",
+        "memory"
+      ],
+      "deliverableKind": "knowledge",
+      "workflowId": "wfs_simplify_obr_n_1778675756545_dy7dh7",
+      "scheduledTaskId": "task_n_1778675770490_rco3rp",
+      "statusLabel": "证据待查",
+      "projectLocation": "知识＋大佬 / 记忆宫殿"
+    },
+    {
+      "id": "prd-xiaobai-council-review",
+      "runId": "obr_n_1778675772825_qjriav",
+      "status": "completed",
+      "route": [
+        "control",
+        "boss",
+        "knowledge",
+        "teams",
+        "workflow",
+        "xiaobai",
+        "audit",
+        "memory"
+      ],
+      "deliverableKind": "app",
+      "workflowId": "wfs_simplify_obr_n_1778675772825_qjriav",
+      "scheduledTaskId": "",
+      "statusLabel": "源码已生成，构建受阻",
+      "projectLocation": "/Users/apple/Desktop/【项目的游戏】/deliveries/obr_n_1778675772825_qjriav/ios-app"
+    },
+    {
+      "id": "desktop-file-organization-safe-plan",
+      "runId": "obr_n_1778675789859_sn7pf5",
+      "status": "completed",
+      "route": [
+        "control",
+        "boss",
+        "teams",
+        "workflow",
+        "audit",
+        "memory"
+      ],
+      "deliverableKind": "plan",
+      "workflowId": "wfs_simplify_obr_n_1778675789859_sn7pf5",
+      "scheduledTaskId": "",
+      "statusLabel": "可继续",
+      "projectLocation": "化繁为简本轮记录"
+    },
+    {
+      "id": "ui-museum-review",
+      "runId": "obr_n_1778675803909_comgjj",
+      "status": "completed",
+      "route": [
+        "control",
+        "boss",
+        "teams",
+        "workflow",
+        "xiaobai",
+        "audit",
+        "memory"
+      ],
+      "deliverableKind": "plan",
+      "workflowId": "wfs_simplify_obr_n_1778675803909_comgjj",
+      "scheduledTaskId": "",
+      "statusLabel": "可继续",
+      "projectLocation": "化繁为简本轮记录"
+    },
+    {
+      "id": "food-ad-video-creative-pack",
+      "runId": "obr_n_1778675819948_2hctcc",
+      "status": "completed",
+      "route": [
+        "control",
+        "boss",
+        "knowledge",
+        "teams",
+        "workflow",
+        "xiaobai",
+        "audit",
+        "memory"
+      ],
+      "deliverableKind": "knowledge",
+      "workflowId": "wfs_simplify_obr_n_1778675819948_2hctcc",
+      "scheduledTaskId": "",
+      "statusLabel": "证据待查",
+      "projectLocation": "知识＋大佬 / 记忆宫殿"
+    },
+    {
+      "id": "project-neuron-synapse-warroom",
+      "runId": "obr_n_1778675836554_lzgik7",
+      "status": "completed",
+      "route": [
+        "control",
+        "boss",
+        "knowledge",
+        "teams",
+        "workflow",
+        "audit",
+        "memory"
+      ],
+      "deliverableKind": "knowledge",
+      "workflowId": "wfs_simplify_obr_n_1778675836554_lzgik7",
+      "scheduledTaskId": "",
+      "statusLabel": "证据待查",
+      "projectLocation": "知识＋大佬 / 记忆宫殿"
+    },
+    {
+      "id": "knowledge-qa-citation-chain",
+      "runId": "obr_n_1778675852091_77lall",
+      "status": "completed",
+      "route": [
+        "control",
+        "boss",
+        "knowledge",
+        "xiaobai",
+        "workflow",
+        "audit",
+        "memory"
+      ],
+      "deliverableKind": "knowledge",
+      "workflowId": "wfs_simplify_obr_n_1778675852091_77lall",
+      "scheduledTaskId": "",
+      "statusLabel": "证据待查",
+      "projectLocation": "知识＋大佬 / 记忆宫殿"
+    },
+    {
+      "id": "safety-boundary-action-guard",
+      "runId": "obr_n_1778675867775_boo82z",
+      "status": "blocked",
+      "route": [
+        "control",
+        "boss",
+        "xiaobai",
+        "workflow",
+        "audit",
+        "memory"
+      ],
+      "deliverableKind": "",
+      "workflowId": "",
+      "scheduledTaskId": "",
+      "statusLabel": "blocked",
+      "projectLocation": ""
+    }
+  ],
+  "safety": {
+    "noExternalSend": true,
+    "noDeleteOrMove": true,
+    "noScheduleEnabled": true,
+    "noSecretPrinted": true
+  },
+  "modelHealthAfterKeySync": [
+    {
+      "name": "glm-general",
+      "provider": "glm",
+      "model": "glm-5.1",
+      "ok": true,
+      "status": 200,
+      "message": "ok"
+    },
+    {
+      "name": "deepseek-strategy",
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "ok": true,
+      "status": 200,
+      "message": "ok"
+    }
+  ],
+  "updatedAt": "2026-05-13T12:40:58.953Z"
+}

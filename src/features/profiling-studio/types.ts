@@ -113,6 +113,25 @@ export interface HumanMapSignalScore {
   evidence: string[];
 }
 
+export interface HumanMapAnswerAudit {
+  questionId: string;
+  questionTitle: string;
+  specificity: number;
+  evidenceLevel: number;
+  actionability: number;
+  needsClarifier: boolean;
+  notes: string[];
+}
+
+export interface HumanMapStageConclusion {
+  answeredCount: number;
+  averageSpecificity: number;
+  averageEvidenceLevel: number;
+  averageActionability: number;
+  clarifierNeededCount: number;
+  boundaryNote: string;
+}
+
 export interface PersonalizedDimensionPlan {
   dimensionId: string;
   questionIds: string[];
@@ -135,6 +154,8 @@ export interface HumanMapBlueprint {
   recommendedDimensions: string[];
   dimensionPlans: PersonalizedDimensionPlan[];
   sourceDigest: string[];
+  answerAudits: HumanMapAnswerAudit[];
+  stageConclusion: HumanMapStageConclusion;
   completedAt: string;
 }
 
@@ -413,6 +434,39 @@ export interface CATOpenResponseScore {
   elaboration: number;
   category: 0 | 1 | 2 | 3;
   notes: string[];
+}
+
+export type CATScope = 'full' | 'dimension';
+
+export interface CATAssessmentRun {
+  id: string;
+  scope: CATScope;
+  dimensionId?: string;
+  answeredCount: number;
+  maxItems: number;
+  coveredDimensions: string[];
+  missingDimensions: string[];
+  precision: number;
+  theta: number;
+  se: number;
+  converged: boolean;
+  durationMs: number;
+  responsesByDimension: Record<string, CATResponse[]>;
+  completedAt: string;
+}
+
+export interface CATCoverageStatus {
+  totalDimensions: number;
+  coveredDimensions: string[];
+  missingDimensions: string[];
+  coveredCount: number;
+  latestRun?: CATAssessmentRun;
+  latestFullRun?: CATAssessmentRun;
+  latestAnsweredCount: number;
+  latestMaxItems: number;
+  latestPrecision: number;
+  complete: boolean;
+  source: 'run' | 'legacy-responses' | 'empty';
 }
 
 // ── Original Matrix Reasoning Lab (原创矩阵推理，不复制 Raven APM 原题) ──

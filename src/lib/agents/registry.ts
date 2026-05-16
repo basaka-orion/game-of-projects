@@ -10,10 +10,6 @@ import { query, run } from '../db/repository'
 import { generateId } from '../db/schema'
 import { getSetting, setSetting } from '../db/store'
 
-const BUILTIN_AGENT_SKILLS: Partial<Record<ExpertRole, string[]>> = {
-  visual: ['remotion-motion-design', 'baoyu-visual-kit', 'openbasaka-visual-master'],
-}
-
 export interface AgentDefinition {
   id: string
   name: string
@@ -88,7 +84,7 @@ export async function listAllAgents(): Promise<AgentDefinition[]> {
       icon: config.emoji,
       systemPromptSuffix: config.suffix,
       temperature: config.temperature,
-      skills: BUILTIN_AGENT_SKILLS[role] || [],
+      skills: [],
       isCustom: false,
       avatarStyle: 'default' as const,
       color: '#00d4aa',
@@ -136,7 +132,7 @@ export async function getAgentById(id: string): Promise<AgentDefinition | undefi
       icon: builtIn.config.emoji,
       systemPromptSuffix: builtIn.config.suffix,
       temperature: builtIn.config.temperature,
-      skills: BUILTIN_AGENT_SKILLS[builtIn.role] || [],
+      skills: [],
       isCustom: false,
       avatarStyle: 'default',
       color: '#00d4aa',

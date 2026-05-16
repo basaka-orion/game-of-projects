@@ -285,35 +285,10 @@ export async function saveSoul(agentId: string, soul: AgentSoul): Promise<void> 
     }
   } else {
     // 自定义角色 → custom_agents.soul_json
-    try {
-      await run(
-        `UPDATE custom_agents SET soul_json = ?, updated_at = datetime('now','localtime') WHERE id = ?`,
-        [soulJson, agentId]
-      )
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      if (!message.includes('no such column: soul_json')) throw err
-      await ensureCustomAgentSoulColumns()
-      await run(
-        `UPDATE custom_agents SET soul_json = ?, updated_at = datetime('now','localtime') WHERE id = ?`,
-        [soulJson, agentId]
-      )
-    }
-  }
-}
-
-async function ensureCustomAgentSoulColumns(): Promise<void> {
-  try {
-    await run('ALTER TABLE custom_agents ADD COLUMN soul_json TEXT DEFAULT ""')
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    if (!message.includes('duplicate column name')) throw err
-  }
-  try {
-    await run('ALTER TABLE custom_agents ADD COLUMN memory_json TEXT DEFAULT ""')
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    if (!message.includes('duplicate column name')) throw err
+    await run(
+      `UPDATE custom_agents SET soul_json = ?, updated_at = datetime('now','localtime') WHERE id = ?`,
+      [soulJson, agentId]
+    )
   }
 }
 

@@ -271,8 +271,8 @@ export function buildCouncilLaunchReadinessPack(input: CouncilLaunchReadinessPac
   const requiredFixes = input.qualityGate.checks.flatMap((check) => check.requiredFixes)
   const riskControls = unique(
     [
-      ...requiredFixes,
       ...doNotDo,
+      ...requiredFixes,
       '所有动画、进度和剧场页面必须绑定真实 TeamMessage、QualityGate 或导出状态。',
       '强时效、高风险或外部事实默认标注待查证，不用模型自信语气掩盖不确定。',
       '本地资料只展示安全摘要，不导出密钥、原始长日志或私有画像明文。',
@@ -281,11 +281,29 @@ export function buildCouncilLaunchReadinessPack(input: CouncilLaunchReadinessPac
   )
   const actionCoverageBonus = taskGroups.every((group) => group.tasks.length >= 2) ? 4 : 0
   const exportCoverageBonus = input.qualityGate.checks.some((check) => check.id === 'master-prd-fullstack' && check.status !== 'fail') ? 3 : 1
+  const qualityAverage = Math.round((input.qualityGate.score + input.qualityGate.prdCompletenessScore + input.qualityGate.launchReadinessScore) / 3)
+  const taskCoverageScore = taskGroups.every((group) => group.tasks.length >= 2) ? 92 : 70 + taskGroups.filter((group) => group.tasks.length > 0).length * 4
+  const riskCoverageScore = riskControls.length >= 5 ? 90 : 72 + riskControls.length * 3
+  const exportChecklistScore = input.baoyuVisualPlans.length >= 4 ? 92 : 88
+  const sourceTraceScore = input.verdictLedger.kept.length + input.verdictLedger.cut.length + input.verdictLedger.revised.length > 0 ? 90 : 82
+  const qualityStatusPenalty =
+    input.qualityGate.finalGateStatus === 'approved'
+      ? 0
+      : input.qualityGate.finalGateStatus === 'needs-revision'
+        ? 3
+        : 6
   const score = Math.min(
     100,
-    Math.round((input.qualityGate.score + input.qualityGate.prdCompletenessScore + input.qualityGate.launchReadinessScore) / 3) +
+    Math.round(
+      taskCoverageScore * 0.38 +
+        riskCoverageScore * 0.18 +
+        exportChecklistScore * 0.16 +
+        sourceTraceScore * 0.12 +
+        Math.max(60, qualityAverage) * 0.16,
+    ) +
       actionCoverageBonus +
-      exportCoverageBonus,
+      exportCoverageBonus -
+      qualityStatusPenalty,
   )
 
   return {

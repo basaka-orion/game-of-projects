@@ -104,7 +104,36 @@ function validationCorpus(markdown: string): string {
   return markdown.replace(/\n##\s+自动补齐清单：仍需人工复验的 PRD 章节[\s\S]*?(?=\n##\s+|$)/i, '\n')
 }
 
+export function isCouncilMasterPrdSynthesisFailure(markdown: string): boolean {
+  const text = markdown.replace(/\s+/g, ' ').trim()
+  if (!text) return true
+  const failureSignals = [
+    /PRD\s*成稿生成失败/i,
+    /模型主持人没有稳定返回/i,
+    /没有生成可交付的[「"]?PRD/i,
+    /模型错误摘要/i,
+    /所有模型路由都失败/i,
+    /不是可交付的[「"]?PRD/i,
+    /本轮只保留失败说明/i,
+  ]
+  return failureSignals.some((pattern) => pattern.test(text))
+}
+
 export function validateCouncilMasterPrd(markdown: string): CouncilMasterPrdValidation {
+  if (isCouncilMasterPrdSynthesisFailure(markdown)) {
+    const sections = COUNCIL_MASTER_PRD_REQUIRED_SECTIONS.map((section) => ({
+      id: section.id,
+      label: section.label,
+      present: false,
+    }))
+    return {
+      score: 0,
+      hitLabels: [],
+      missedLabels: sections.map((section) => section.label),
+      sections,
+    }
+  }
+
   const corpus = validationCorpus(markdown)
   const sections = COUNCIL_MASTER_PRD_REQUIRED_SECTIONS.map((section) => ({
     id: section.id,

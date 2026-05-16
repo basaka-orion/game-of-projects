@@ -7,7 +7,7 @@ const mocked = vi.hoisted(() => {
   }
 
   function findCandidateById(id: string) {
-    return Array.from(state.archiveCandidates.values()).find((row) => row.id === id)
+    return Array.from(state.archiveCandidates.values()).find(row => row.id === id)
   }
 
   function filterDrawers(params: unknown[]) {
@@ -16,7 +16,7 @@ const mocked = vi.hoisted(() => {
     const content = strings[1] || ''
     const excludeId = strings[2] || ''
 
-    return state.drawers.filter((row) => {
+    return state.drawers.filter(row => {
       if (excludeId && row.id === excludeId) return false
       return (title && row.title === title) || (content && row.raw_content === content)
     })
@@ -35,7 +35,7 @@ const mocked = vi.hoisted(() => {
     }
 
     if (sql.includes('SELECT * FROM archive_candidates WHERE conversation_id = ? ORDER BY created_at ASC')) {
-      return Array.from(state.archiveCandidates.values()).filter((row) => row.conversation_id === params[0])
+      return Array.from(state.archiveCandidates.values()).filter(row => row.conversation_id === params[0])
     }
 
     if (sql.includes('SELECT COUNT(*) as cnt') && sql.includes('FROM mempalace_drawers')) {
@@ -43,16 +43,14 @@ const mocked = vi.hoisted(() => {
     }
 
     if (sql.includes('SELECT id, title, wing, hall, room, source_type') && sql.includes('FROM mempalace_drawers')) {
-      return filterDrawers(params)
-        .slice(0, 3)
-        .map((row) => ({
-          id: row.id,
-          title: row.title,
-          wing: row.wing,
-          hall: row.hall,
-          room: row.room,
-          source_type: row.source_type,
-        }))
+      return filterDrawers(params).slice(0, 3).map(row => ({
+        id: row.id,
+        title: row.title,
+        wing: row.wing,
+        hall: row.hall,
+        room: row.room,
+        source_type: row.source_type,
+      }))
     }
 
     return []
@@ -71,10 +69,7 @@ const mocked = vi.hoisted(() => {
       return
     }
 
-    if (
-      sql.includes('UPDATE archive_candidates') &&
-      sql.includes('SET content = ?, message_role = ?, agent_role = ?, title = ?,')
-    ) {
+    if (sql.includes('UPDATE archive_candidates') && sql.includes('SET content = ?, message_role = ?, agent_role = ?, title = ?,')) {
       const [content, messageRole, agentRole, title, wing, hall, room, tags, facets, rationale, metadata, id] = params
       const row = findCandidateById(String(id))
       if (!row) return
@@ -97,7 +92,6 @@ const mocked = vi.hoisted(() => {
 })
 
 vi.mock('../../db/repository', () => ({
-  dbSaveOperatingEvent: vi.fn(async () => 'event-1'),
   query: mocked.queryMock,
   run: mocked.runMock,
 }))

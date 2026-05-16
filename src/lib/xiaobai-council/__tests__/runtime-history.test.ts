@@ -44,6 +44,10 @@ function ledger(status: 'proved' | 'partial' | 'missing', runId = `run-${status}
     actionTaskCount: 12,
     baoyuPlanCount: 5,
     localSvgCardCount: 1,
+    internetResearchRequired: false,
+    internetResearchGrounded: false,
+    internetSourceCount: 0,
+    internetQueries: [],
     deepRunCertification: {
       status,
       label: status === 'proved' ? '2-5 分钟深度长跑已认证' : '尚未完成深度长跑认证',

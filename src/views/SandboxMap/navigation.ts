@@ -1,4 +1,5 @@
 export const SANDBOX_TAB_IDS = [
+  'simplify',
   'overview',
   'neurons',
   'warroom',
@@ -10,6 +11,7 @@ export const SANDBOX_TAB_IDS = [
   'workflow',
   'control',
   'scheduler',
+  'system-audit',
   'teams',
   'xiaobai',
 ] as const

@@ -15,8 +15,6 @@ import { loadSkills } from '../skills/registry'
 import { queryEntity, renderGraphPrompt, type KnowledgeTriple } from '../memory/knowledge-graph'
 import { getLatestSwarmState, renderSwarmPrompt } from '../synapse/swarm'
 import { collectMCPSkills, executeMCPSkill, isMCPSkill, buildMCPToolPrompt } from '../mcp/bridge'
-import { recordAgentExecutionReceipt } from '../agents/execution-audit'
-import type { ExecutionToolRef } from '../agents/execution-receipt'
 
 const MAX_TOOL_ROUNDS = 5
 
@@ -39,15 +37,6 @@ export interface ToolLoopResult {
   rounds: number
 }
 
-function toolLoopRef(skillId: string, success: boolean): ExecutionToolRef {
-  return {
-    id: skillId,
-    label: skillId,
-    risk: isMCPSkill(skillId) ? 'medium' : 'low',
-    status: success ? 'completed' : 'failed',
-  }
-}
-
 /**
  * 执行 ReAct 工具循环
  *
@@ -61,7 +50,7 @@ export async function runToolLoop(
   llmConfig: LLMConfig,
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
   enabledSkillIds: string[] = [],
-  context?: string,
+  context?: string
 ): Promise<ToolLoopResult> {
   const toolCalls: ToolLoopResult['toolCalls'] = []
   let currentMessages = [...messages]
@@ -70,7 +59,7 @@ export async function runToolLoop(
   // 初始注入：内核状态
   const kernelContext = await buildKernelContext(context || '')
   if (kernelContext) {
-    const lastSystem = currentMessages.findIndex((m) => m.role === 'system')
+    const lastSystem = currentMessages.findIndex(m => m.role === 'system')
     if (lastSystem >= 0) {
       currentMessages[lastSystem] = {
         ...currentMessages[lastSystem],
@@ -89,10 +78,9 @@ export async function runToolLoop(
     const jsonMatches = [...response.matchAll(TOOL_CALL_JSON_REGEX)]
     // Fallback 到正则匹配
     const regexMatches = jsonMatches.length > 0 ? [] : [...response.matchAll(TOOL_CALL_REGEX)]
-    const matches =
-      jsonMatches.length > 0
-        ? jsonMatches.map((m) => ({ fullMatch: m[0], skillId: m[1], args: m[2] }))
-        : regexMatches.map((m) => ({ fullMatch: m[0], skillId: m[1], args: m[2] }))
+    const matches = jsonMatches.length > 0
+      ? jsonMatches.map(m => ({ fullMatch: m[0], skillId: m[1], args: m[2] }))
+      : regexMatches.map(m => ({ fullMatch: m[0], skillId: m[1], args: m[2] }))
 
     if (matches.length === 0) {
       // 没有工具调用，返回最终回复
@@ -120,41 +108,24 @@ export async function runToolLoop(
           mcpServerUsed: skillId.split(':')[1],
         }
       } else {
-        result = await executeSkill(
-          skillId,
-          {
-            prompt: args.replace(/^["']|["']$/g, '').trim(),
-          },
-          llmConfig,
-        )
+        result = await executeSkill(skillId, {
+          prompt: args.replace(/^["']|["']$/g, '').trim(),
+        }, llmConfig)
       }
 
       toolCalls.push({ skillId, args, result })
-      recordAgentExecutionReceipt({
-        agentId: 'tool-loop',
-        subject: `工具循环：${skillId}`,
-        input: args,
-        output: result.result,
-        status: result.success ? 'completed' : 'failed',
-        tools: [toolLoopRef(skillId, result.success)],
-        evidenceRefs: result.mcpServerUsed
-          ? [{ kind: 'tool', id: result.mcpServerUsed, title: result.mcpServerUsed }]
-          : [],
-        durationMs: result.duration,
-        entities: [skillId, result.mcpServerUsed || ''].filter(Boolean),
-      }).catch(() => {})
 
       // 将工具结果嵌入回复
       augmentedResponse = augmentedResponse.replace(
         match.fullMatch,
-        `\n> **[${skillId}]** ${result.success ? '✓' : '✗'} ${result.result.slice(0, 500)}\n`,
+        `\n> **[${skillId}]** ${result.success ? '✓' : '✗'} ${result.result.slice(0, 500)}\n`
       )
     }
 
     // 将 LLM 回复（含工具结果）加入消息历史，让 LLM 继续生成
     currentMessages.push(
       { role: 'assistant', content: augmentedResponse },
-      { role: 'user', content: '请基于工具结果继续回答。如果需要更多信息，可以继续调用工具。否则直接给出最终回答。' },
+      { role: 'user', content: '请基于工具结果继续回答。如果需要更多信息，可以继续调用工具。否则直接给出最终回答。' }
     )
   }
 
@@ -172,7 +143,7 @@ async function buildKernelContext(topic: string): Promise<string> {
   // Knowledge Graph：按主题查询相关三元组
   if (topic) {
     try {
-      const keywords = topic.split(/[\s,，、]+/).filter((k) => k.length > 1)
+      const keywords = topic.split(/[\s,，、]+/).filter(k => k.length > 1)
       const allTriples: KnowledgeTriple[] = []
       for (const kw of keywords.slice(0, 3)) {
         const triples = await queryEntity(kw)
@@ -180,25 +151,19 @@ async function buildKernelContext(topic: string): Promise<string> {
       }
       const graphPrompt = renderGraphPrompt(allTriples, 300)
       if (graphPrompt) parts.push(graphPrompt)
-    } catch {
-      /* ignore */
-    }
+    } catch { /* ignore */ }
   }
 
   // Swarm 突破状态
   try {
     const swarmState = await getLatestSwarmState()
     if (swarmState && swarmState.breakthroughs.length > 0) {
-      const lines = swarmState.breakthroughs
-        .slice(0, 3)
-        .map(
-          (b) => `- ${b.insight || `${b.sourceNeuron} ↔ ${b.targetNeuron}`} [新颖度 ${(b.novelty * 100).toFixed(0)}%]`,
-        )
+      const lines = swarmState.breakthroughs.slice(0, 3).map(b =>
+        `- ${b.insight || `${b.sourceNeuron} ↔ ${b.targetNeuron}`} [新颖度 ${(b.novelty * 100).toFixed(0)}%]`
+      )
       parts.push(`<recent-breakthroughs>\n${lines.join('\n')}\n</recent-breakthroughs>`)
     }
-  } catch {
-    /* ignore */
-  }
+  } catch { /* ignore */ }
 
   return parts.join('\n')
 }
@@ -212,9 +177,11 @@ export async function buildToolPrompt(enabledSkillIds: string[]): Promise<string
 
   // 内置技能
   if (enabledSkillIds.length > 0) {
-    const skills = loadSkills().filter((s) => enabledSkillIds.includes(s.id) && s.enabled)
+    const skills = loadSkills().filter(s => enabledSkillIds.includes(s.id) && s.enabled)
     if (skills.length > 0) {
-      const toolList = skills.map((s) => `- \`${s.id}\`: ${s.description.slice(0, 60)}`).join('\n')
+      const toolList = skills.map(s =>
+        `- \`${s.id}\`: ${s.description.slice(0, 60)}`
+      ).join('\n')
       parts.push(`可用技能：\n${toolList}`)
     }
   }
@@ -225,9 +192,7 @@ export async function buildToolPrompt(enabledSkillIds: string[]): Promise<string
     if (mcpSkills.length > 0) {
       parts.push(buildMCPToolPrompt(mcpSkills))
     }
-  } catch {
-    /* MCP 不可用时不影响基本功能 */
-  }
+  } catch { /* MCP 不可用时不影响基本功能 */ }
 
   if (parts.length === 0) return ''
 

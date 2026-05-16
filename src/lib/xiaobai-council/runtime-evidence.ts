@@ -1,6 +1,7 @@
 import type { CouncilActionTask } from './action-pack'
 import type { CouncilBaoyuVisualPlan } from './baoyu'
 import type { CouncilDebateMap, CouncilDebateScene, CouncilVerdictLedger } from './debate-theater'
+import type { CouncilInternetResearchPack } from './internet-research'
 import type { CouncilQualityGate } from './quality-gate'
 import type { CouncilMatchDecisionSource, CouncilMatchPhaseId, CouncilMatchProgressEvent, CouncilSelection } from './selector'
 import type { TeamSession } from '../teams/types'
@@ -17,7 +18,7 @@ export interface CouncilRuntimeEvidenceItem {
 export interface CouncilRuntimeReplayFrame {
   id: string
   atMs: number
-  source: 'match-gate' | 'team-session' | 'debate-theater' | 'quality-gate' | 'action-pack' | 'baoyu' | 'export'
+  source: 'match-gate' | 'internet-research' | 'team-session' | 'debate-theater' | 'quality-gate' | 'action-pack' | 'baoyu' | 'export'
   title: string
   status: CouncilRuntimeEvidenceStatus
   summary: string
@@ -59,6 +60,10 @@ export interface CouncilRuntimeEvidenceLedger {
   actionTaskCount: number
   baoyuPlanCount: number
   localSvgCardCount: number
+  internetResearchRequired: boolean
+  internetResearchGrounded: boolean
+  internetSourceCount: number
+  internetQueries: string[]
   deepRunCertification: CouncilDeepRunCertification
   replayFrames: CouncilRuntimeReplayFrame[]
   evidenceItems: CouncilRuntimeEvidenceItem[]
@@ -77,6 +82,7 @@ interface CouncilRuntimeEvidenceInput {
   qualityGate: CouncilQualityGate
   actionTasks: CouncilActionTask[]
   baoyuVisualPlans: CouncilBaoyuVisualPlan[]
+  internetResearch?: CouncilInternetResearchPack | null
 }
 
 const REQUIRED_MATCH_PHASES: CouncilMatchPhaseId[] = [
@@ -237,6 +243,7 @@ function buildReplayFrames(input: CouncilRuntimeEvidenceInput & {
   verdictLedgerCount: number
   actionTaskCount: number
   localSvgCardCount: number
+  internetResearch?: CouncilInternetResearchPack | null
 }): CouncilRuntimeReplayFrame[] {
   const frames: CouncilRuntimeReplayFrame[] = []
   const stageTrace = input.selection.matchGate.stageTrace || []
@@ -250,6 +257,21 @@ function buildReplayFrames(input: CouncilRuntimeEvidenceInput & {
         event.status === 'completed' ? 'proved' : event.status === 'failed' ? 'missing' : 'partial',
         event.detail,
         event.candidatePersonaIds,
+      ),
+    )
+  }
+  if (input.internetResearch?.attempted || input.internetResearch?.required) {
+    frames.push(
+      frame(
+        'internet-research-summary',
+        input.durationMs * 0.2,
+        'internet-research',
+        '联网证据包',
+        input.internetResearch.grounded ? 'proved' : input.internetResearch.attempted ? 'partial' : 'missing',
+        input.internetResearch.grounded
+          ? `queries=${input.internetResearch.queries.length}，sources=${input.internetResearch.sources.length}，外部证据已注入会议。`
+          : `status=${input.internetResearch.status}，${input.internetResearch.summary}`,
+        input.internetResearch.sources.slice(0, 8).map((source) => source.url),
       ),
     )
   }
@@ -337,6 +359,11 @@ export function buildCouncilRuntimeEvidenceLedger(input: CouncilRuntimeEvidenceI
   const verdictLedgerCount = countVerdictItems(input.verdictLedger)
   const localSvgCardCount = input.baoyuVisualPlans.filter((plan) => plan.textRenderMode === 'local-svg').length
   const actionTaskCount = input.actionTasks.length
+  const internetResearch = input.internetResearch || null
+  const internetResearchRequired = Boolean(internetResearch?.required)
+  const internetResearchGrounded = Boolean(internetResearch?.grounded && internetResearch.sources.length > 0)
+  const internetSourceCount = internetResearch?.sources.length || 0
+  const internetQueries = internetResearch?.queries || []
   const durationMs = Math.max(0, input.runCompletedAt - runStartedAt)
   const qualityStatus = input.qualityGate.finalGateStatus || input.qualityGate.status
   const deepRunCertification = buildDeepRunCertification({
@@ -361,8 +388,20 @@ export function buildCouncilRuntimeEvidenceLedger(input: CouncilRuntimeEvidenceI
     verdictLedgerCount,
     actionTaskCount,
     localSvgCardCount,
+    internetResearch,
   })
   const evidenceItems: CouncilRuntimeEvidenceItem[] = [
+    item(
+      'internet-research',
+      '联网证据包',
+      !internetResearchRequired || internetResearchGrounded,
+      internetResearchRequired
+        ? internetResearchGrounded
+          ? `本轮已联网检索并注入 ${internetSourceCount} 条外部来源。`
+          : `本轮需要联网证据但未形成可引用来源：${internetResearch?.summary || '无结果'}`
+        : '本轮没有触发强联网信号。',
+      internetResearchRequired && Boolean(internetResearch?.attempted),
+    ),
     item(
       'deep-run-certification',
       '深度长跑认证',
@@ -430,12 +469,19 @@ export function buildCouncilRuntimeEvidenceLedger(input: CouncilRuntimeEvidenceI
     actionTaskCount,
     baoyuPlanCount: input.baoyuVisualPlans.length,
     localSvgCardCount,
+    internetResearchRequired,
+    internetResearchGrounded,
+    internetSourceCount,
+    internetQueries,
     deepRunCertification,
     replayFrames,
     evidenceItems,
     exportProof: [
       'PRD Markdown export includes match gate, theater, consensus trace, delivery modes, action pack, excellence audit, runtime evidence and quality gate.',
       'Share brief export stays readable without default image-pack generation.',
+      internetResearchGrounded
+        ? `Internet research pack includes ${internetSourceCount} external sources and ${internetQueries.length} queries.`
+        : 'Internet research status is recorded honestly; unavailable search is not promoted as grounded evidence.',
       'Runtime ledger does not include API keys, raw secrets, or private long logs.',
     ],
     nextProofNeeded,
@@ -454,6 +500,8 @@ export function renderCouncilRuntimeEvidenceMarkdown(ledger: CouncilRuntimeEvide
     `- messages: ${ledger.messageCount} / briefs: ${ledger.briefCount}`,
     `- scenes: ${ledger.sceneCount} / relations: ${ledger.relationCount} / ledgerItems: ${ledger.verdictLedgerCount}`,
     `- actionTasks: ${ledger.actionTaskCount}`,
+    `- internetResearch: required=${ledger.internetResearchRequired ? 'yes' : 'no'} grounded=${ledger.internetResearchGrounded ? 'yes' : 'no'} sources=${ledger.internetSourceCount}`,
+    `- internetQueries: ${ledger.internetQueries.join('；') || 'none'}`,
     `- traceExportTasks: ${ledger.actionTaskCount}`,
     '',
     '### 证据项',

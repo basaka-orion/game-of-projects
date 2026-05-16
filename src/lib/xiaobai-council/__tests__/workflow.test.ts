@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { runCouncilPrdWorkflow } from '../workflow'
 import { selectCouncilTeam } from '../selector'
+import { createCouncilInternetResearchPack } from '../internet-research'
 import type { CouncilRuntimeWisdomContext } from '../runtime-wisdom'
 
 const activationMock = vi.hoisted(() => ({
@@ -128,6 +129,38 @@ vi.mock('../dream', () => ({
   loadAgentDreamState: dreamMock.loadAgentDreamState,
 }))
 
+function groundedInternetResearchPack() {
+  return createCouncilInternetResearchPack({
+    required: true,
+    attempted: true,
+    grounded: true,
+    status: 'grounded',
+    summary: '已用联网来源确认外部事实、竞品和当前模型能力只能带来源引用进入 PRD。',
+    queries: ['小白智囊团 PRD 市场 2026', 'AI product council model capability current'],
+    sources: [
+      {
+        title: 'Official AI product update',
+        url: 'https://openai.com/news/example',
+        domain: 'openai.com',
+        authority: 'official',
+        snippet: 'Official product update used as grounded evidence for current model capability claims.',
+      },
+    ],
+    generatedAt: '2026-05-15T00:00:00.000Z',
+  })
+}
+
+function notNeededInternetResearchPack() {
+  return createCouncilInternetResearchPack({
+    required: false,
+    attempted: false,
+    grounded: false,
+    status: 'not-needed',
+    summary: '测试场景未触发强联网信号。',
+    generatedAt: '2026-05-15T00:00:00.000Z',
+  })
+}
+
 describe('xiaobai council workflow integration', () => {
   beforeEach(() => {
     activationMock.activateCouncilPersonas.mockClear()
@@ -169,12 +202,14 @@ describe('xiaobai council workflow integration', () => {
       promptFragment: '## 95 真实长跑评测协议\n需要第一条真实深度基线。',
     }
     const snapshots: any[] = []
+    const internetResearch = groundedInternetResearchPack()
     const result = await runCouncilPrdWorkflow({
       problem,
       selection,
       preferredStyleIds: ['kinetic'],
       runtimeWisdomContext,
       runtimeCalibrationPlan,
+      internetResearch,
       onSnapshot: (snapshot) => snapshots.push(snapshot),
     })
 
@@ -183,6 +218,7 @@ describe('xiaobai council workflow integration', () => {
     expect(result.creativeEnhancement.promptFragment).toContain('创意孵化器增强输入')
     expect(result.agentDreamStates).toHaveLength(selection.seats.length)
     expect(result.qualityGate.checks.map((item) => item.id)).toContain('actionable-prd')
+    expect(result.qualityGate.checks.map((item) => item.id)).toContain('internet-grounding')
     expect(result.qualityGate.typedDeliberation.length).toBeGreaterThan(0)
     expect(result.debateScenes.length).toBeGreaterThan(0)
     expect(result.debateMap.edges.length).toBeGreaterThan(0)
@@ -196,6 +232,9 @@ describe('xiaobai council workflow integration', () => {
     expect(result.masterPrdValidation.hitLabels.join('\n')).toContain('角色共识、裁决与来源追溯')
     expect(result.consensusTrace.lanes.map((lane) => lane.id)).toEqual(['claim', 'challenge', 'absorb', 'cut'])
     expect(result.runtimeEvidence.actionTaskCount).toBeGreaterThanOrEqual(10)
+    expect(result.internetResearch.grounded).toBe(true)
+    expect(result.runtimeEvidence.internetResearchGrounded).toBe(true)
+    expect(result.runtimeEvidence.evidenceItems.map((item) => item.id)).toContain('internet-research')
     expect(result.runtimeEvidence.deepRunCertification.status).toBe('missing')
     expect(result.runtimeEvidence.deepRunCertification.blockers.join('\n')).toContain('默认深度模式')
     expect(result.runtimeEvidence.replayFrames.map((frame) => frame.source)).toContain('team-session')
@@ -216,6 +255,7 @@ describe('xiaobai council workflow integration', () => {
     expect(result.baoyuVisualPlans).toEqual([])
     expect(snapshots.map((snapshot) => snapshot.status)).toEqual(expect.arrayContaining([
       'match-ready',
+      'internet-research',
       'activating',
       'team-ready',
       'phase-start',
@@ -232,6 +272,9 @@ describe('xiaobai council workflow integration', () => {
     expect(engineMock.runTeamSession.mock.calls[0][1]).toContain('运行智慧反馈')
     expect(engineMock.runTeamSession.mock.calls[0][1]).toContain('上一轮 fallback')
     expect(engineMock.runTeamSession.mock.calls[0][1]).toContain('95 真实长跑评测协议')
+    expect(engineMock.runTeamSession.mock.calls[0][1]).toContain('联网证据包')
+    expect(engineMock.runTeamSession.mock.calls[0][1]).toContain('[W1] Official AI product update')
+    expect(engineMock.runTeamSession.mock.calls[0][1]).toContain('https://openai.com/news/example')
     expect(engineMock.runTeamSession.mock.calls[0][1]).toContain('本轮日期与文档硬规则')
     expect(engineMock.runTeamSession.mock.calls[0][1]).toContain('全技术栈蓝图')
     expect(engineMock.runTeamSession.mock.calls[0][3].uiStyleContext).toEqual(result.uiStyleContext)
@@ -248,5 +291,72 @@ describe('xiaobai council workflow integration', () => {
     expect(engineMock.runTeamSession.mock.calls[0][1]).toContain('UI风格馆自动视觉输入')
     expect(engineMock.runTeamSession.mock.calls[0][1]).toContain('创意孵化器增强条款')
     expect(engineMock.runTeamSession.mock.calls[0][1]).toContain('博弈裁决记录')
+  })
+
+  it('keeps debating through a local Nuwa methodology session when the model council fails', async () => {
+    engineMock.runTeamSession.mockRejectedValueOnce(new Error('GLM 5.1 timeout'))
+    const problem = '做一个女性天气包包 iOS App，需要产品、技术、审美、风险和增长一起裁判'
+    const selection = selectCouncilTeam(problem)
+    const snapshots: any[] = []
+    const progress: any[] = []
+
+    const result = await runCouncilPrdWorkflow({
+      problem,
+      selection,
+      internetResearch: groundedInternetResearchPack(),
+      onProgress: (message) => progress.push(message),
+      onSnapshot: (snapshot) => snapshots.push(snapshot),
+    })
+
+    expect(engineMock.runTeamSession).toHaveBeenCalled()
+    expect(result.session.id).toContain('local_nuwa_session')
+    expect(result.session.tags).toContain('local-nuwa-debate')
+    expect(result.session.summary).toContain('本地严苛博弈')
+    expect(result.session.summary).toContain('包里晴雨签')
+    expect(result.session.summary).toContain('天气、场景、包包')
+    expect(result.session.summary).toContain('UI风格馆视觉 DNA')
+    expect(result.session.summary).toContain('SwiftUI + Observation + SwiftData')
+    expect(result.session.summary).toContain('前端技术栈与状态管理')
+    expect(result.session.summary).toContain('后端服务与领域边界')
+    expect(result.session.summary).toContain('像素级 UI 与交互动效规格')
+    expect(result.session.summary).toContain('联网证据与待查证边界')
+    expect(result.session.summary).toContain('[W1] Official AI product update')
+    expect(progress.filter((message) => message.kind === 'brief')).toHaveLength(selection.seats.length * 6)
+    expect(progress.map((message) => message.content).join('\n')).toContain('【方法论提取】')
+    expect(progress.map((message) => message.content).join('\n')).toContain('【冲突/补充】')
+    expect(result.debateScenes.length).toBeGreaterThanOrEqual(18)
+    expect(result.debateMap.edges.length).toBeGreaterThanOrEqual(12)
+    expect(result.verdictLedger.prdImpacts.length).toBeGreaterThanOrEqual(1)
+    expect(result.masterPrdValidation.score).toBeGreaterThanOrEqual(90)
+    expect(result.consensusTrace.sourcedScenes).toBeGreaterThanOrEqual(18)
+    expect(snapshots.map((snapshot) => snapshot.status)).toContain('error')
+    expect(snapshots.map((snapshot) => snapshot.status)).toContain('completed')
+    expect(result.runtimeEvidence.deepRunCertification.status).not.toBe('proved')
+  })
+
+  it('generates a project-specific Soul.md Mac App PRD and redacts keys in fallback mode', async () => {
+    engineMock.runTeamSession.mockRejectedValueOnce(new Error('模型空输出'))
+    const problem = [
+      '我想做一个 Mac 桌面端 app，把几千篇文章扔进去，结合 Karpathy 知识分类和 mempalace 记忆宫殿，最终生成 soul.md。',
+      '模型是 GLM5.1 和 DeepSeek V4。',
+      'deepseek-apikey：sk-1234567890abcdef1234567890abcdef',
+      'GLM5.1:5317add67a3e413e93cb818ca461bc9d.Bp7iy76Nz9CN3BFg',
+    ].join('\n')
+    const selection = selectCouncilTeam(problem)
+
+    const result = await runCouncilPrdWorkflow({
+      problem,
+      selection,
+      internetResearch: notNeededInternetResearchPack(),
+    })
+
+    expect(result.session.summary).toContain('Soul.md 记忆宫殿 Mac App')
+    expect(result.session.summary).toContain('Karpathy 式来源/概念/索引')
+    expect(result.session.summary).toContain('GLM5.1')
+    expect(result.session.summary).toContain('DeepSeek V4')
+    expect(result.session.summary).toContain('密钥处理')
+    expect(result.session.summary).not.toContain('sk-1234567890abcdef1234567890abcdef')
+    expect(result.session.summary).not.toContain('5317add67a3e413e93cb818ca461bc9d.Bp7iy76Nz9CN3BFg')
+    expect(result.masterPrdValidation.score).toBeGreaterThanOrEqual(90)
   })
 })

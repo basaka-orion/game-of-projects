@@ -3,9 +3,11 @@ import { HUMAN_MAP_SIGNAL_LABELS } from '../data/human-map';
 import { DIMENSIONS, DIMENSION_MAP } from '../data/dimensions';
 import { allModules } from '../data/questions';
 import type {
+  HumanMapAnswerAudit,
   HumanMapBlueprint,
   HumanMapMode,
   HumanMapQuestionDef,
+  HumanMapStageConclusion,
   HumanMapSignalId,
   HumanMapSignalScore,
   PersonalizedDimensionPlan,
@@ -137,6 +139,66 @@ function textCoverageScore(text: string): number {
   if (text.length < 20) return 0.65;
   if (text.length < 60) return 1;
   return 1.25;
+}
+
+function scoreAnswerDimension(answer: string, patterns: RegExp[], base: number): number {
+  const text = cleanText(answer);
+  if (!text) return 0;
+  const lengthScore = Math.min(42, Math.round(text.length * 0.58));
+  const signalScore = patterns.reduce((sum, pattern) => sum + (pattern.test(text) ? 14 : 0), 0);
+  return Math.max(0, Math.min(100, base + lengthScore + signalScore));
+}
+
+export function auditHumanMapAnswer(
+  question: HumanMapQuestionDef,
+  answer: string,
+): HumanMapAnswerAudit {
+  const text = cleanText(answer);
+  const specificity = scoreAnswerDimension(text, [
+    /最近|今天|昨天|本周|上周|30\s*天|一个月|这次|当时|例如|比如/,
+    /\d+|一|二|三|两|半|次|天|周|月|年/,
+    /项目|任务|关系|工作|学习|创作|系统|Openbasaka/i,
+  ], text ? 12 : 0);
+  const evidenceLevel = scoreAnswerDimension(text, [
+    /因为|所以|导致|结果|发现|证据|表现|具体|例子|场景/,
+    /例如|比如|昨天|最近|当时|这次/,
+    /我会|我做了|我选择|我没有|我发现/,
+  ], text ? 10 : 0);
+  const actionability = scoreAnswerDimension(text, [
+    /下一步|先|再|要|需要|固定|减少|增加|停止|开始|推进|复盘|验证/,
+    /目标|主线|边界|节奏|计划|清单|行动/,
+  ], text ? 8 : 0);
+  const needsClarifier = !text || specificity < 42 || evidenceLevel < 42 || containsAmbivalence(text);
+  const notes = [
+    needsClarifier ? '需要追问以补足具体场景或取舍边界' : '答案已经具备可用的场景证据',
+    actionability >= 55 ? '可转成后续测评路由和行动提示' : '行动线索仍偏弱',
+  ];
+
+  return {
+    questionId: question.id,
+    questionTitle: question.title,
+    specificity,
+    evidenceLevel,
+    actionability,
+    needsClarifier,
+    notes,
+  };
+}
+
+function averageScore(audits: HumanMapAnswerAudit[], key: keyof Pick<HumanMapAnswerAudit, 'specificity' | 'evidenceLevel' | 'actionability'>): number {
+  if (audits.length === 0) return 0;
+  return Math.round(audits.reduce((sum, audit) => sum + audit[key], 0) / audits.length);
+}
+
+function buildHumanMapStageConclusion(audits: HumanMapAnswerAudit[]): HumanMapStageConclusion {
+  return {
+    answeredCount: audits.length,
+    averageSpecificity: averageScore(audits, 'specificity'),
+    averageEvidenceLevel: averageScore(audits, 'evidenceLevel'),
+    averageActionability: averageScore(audits, 'actionability'),
+    clarifierNeededCount: audits.filter((audit) => audit.needsClarifier).length,
+    boundaryNote: '人类数值地图只用于自我理解、题目路由和代理人协作提示，不是临床诊断、正式心理测量或高风险决策依据。',
+  };
 }
 
 function buildSignalScores(
@@ -510,6 +572,10 @@ export function buildHumanMapBlueprint(
     .map((dimensionId) => DIMENSION_MAP[dimensionId]?.name || dimensionId)
     .join(' / ');
   const { answered, total } = getHumanMapProgress(mode, answers, adaptiveQuestions);
+  const answerAudits = getHumanMapQuestionFlow(mode, answers, adaptiveQuestions)
+    .map((question) => ({ question, answer: cleanText(answers[question.id]) }))
+    .filter(({ answer }) => Boolean(answer))
+    .map(({ question, answer }) => auditHumanMapAnswer(question, answer));
 
   return {
     mode,
@@ -524,6 +590,8 @@ export function buildHumanMapBlueprint(
     recommendedDimensions,
     dimensionPlans,
     sourceDigest: buildSourceDigest(answers, adaptiveQuestions),
+    answerAudits,
+    stageConclusion: buildHumanMapStageConclusion(answerAudits),
     completedAt: new Date().toISOString(),
   };
 }

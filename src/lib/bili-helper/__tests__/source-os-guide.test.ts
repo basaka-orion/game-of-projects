@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createSampleBiliWorkspace } from '../state'
+import { createLocalLearningPack, createSampleBiliWorkspace } from '../state'
 import { buildSourceOsArrowGeometry, buildSourceOsGuideState } from '../source-os-guide'
 import type { BiliVideoWorkspace } from '../types'
 
@@ -38,7 +38,7 @@ describe('SourceOS guide state', () => {
     expect(state.focusTarget).toBe('source-card')
   })
 
-  it('points parsed sources toward Baoyu visual guidance', () => {
+  it('points parsed sources toward content diagnostics before product generation', () => {
     const state = buildSourceOsGuideState({
       processing: 'idle',
       workspace: unpackedWorkspace(),
@@ -46,10 +46,11 @@ describe('SourceOS guide state', () => {
       artifactMode: 'mindmap',
     })
 
-    expect(state.activeStep.id).toBe('visual-brief')
+    expect(state.activeStep.id).toBe('content-check')
     expect(state.artifactMode).toBe('mindmap')
     expect(state.steps.find((step) => step.id === 'source-ready')?.status).toBe('complete')
-    expect(state.focusTarget).toBe('baoyu-visuals')
+    expect(state.focusTarget).toBe('source-card')
+    expect(state.caption).toContain('字幕')
   })
 
   it('shows active generation while building a pack', () => {
@@ -66,9 +67,11 @@ describe('SourceOS guide state', () => {
   })
 
   it('celebrates a ready learning pack', () => {
+    const workspace = createSampleBiliWorkspace()
+    const pack = createLocalLearningPack(workspace.video, workspace.transcript, '生成学习包')
     const state = buildSourceOsGuideState({
       processing: 'idle',
-      workspace: createSampleBiliWorkspace(),
+      workspace: { ...workspace, pack, modePacks: { tutorial: pack } },
       view: 'tutorial',
       artifactMode: 'tutorial',
     })

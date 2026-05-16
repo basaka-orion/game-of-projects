@@ -68,19 +68,50 @@ const stageLabels: Record<OperatingEventRow['stage'], string> = {
   understand: '理解',
   remember: '沉淀',
   compile: '编译',
+  explore: '探索',
   simulate: '推演',
   execute: '执行',
   review: '复盘',
+}
+
+const eventTypeLabels: Record<OperatingEventRow['type'], string> = {
+  input_event: '输入',
+  memory_candidate: '记忆',
+  boss_signal: '画像',
+  knowledge_source: '知识',
+  project_signal: '项目',
+  agent_action: '行动',
 }
 
 function eventSummary(event: OperatingEventRow): string {
   return event.summary || event.source_title || event.title || '主循环事件已记录'
 }
 
+function eventTypeLabel(type: OperatingEventRow['type']): string {
+  return eventTypeLabels[type] || '事件'
+}
+
 function riskLabel(risk: ExecutionRiskLevel): string {
   if (risk === 'high') return '高风险'
   if (risk === 'medium') return '中风险'
   return '低风险'
+}
+
+function receiptActionLabel(receipt: AgentExecutionReceipt): string {
+  if (receipt.status === 'failed' || receipt.retry.recommended) return '处理'
+  if (receipt.evidenceRefs.length === 0) return '补证据'
+  return '复盘'
+}
+
+function receiptTarget(receipt: AgentExecutionReceipt): SandboxTabId {
+  if (receipt.status === 'failed' || receipt.retry.recommended) {
+    return receipt.tools.some((tool) => tool.id === 'scheduled_tasks') ? 'scheduler' : 'control'
+  }
+  if (receipt.evidenceRefs.some((ref) => ref.kind === 'knowledge')) return 'knowledge'
+  if (receipt.evidenceRefs.some((ref) => ref.kind === 'memory')) return 'memory'
+  if (receipt.evidenceRefs.some((ref) => ref.kind === 'project')) return 'neurons'
+  if (receipt.evidenceRefs.some((ref) => ref.kind === 'schedule')) return 'scheduler'
+  return 'teams'
 }
 
 function receiptTone(receipt: AgentExecutionReceipt): 'accent' | 'success' | 'warning' | 'danger' {
@@ -106,7 +137,7 @@ function renderDeckItem(item: OperatingLoopDeckItem, onNavigate: (tab: SandboxTa
       description={item.description}
       tone={item.tone}
       onClick={() => onNavigate(sandboxTargetMap[item.target])}
-      actionLabel="open"
+      actionLabel="打开"
     />
   )
 }
@@ -115,7 +146,7 @@ const networkTypeLabels: Record<ProjectNeuralNodeType, string> = {
   project: '项目节点',
   memory: '记忆节点',
   knowledge: '知识节点',
-  agent: 'Agent 行动',
+  agent: '执行节点',
 }
 
 function renderNetworkNode(node: ProjectNeuralNode, onNavigate: (tab: SandboxTabId) => void) {
@@ -187,7 +218,7 @@ export default function OverviewTab({
   return (
     <div className="sandbox-map__tab sandbox-map__overview">
       <SystemStageShell
-        eyebrow="external brain control deck"
+        eyebrow="外脑总控"
         title="沙盘总控台"
         description={
           <>
@@ -218,7 +249,7 @@ export default function OverviewTab({
         leftRail={
           <>
             <SystemStagePanel
-              eyebrow="daily intake"
+              eyebrow="入口队列"
               title="今日入口"
               description="先处理会堵住闭环的入口，再进入具体模块。"
             >
@@ -248,7 +279,7 @@ export default function OverviewTab({
             </SystemStagePanel>
 
             <SystemStagePanel
-              eyebrow="boss signal"
+              eyebrow="Boss 信号"
               title="最近 Boss 记忆"
               description={
                 bossMemories.length > 0
@@ -283,7 +314,7 @@ export default function OverviewTab({
             </SystemStagePanel>
 
             <SystemStagePanel
-              eyebrow="loop ledger"
+              eyebrow="主循环账本"
               title="主循环事件流"
               description={
                 operatingEvents.length > 0 ? '最近写入的跨模块状态变化。' : '等待启蒙、画像、知识或推演写入第一批事件。'
@@ -298,7 +329,7 @@ export default function OverviewTab({
                       title={event.title}
                       value={stageLabels[event.stage]}
                       description={eventSummary(event)}
-                      actionLabel={event.type.replace('_', ' ')}
+                      actionLabel={eventTypeLabel(event.type)}
                     />
                   ))
               ) : (
@@ -316,7 +347,7 @@ export default function OverviewTab({
         }
         centerRail={
           <SystemStagePanel
-            eyebrow="operating loop"
+            eyebrow="循环路径"
             title="外脑主循环"
             description="每个模块都要服务这条闭环，否则就会变成孤岛功能。"
             focal
@@ -329,7 +360,7 @@ export default function OverviewTab({
                 description={item.description}
                 tone={item.tone}
                 onClick={() => onNavigate(sandboxTargetMap[item.target])}
-                actionLabel="go"
+                actionLabel="进入"
               />
             ))}
           </SystemStagePanel>
@@ -337,7 +368,7 @@ export default function OverviewTab({
         rightRail={
           <>
             <SystemStagePanel
-              eyebrow="project intelligence"
+              eyebrow="项目智能"
               title="项目网络"
               description="先看项目分类，再看项目之间能否通过突触产生复利。"
             >
@@ -345,7 +376,7 @@ export default function OverviewTab({
             </SystemStagePanel>
 
             <SystemStagePanel
-              eyebrow="execution layer"
+              eyebrow="执行层"
               title="执行与自动化"
               description="把推演结果交给 Agent、定时器和控制面板，而不是停留在报告。"
             >
@@ -353,7 +384,7 @@ export default function OverviewTab({
             </SystemStagePanel>
 
             <SystemStagePanel
-              eyebrow="review learning"
+              eyebrow="学习队列"
               title="复盘学习"
               description={
                 learningSummary.total > 0
@@ -371,7 +402,7 @@ export default function OverviewTab({
                     meta={review.nextStep}
                     tone={reviewTone(review)}
                     onClick={() => onNavigate(sandboxTargetMap[review.target])}
-                    actionLabel="learn"
+                    actionLabel="复盘"
                   />
                 ))
               ) : (
@@ -388,7 +419,7 @@ export default function OverviewTab({
             </SystemStagePanel>
 
             <SystemStagePanel
-              eyebrow="agent receipts"
+              eyebrow="执行证据"
               title="执行收据"
               description={
                 executionReceipts.length > 0
@@ -405,7 +436,8 @@ export default function OverviewTab({
                     description={receipt.outputPreview}
                     meta={receipt.retry.nextStep}
                     tone={receiptTone(receipt)}
-                    actionLabel={receipt.status === 'failed' ? 'retry' : 'receipt'}
+                    onClick={() => onNavigate(receiptTarget(receipt))}
+                    actionLabel={receiptActionLabel(receipt)}
                   />
                 ))
               ) : (
@@ -425,14 +457,14 @@ export default function OverviewTab({
         footer={
           <>
             <SystemStagePanel
-              eyebrow="daily command brief"
+              eyebrow="每日指挥简报"
               title="沙盘每日简报"
               description={`${dailyBrief.dateLabel} · ${dailyBrief.headline}`}
               className="sandbox-map__daily-brief"
             >
               <div className="sandbox-map__daily-brief-summary">
                 <div className="sandbox-map__daily-brief-score">
-                  <span className="sandbox-map__daily-brief-score-label">ready</span>
+                  <span className="sandbox-map__daily-brief-score-label">就绪度</span>
                   <span className="sandbox-map__daily-brief-score-value">{dailyBrief.readinessScore}</span>
                 </div>
                 <div className="sandbox-map__daily-brief-focus">
@@ -455,7 +487,7 @@ export default function OverviewTab({
             </SystemStagePanel>
 
             <SystemStagePanel
-              eyebrow="neural network"
+              eyebrow="神经网络"
               title="项目神经网络"
               description={`${projectNeuralNetwork.nodes.length} 个节点 · ${projectNeuralNetwork.links.length} 条连接 · ${projectNeuralNetwork.summary.strongestSignal}`}
               className="sandbox-map__network"
@@ -474,7 +506,7 @@ export default function OverviewTab({
                   <strong>{projectNeuralNetwork.summary.knowledgeNodes}</strong>
                 </div>
                 <div>
-                  <span>Agent 行动</span>
+                  <span>执行节点</span>
                   <strong>{projectNeuralNetwork.summary.agentNodes}</strong>
                 </div>
               </div>
@@ -512,7 +544,7 @@ export default function OverviewTab({
                   <SystemStageState
                     state="empty"
                     title="等待第一条跨节点连接"
-                    description="项目突触、知识编译、Boss 记忆或 Agent 行动回写后，这里会形成可追踪连接。"
+                    description="项目突触、知识编译、Boss 记忆或执行行动回写后，这里会形成可追踪连接。"
                     compact
                   />
                 )}

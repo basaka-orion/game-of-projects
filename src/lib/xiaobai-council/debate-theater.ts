@@ -94,6 +94,12 @@ function personaForMessage(selection: CouncilSelection, message: TeamMessage): {
   id: string
   name: string
 } {
+  const metadataPersonaId = typeof message.metadata?.personaId === 'string' ? message.metadata.personaId : ''
+  const metadataMatch = metadataPersonaId
+    ? selection.seats.find((seat) => seat.persona.id === metadataPersonaId)
+    : undefined
+  if (metadataMatch) return { id: metadataMatch.persona.id, name: metadataMatch.persona.name }
+
   const match = selection.seats.find((seat) =>
     [seat.persona.name, seat.persona.shortName, seat.persona.id].some((name) =>
       name && (message.agentName.includes(name) || name.includes(message.agentName) || message.agentId === name),

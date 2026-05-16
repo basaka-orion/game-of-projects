@@ -5,6 +5,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   minimizeToTray: () => ipcRenderer.invoke('minimize-to-tray'),
   getSystemInfo: () => ipcRenderer.invoke('get-system-info'),
   getAppData: () => ipcRenderer.invoke('get-app-data'),
+  safeStorageSet: (key: string, value: string) => ipcRenderer.invoke('safe-storage-set', key, value),
+  safeStorageGet: (key: string) => ipcRenderer.invoke('safe-storage-get', key),
+  bibigptRequest: (payload: Record<string, unknown>) => ipcRenderer.invoke('bibigpt-request', payload),
 
   onFileDrop: (callback: (files: string[]) => void) => {
     ipcRenderer.on('file-drop', (_event, files: string[]) => callback(files))

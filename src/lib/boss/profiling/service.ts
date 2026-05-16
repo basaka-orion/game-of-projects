@@ -20,8 +20,7 @@ import type {
   NormalizedBossProfile,
   QuickProfilingAnswers,
 } from './types'
-import type { HumanMapBlueprint } from '../../../features/profiling-studio/types'
-import type { MatrixSessionResult } from '../../../features/profiling-studio/types'
+import type { HumanMapBlueprint, MatrixSessionResult } from '../../../features/profiling-studio/types'
 export { importOpenBasakaExportBundle, normalizeOpenBasakaExportBundle } from './openbasaka-bundle'
 
 function parseRunRow(row: Awaited<ReturnType<typeof dbGetBossAssessmentRun>>): BossAssessmentRun | null {

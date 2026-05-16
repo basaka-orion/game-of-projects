@@ -4,7 +4,7 @@ export type SourceOsGuideStepId =
   | 'intake'
   | 'resolving'
   | 'source-ready'
-  | 'visual-brief'
+  | 'content-check'
   | 'artifact-choice'
   | 'generating'
   | 'pack-ready'
@@ -85,15 +85,15 @@ const STEP_BASE: Array<Omit<SourceOsGuideStep, 'status'>> = [
     target: 'source-card',
   },
   {
-    id: 'visual-brief',
-    label: '04 秒懂',
-    title: '先看 Baoyu 图文',
-    description: '图文卡、漫画、信息图会先把复杂内容变成一眼能懂的视觉线索。',
-    target: 'baoyu-visuals',
+    id: 'content-check',
+    label: '04 诊断',
+    title: '检查来源内容',
+    description: '确认是否有真实字幕、正文、OCR 或转写；缺内容先补条件，不生成假结论。',
+    target: 'source-card',
   },
   {
     id: 'artifact-choice',
-    label: '05 选择产物',
+    label: '05 产物',
     title: '选择 AI 产物形态',
     description: '教程、导图、考题、金句、辩论、时间线、行动清单都在这里。',
     target: 'artifact-dashboard',
@@ -128,7 +128,7 @@ function activeStepId(input: BuildSourceOsGuideInput): SourceOsGuideStepId {
   if (input.processing === 'chatting' || input.view === 'chat' || input.view === 'downloads') return 'dialog-export'
   if (input.workspace.pack) return 'pack-ready'
   if (input.view === 'insights' || input.view === 'tutorial') return 'artifact-choice'
-  return 'visual-brief'
+  return 'content-check'
 }
 
 function progressFor(activeIndex: number, intensity: SourceOsGuideIntensity): number {
@@ -170,12 +170,12 @@ function stepCaption(stepId: SourceOsGuideStepId, input: BuildSourceOsGuideInput
         cta: '选择 AI 产物模式',
         intensity: 'calm',
       }
-    case 'visual-brief':
+    case 'content-check':
       return {
-        headline: 'Baoyu 正在把来源变成秒懂视觉',
-        caption: '先扫图文卡和漫画分镜，再决定要生成教程、导图、考题还是行动清单。',
-        cta: '查看秒懂图文',
-        intensity: 'celebrate',
+        headline: '先确认来源够不够真实',
+        caption: '有字幕、正文、OCR 或转写才生成结论；只有元信息时只显示补内容路径。',
+        cta: '检查识别诊断',
+        intensity: 'calm',
       }
     case 'generating':
       return {

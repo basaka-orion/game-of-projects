@@ -261,7 +261,7 @@ function CouncilDebateComposition({
           fontSize: 13,
         }}
       >
-        {running ? `debate in progress · ${theme.motion}` : activated ? 'activated council' : 'waiting for activation'}
+        {running ? `debate in progress · ${theme.motion}` : activated ? 'activated council' : 'waiting for one-key start'}
       </div>
     </AbsoluteFill>
   )
@@ -288,13 +288,13 @@ export default function CouncilDebateStage({
   const names = useMemo(() => selection?.seats.map((seat) => seat.persona.shortName) || [], [selection])
   const briefCount = messages.filter((message) => message.kind === 'brief').length
   const artifactCount = messages.filter((message) => message.kind === 'artifact').length
-  const phase = artifactCount ? '共识成稿' : briefCount || running ? '角色博弈' : selection ? '推荐待激活' : '等待问题'
+  const phase = artifactCount ? '共识成稿' : briefCount || running ? '角色博弈' : selection ? '自动编队完成' : '等待问题'
   const headline = artifactCount
     ? '共识 PRD 已生成'
     : running
       ? `${selection?.seats.length || 0} 位思想原型正在博弈`
       : selection
-        ? `${selection.seats.length} 位推荐角色等待确认激活`
+        ? `${selection.seats.length} 位推荐角色已进入自动开会队列`
         : '输入问题，系统再挑最合适的人'
   const palette = uiStyleContext?.visual.palette || []
   const theme = {
@@ -308,6 +308,13 @@ export default function CouncilDebateStage({
   const dreamLines = agentDreamStates.map((dream) => dream.currentDream)
   const realScenes = debateScenes.filter((scene) => scene.id !== 'scene-waiting-for-briefs')
   const currentScene = realScenes[realScenes.length - 1] || debateScenes[0]
+  const currentSceneTitle = currentScene?.id === 'scene-waiting-for-briefs'
+    ? running
+      ? '正在形成第一幕，角色发言返回后自动写入'
+    : activated
+      ? '会场已激活，等待第一条角色发言'
+      : '推荐队伍就位，点击开始进入博弈'
+    : currentScene?.sceneTitle || (running ? '正在形成第一幕，角色发言返回后自动写入' : '等待剧场场景')
   const conflictCount = debateMap?.edges.filter((edge) => edge.relation === 'oppose' || edge.relation === 'cut').length || 0
 
   if (reducedMotion) {
@@ -316,7 +323,7 @@ export default function CouncilDebateStage({
         <div className="council-stage__kicker">XIAOBAI COUNCIL</div>
         <div className="council-stage__headline">{headline}</div>
         <div className="council-stage__phase">{phase}</div>
-        <div className="council-stage__phase">{currentScene?.sceneTitle || '等待剧场场景'}</div>
+        <div className="council-stage__phase">{currentSceneTitle}</div>
         <div className="council-stage__phase">{uiStyleContext?.styleNames.join(' / ') || 'UI Museum theme'}</div>
       </div>
     )
@@ -336,7 +343,7 @@ export default function CouncilDebateStage({
           theme,
           creativeSource: creativeEnhancement?.source || 'fallback',
           dreamLines,
-          currentSceneTitle: currentScene?.sceneTitle || '等待第一幕',
+          currentSceneTitle,
           currentSpeaker: currentScene?.speakerName || '小白智囊团',
           currentTarget: currentScene?.targetNames.join(' / ') || '',
           conflictCount,

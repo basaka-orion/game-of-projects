@@ -1,5 +1,6 @@
 import { buildCouncilDistillationProfile } from './distillation'
 import type { CouncilBaoyuVisualPlan } from './baoyu'
+import type { CouncilInternetResearchPack } from './internet-research'
 import { validateCouncilMasterPrd } from './master-prd'
 import type { CouncilSelection } from './selector'
 import type { TeamMessage, TeamSession } from '../teams/types'
@@ -65,6 +66,7 @@ interface CouncilQualityGateInput {
   prdMarkdown: string
   baoyuVisualPlans: CouncilBaoyuVisualPlan[]
   revisionRounds?: CouncilQualityRevisionRound[]
+  internetResearch?: CouncilInternetResearchPack | null
 }
 
 function includesAny(text: string, patterns: RegExp[]): boolean {
@@ -175,8 +177,30 @@ function buildChecks(input: CouncilQualityGateInput): CouncilQualityCheck[] {
     { label: '本地优先', patterns: [/本地|Openbasaka|Telegram.*可选|Telegram.*默认关闭/i] },
     { label: '隐私/安全', patterns: [/隐私|安全|密钥|权限|合规|审计/i] },
   ])
+  const internetResearch = input.internetResearch || null
+  const internetSourceCount = internetResearch?.sources.length || 0
+  const internetScore = (() => {
+    if (!internetResearch?.required) return 88
+    if (internetResearch.grounded && internetSourceCount >= 3) return 96
+    if (internetResearch.grounded && internetSourceCount > 0) return 86
+    if (internetResearch.attempted) return 58
+    return 42
+  })()
 
   return [
+    check(
+      'internet-grounding',
+      '联网证据与实时事实边界',
+      internetScore,
+      [
+        internetResearch?.required ? '本轮触发联网证据需求。' : '本轮没有触发强联网证据需求。',
+        internetResearch?.attempted ? `已尝试联网检索，status=${internetResearch.status}。` : '未尝试联网检索。',
+        internetSourceCount > 0 ? `可引用外部来源 ${internetSourceCount} 条。` : '没有可引用外部来源。',
+      ],
+      internetScore >= 82
+        ? []
+        : ['补充联网搜索来源、网页摘录和待查证清单；市场、竞品、时效、政策、价格、天气、模型能力不得只靠模型记忆。'],
+    ),
     check(
       'evidence-truth',
       '事实证据与待验证边界',

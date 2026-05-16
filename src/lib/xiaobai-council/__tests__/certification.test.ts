@@ -5,6 +5,7 @@ import type { CouncilNuwaEvidenceRegistry } from '../distillation-evidence'
 import type { CouncilQualityGate } from '../quality-gate'
 import type { CouncilRuntimeCalibrationPlan } from '../runtime-calibration'
 import type { CouncilRuntimeEvidenceLedger } from '../runtime-evidence'
+import type { CouncilNuwaLocalPreflightReport } from '../source-preflight'
 import type { CouncilNuwaSourceAuditLedger } from '../source-audit'
 import type { CouncilUserValidationLedger } from '../user-validation'
 import type { CouncilArtifactReviewLedger } from '../artifact-review'
@@ -63,6 +64,10 @@ function runtimeEvidence(): CouncilRuntimeEvidenceLedger {
     actionTaskCount: 12,
     baoyuPlanCount: 5,
     localSvgCardCount: 1,
+    internetResearchRequired: false,
+    internetResearchGrounded: false,
+    internetSourceCount: 0,
+    internetQueries: [],
     deepRunCertification: {
       status: 'proved',
       label: '2-5 分钟深度长跑已认证',
@@ -274,6 +279,46 @@ function nuwaRegistry(audited = true): CouncilNuwaEvidenceRegistry {
   }
 }
 
+function nuwaPreflight(ready = true): CouncilNuwaLocalPreflightReport {
+  const reports = selection.seats.map((seat) => ({
+    personaId: seat.persona.id,
+    personaName: seat.persona.name,
+    canonicalName: seat.persona.realHumanBasis.displayName,
+    packagePath: `.openbasaka/nuwa-council/${seat.persona.id}`,
+    packageStatus: ready ? 'ready' as const : 'partial' as const,
+    canUseAsLocalSkill: ready,
+    canClaimSourceAudit: false,
+    localPackageScore: ready ? 96 : 70,
+    sourceIndexDepthScore: ready ? 72 : 38,
+    overallPreflightScore: ready ? 87 : 58,
+    validationQuestionsFound: ready ? 5 : 2,
+    mentalModelsFound: ready ? 3 : 1,
+    decisionHeuristicsFound: ready ? 5 : 2,
+    honestBoundaryFound: ready,
+    noAuthorizationBoundaryFound: ready,
+    fileStatuses: [],
+    researchStreams: [],
+    missingProof: ready ? [] : ['local package incomplete'],
+    nextProof: [],
+    warnings: ready ? [] : ['needs package repair'],
+  }))
+  return {
+    generatedAt: '2026-05-05T00:00:00.000Z',
+    rootPath: '.',
+    personaCount: reports.length,
+    localReadyCount: ready ? reports.length : 0,
+    localBlockedCount: ready ? 0 : reports.length,
+    autoSourceClaimReadyCount: 0,
+    templateOnlyResearchFileCount: ready ? 0 : reports.length * 6,
+    averageLocalPackageScore: ready ? 96 : 70,
+    averageSourceIndexDepthScore: ready ? 72 : 38,
+    reports,
+    summary: ready ? 'all local packages ready' : 'packages blocked',
+    hardTruth: ['自动预检不能替代人工来源级复核。'],
+    gapTo95: ready ? [] : ['repair local package'],
+  }
+}
+
 describe('xiaobai council 95 certification gate', () => {
   it('blocks 95 claims when human validation and source audits are missing', () => {
     const gate = buildCouncil95CertificationGate({
@@ -285,6 +330,7 @@ describe('xiaobai council 95 certification gate', () => {
       userValidationLedger: userValidation('collecting'),
       artifactReviewLedger: artifactReview('missing'),
       nuwaEvidenceRegistry: nuwaRegistry(false),
+      nuwaLocalPreflight: nuwaPreflight(),
       sourceAuditLedger: sourceAuditLedger(false),
       generatedAt: '2026-05-05T00:00:00.000Z',
     })
@@ -309,6 +355,7 @@ describe('xiaobai council 95 certification gate', () => {
       userValidationLedger: userValidation(),
       artifactReviewLedger: artifactReview(),
       nuwaEvidenceRegistry: nuwaRegistry(),
+      nuwaLocalPreflight: nuwaPreflight(),
       sourceAuditLedger: sourceAuditLedger(),
       generatedAt: '2026-05-05T00:00:00.000Z',
     })
@@ -331,6 +378,7 @@ describe('xiaobai council 95 certification gate', () => {
       userValidationLedger: userValidation(),
       artifactReviewLedger: artifactReview(),
       nuwaEvidenceRegistry: nuwaRegistry(false),
+      nuwaLocalPreflight: nuwaPreflight(),
       sourceAuditLedger: sourceAuditLedger(false),
       generatedAt: '2026-05-05T00:00:00.000Z',
     })
@@ -353,11 +401,32 @@ describe('xiaobai council 95 certification gate', () => {
       userValidationLedger: userValidation(),
       artifactReviewLedger: artifactReview(),
       nuwaEvidenceRegistry: nuwaRegistry(),
+      nuwaLocalPreflight: nuwaPreflight(),
       sourceAuditLedger: sourceAuditLedger(),
       generatedAt: '2026-05-05T00:00:00.000Z',
     })
 
     expect(gate.claimAllowed).toBe(false)
     expect(gate.checks.find((item) => item.id === 'deep-model-long-run')?.status).not.toBe('pass')
+  })
+
+  it('blocks 95 claims when selected sages do not have independent Nuwa packages', () => {
+    const gate = buildCouncil95CertificationGate({
+      selection,
+      qualityGate: qualityGate(),
+      excellenceAudit: excellenceAudit(),
+      runtimeEvidence: runtimeEvidence(),
+      runtimeCalibrationPlan: calibrationPlan(),
+      userValidationLedger: userValidation(),
+      artifactReviewLedger: artifactReview(),
+      nuwaEvidenceRegistry: nuwaRegistry(),
+      nuwaLocalPreflight: nuwaPreflight(false),
+      sourceAuditLedger: sourceAuditLedger(),
+      generatedAt: '2026-05-05T00:00:00.000Z',
+    })
+
+    expect(gate.claimAllowed).toBe(false)
+    expect(gate.blockers.join('\n')).toContain('Nuwa-skill 独立蒸馏包')
+    expect(gate.checks.find((item) => item.id === 'nuwa-local-skills')?.hardGate).toBe(true)
   })
 })

@@ -45,9 +45,7 @@ function safeParseJSON(text: string): Record<string, unknown> | null {
   try {
     const match = text.match(/\{[\s\S]*\}/)
     if (match) return JSON.parse(match[0])
-  } catch {
-    /* 忽略 */
-  }
+  } catch { /* 忽略 */ }
   return null
 }
 
@@ -55,7 +53,7 @@ function safeParseJSON(text: string): Record<string, unknown> | null {
 export async function runWarRoom(
   config: LLMConfig,
   prd: ParsedPRD,
-  onLog?: (log: WarRoomLog) => void,
+  onLog?: (log: WarRoomLog) => void
 ): Promise<WarRoomResult> {
   // 获取时代变量上下文
   let eraContext = ''
@@ -64,9 +62,7 @@ export async function runWarRoom(
   try {
     const era = await getEraVariables(config)
     eraContext = buildEraContext(era)
-  } catch {
-    /* 静默降级 */
-  }
+  } catch { /* 静默降级 */ }
   try {
     const boss = await loadBossState()
     const parts = [
@@ -80,9 +76,7 @@ export async function runWarRoom(
     const cognitiveContext = renderCognitivePrompt(boss.cognitiveProfile, 'context')
     if (cognitiveContext) parts.push(`认知操作系统: ${cognitiveContext}`)
     if (parts.length > 0) bossContext = `Boss画像：${parts.join(' | ')}`
-  } catch {
-    /* ignore boss context failure */
-  }
+  } catch { /* ignore boss context failure */ }
 
   const projectBrief = `
 ${bossContext}
@@ -190,15 +184,13 @@ ${bossContext}
     }
     logs.push(modelingLog)
     onLog?.(modelingLog)
-  } catch {
-    /* profiling-weighted score is best effort */
-  }
+  } catch { /* profiling-weighted score is best effort */ }
 
   const fallbackSurvival = calculateFallback(radar)
   const survivalRate = clamp(
     typeof summaryData?.survival_rate === 'number'
-      ? (summaryData.survival_rate as number) * 0.6 + fallbackSurvival * 0.4
-      : fallbackSurvival,
+      ? ((summaryData.survival_rate as number) * 0.6 + fallbackSurvival * 0.4)
+      : fallbackSurvival
   )
 
   return {
@@ -218,7 +210,7 @@ function clamp(v: number, min = 0, max = 100): number {
 
 function calculateFallback(r: RadarScores): number {
   return clamp(
-    (r.era_fit + r.boss_match + r.monetization + r.tech_breakthrough - r.resource_cost * 0.5 - r.risk_index * 0.5) / 4,
+    (r.era_fit + r.boss_match + r.monetization + r.tech_breakthrough - r.resource_cost * 0.5 - r.risk_index * 0.5) / 4
   )
 }
 

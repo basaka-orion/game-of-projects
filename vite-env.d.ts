@@ -38,11 +38,46 @@ interface Window {
       missingProvider?: boolean
       error?: string
     }>
+    transcribeWhiteboardVoice: (payload: {
+      fileName?: string
+      mimeType?: string
+      dataUrl: string
+    }) => Promise<{
+      success: boolean
+      kind: 'text' | 'document' | 'pdf' | 'image' | 'audio' | 'video' | 'binary'
+      method: string
+      content: string
+      rawContent?: string
+      warnings: string[]
+      metadata: {
+        fileName: string
+        filePath: string
+        extension: string
+        size: number
+      }
+      transcriptPath?: string
+      missingProvider?: boolean
+      error?: string
+    }>
     writeFile: (path: string, content: string) => Promise<{ success: boolean }>
+    exportWhiteboardMarkdown: (payload: {
+      fileName: string
+      markdown: string
+      images: Array<{ fileName: string; relativePath: string; dataUrl: string }>
+    }) => Promise<{ success: boolean; cancelled?: boolean; filePath?: string; error?: string }>
     getAppData: () => Promise<string>
     openSandbox: (tab?: string) => void
     minimizeToTray: () => void
     getSystemInfo: () => Promise<{ platform: string; arch: string }>
+    safeStorageSet: (key: string, value: string) => Promise<{ success: boolean; error?: string }>
+    safeStorageGet: (key: string) => Promise<string>
+    bibigptRequest: (payload: Record<string, unknown>) => Promise<{
+      success: boolean
+      data?: unknown
+      configured?: boolean
+      status?: number
+      error?: string
+    }>
 	    executeCommand: (
 	      command: string,
 	      timeout?: number,

@@ -12,7 +12,6 @@ import { createPage, updateSource, appendToLog, parseWikiLinks } from './wiki'
 import { extractTriplesFromText } from '../memory/knowledge-graph'
 import { getSetting } from '../db/store'
 import { getDefaultConfig } from '../ai/provider'
-import { dbSaveOperatingEvent } from '../db/repository'
 
 // ─── 接口 ───
 
@@ -53,46 +52,18 @@ const COMPILE_SYSTEM_PROMPT = `你是知识结晶引擎（Karpathy Compiler）�
   "triples": [{"subject": "实体A", "predicate": "关系", "object": "实体B"}]
 }]`
 
-function extractSourceIdsFromDrawers(drawers: Array<{ metadata: Record<string, unknown> }>): string[] {
+function extractSourceIdsFromDrawers(
+  drawers: Array<{ metadata: Record<string, unknown> }>
+): string[] {
   const result: string[] = []
   for (const drawer of drawers) {
-    const sourceId = typeof drawer.metadata?.sourceId === 'string' ? drawer.metadata.sourceId.trim() : ''
+    const sourceId = typeof drawer.metadata?.sourceId === 'string'
+      ? drawer.metadata.sourceId.trim()
+      : ''
     if (!sourceId || result.includes(sourceId)) continue
     result.push(sourceId)
   }
   return result
-}
-
-async function recordWikiCompileAction(params: {
-  id: string
-  title: string
-  status: 'queued' | 'running' | 'blocked' | 'completed' | 'failed'
-  resultPreview: string
-  sourceIds?: string[]
-  drawerIds?: string[]
-  confidence?: number
-}) {
-  try {
-    await dbSaveOperatingEvent({
-      id: params.id,
-      type: 'agent_action',
-      stage: 'compile',
-      agentId: 'wiki-compiler',
-      title: params.title,
-      status: params.status,
-      toolRefs: ['wiki-compiler', 'wiki_pages', 'wiki_chunks'],
-      resultPreview: params.resultPreview,
-      source: {
-        kind: 'wiki',
-        sourceId: params.sourceIds?.[0] || params.drawerIds?.[0] || params.id,
-        title: 'Wiki 编译器',
-      },
-      confidence: params.confidence ?? 0.82,
-      entities: [...(params.sourceIds || []), ...(params.drawerIds || [])].slice(0, 20),
-    })
-  } catch {
-    // Event ledger should never block compile work.
-  }
 }
 
 // ─── 核心编译循环 ───
@@ -101,9 +72,8 @@ async function recordWikiCompileAction(params: {
 export async function runCompileCycle(
   llmConfig: LLMConfig,
   batchSize = 20,
-  onProgress?: (p: CompileProgress) => void,
+  onProgress?: (p: CompileProgress) => void
 ): Promise<CompileJobResult> {
-  const compileEventId = `op_wiki_compile_cycle_${Date.now().toString(36)}`
   const result: CompileJobResult = {
     drawersProcessed: 0,
     pagesCreated: 0,
@@ -114,28 +84,11 @@ export async function runCompileCycle(
 
   // 1. Fetch 未编译抽屉
   onProgress?.({ phase: 'fetching', current: 0, total: 0, message: '获取未编译抽屉...' })
-  await recordWikiCompileAction({
-    id: compileEventId,
-    title: 'Wiki 编译正在运行',
-    status: 'running',
-    resultPreview: `正在扫描未编译 drawer，批次上限 ${batchSize}。`,
-  })
-
   const drawers = await getUncompiledDrawers(batchSize)
   if (drawers.length === 0) {
     onProgress?.({ phase: 'done', current: 0, total: 0, message: '无需编译' })
-    await recordWikiCompileAction({
-      id: compileEventId,
-      title: 'Wiki 编译巡检完成',
-      status: 'completed',
-      resultPreview: '未发现待编译 drawer。',
-      confidence: 0.86,
-    })
     return result
   }
-
-  const allDrawerIds = drawers.map((drawer) => drawer.id)
-  const allSourceIds = extractSourceIdsFromDrawers(drawers)
 
   // 2. 按 folder + wing + hall 分组，避免跨文件夹串库
   onProgress?.({ phase: 'grouping', current: 0, total: drawers.length, message: '分组...' })
@@ -159,12 +112,9 @@ export async function runCompileCycle(
 
     try {
       // 构建生肉 bundle（带 Drawer ID 标记）
-      const rawBundle = groupDrawers
-        .map(
-          (d) =>
-            `--- Drawer: ${d.id} ---\nTitle: ${d.title}\nSource: ${d.sourceType}\nCreated: ${d.createdAt}\n\n${d.rawContent.slice(0, 4000)}`,
-        )
-        .join('\n\n')
+      const rawBundle = groupDrawers.map(d =>
+        `--- Drawer: ${d.id} ---\nTitle: ${d.title}\nSource: ${d.sourceType}\nCreated: ${d.createdAt}\n\n${d.rawContent.slice(0, 4000)}`
+      ).join('\n\n')
 
       // LLM 编译
       const llmResponse = await chatCompletion(
@@ -174,7 +124,7 @@ export async function runCompileCycle(
           { role: 'user', content: rawBundle },
         ],
         0.3,
-        4096,
+        4096
       )
 
       // 解析 JSON
@@ -185,12 +135,8 @@ export async function runCompileCycle(
       }
 
       const pages = JSON.parse(jsonMatch[0]) as Array<{
-        title: string
-        summary: string
-        content: string
-        category: string
-        tags: string[]
-        importance: number
+        title: string; summary: string; content: string
+        category: string; tags: string[]; importance: number
         triples: Array<{ subject: string; predicate: string; object: string }>
       }>
 
@@ -228,7 +174,7 @@ export async function runCompileCycle(
               group: groupKey,
               folderPath: groupFolderPath,
               sourceIds: groupSourceIds,
-              drawerIds: groupDrawers.map((d) => d.id),
+              drawerIds: groupDrawers.map(d => d.id),
             },
           })
 
@@ -237,20 +183,19 @@ export async function runCompileCycle(
           // 解析 [[双链]] 并创建 wiki_page_links
           try {
             await parseWikiLinks(pageId)
-          } catch {
-            /* non-critical */
-          }
+          } catch { /* non-critical */ }
 
           // 提取三元组
           if (page.triples && page.triples.length > 0) {
             for (const t of page.triples) {
               if (t.subject && t.predicate && t.object) {
                 try {
-                  await extractTriplesFromText(`${t.subject} ${t.predicate} ${t.object}`, `wiki:${pageId}`)
+                  await extractTriplesFromText(
+                    `${t.subject} ${t.predicate} ${t.object}`,
+                    `wiki:${pageId}`
+                  )
                   result.triplesExtracted++
-                } catch {
-                  /* non-critical */
-                }
+                } catch { /* non-critical */ }
               }
             }
           }
@@ -265,9 +210,7 @@ export async function runCompileCycle(
           for (const sourceId of groupSourceIds) {
             try {
               await updateSource(sourceId, { status: 'processed', folderPath: groupFolderPath })
-            } catch {
-              /* source 可能不存在 */
-            }
+            } catch { /* source 可能不存在 */ }
           }
 
           // 高重要性写入记忆宫殿
@@ -282,7 +225,7 @@ export async function runCompileCycle(
                 await dbRun(
                   `INSERT OR IGNORE INTO memory_rooms (id, name, description, icon, room_type, sort_order)
                    VALUES (?, 'Knowledge Vault', 'Wiki 自动保存的重要条目', '📚', 'knowledge_vault', 110)`,
-                  [roomId],
+                  [roomId]
                 )
                 room = { id: roomId }
               }
@@ -293,29 +236,19 @@ export async function runCompileCycle(
                 importance: Math.min(page.importance || 50, 100),
                 source: 'wiki-compiler',
               })
-            } catch {
-              /* non-critical */
-            }
+            } catch { /* non-critical */ }
           }
 
           // 记录日志
           await appendToLog('ingest', 'page', pageId, `compiler → ${page.title}`, {
             folderPath: groupFolderPath,
             sourceIds: groupSourceIds,
-            drawerIds: groupDrawers.map((d) => d.id),
+            drawerIds: groupDrawers.map(d => d.id),
             category: page.category,
           })
 
           // 异步：为编译后的 Wiki 页面分块和向量化
-          vectorizeCompiledPage(
-            pageId,
-            page.content,
-            groupFolderPath,
-            groupSourceIds,
-            groupDrawers.map((d) => d.id),
-          ).catch(() => {
-            /* non-critical */
-          })
+          vectorizeCompiledPage(pageId, page.content, groupFolderPath).catch(() => { /* non-critical */ })
         } catch (err) {
           result.errors.push(`页面 ${page.title}: ${String(err)}`)
         }
@@ -331,28 +264,10 @@ export async function runCompileCycle(
     total: drawers.length,
     message: `完成: ${result.pagesCreated} 页, ${result.drawersProcessed} 抽屉已编译`,
   })
-  await recordWikiCompileAction({
-    id: compileEventId,
-    title:
-      result.errors.length > 0 && result.pagesCreated === 0
-        ? 'Wiki 编译失败'
-        : result.errors.length > 0
-          ? 'Wiki 编译部分完成'
-          : 'Wiki 编译完成',
-    status: result.errors.length > 0 && result.pagesCreated === 0 ? 'failed' : 'completed',
-    resultPreview: `处理 ${result.drawersProcessed}/${drawers.length} 个 drawer，创建 ${result.pagesCreated} 页，更新 ${result.pagesUpdated} 页，抽取 ${result.triplesExtracted} 个三元组${
-      result.errors.length > 0 ? `；错误 ${result.errors.length} 条` : ''
-    }。`,
-    sourceIds: allSourceIds,
-    drawerIds: allDrawerIds,
-    confidence: result.errors.length > 0 ? 0.68 : 0.88,
-  })
 
   // Karpathy 工作流：编译后自动重建 INDEX.md
   if (result.pagesCreated > 0) {
-    rebuildIndex().catch(() => {
-      /* non-critical */
-    })
+    rebuildIndex().catch(() => { /* non-critical */ })
   }
 
   return result
@@ -368,9 +283,9 @@ export async function rebuildIndex(): Promise<void> {
   const { query: dbQuery, run: dbRun } = await import('../db/repository')
   const { generateId } = await import('../db/schema')
 
-  const pages = (await dbQuery(
-    'SELECT id, title, slug, category, summary, importance FROM wiki_pages WHERE is_index = 0 ORDER BY category, importance DESC',
-  )) as Array<{ id: string; title: string; slug: string; category: string; summary: string; importance: number }>
+  const pages = await dbQuery(
+    'SELECT id, title, slug, category, summary, importance FROM wiki_pages WHERE is_index = 0 ORDER BY category, importance DESC'
+  ) as Array<{ id: string; title: string; slug: string; category: string; summary: string; importance: number }>
 
   if (pages.length === 0) return
 
@@ -404,18 +319,18 @@ export async function rebuildIndex(): Promise<void> {
   const indexContent = lines.join('\n')
 
   // 更新或创建 INDEX 页面
-  const existing = (await dbQuery('SELECT id FROM wiki_pages WHERE is_index = 1 LIMIT 1')) as Array<{ id: string }>
+  const existing = await dbQuery('SELECT id FROM wiki_pages WHERE is_index = 1 LIMIT 1') as Array<{ id: string }>
   if (existing.length > 0) {
     await dbRun(
       `UPDATE wiki_pages SET content = ?, summary = ?, updated_at = datetime('now','localtime') WHERE id = ?`,
-      [indexContent, `${pages.length} 页面 · ${groups.size} 分类`, existing[0].id],
+      [indexContent, `${pages.length} 页面 · ${groups.size} 分类`, existing[0].id]
     )
   } else {
     const indexId = generateId()
     await dbRun(
       `INSERT INTO wiki_pages (id, title, slug, content, summary, category, tags, is_index, importance, confidence, created_at, updated_at)
        VALUES (?, 'INDEX', 'index', ?, ?, 'index', '["index","目录"]', 1, 100, 1.0, datetime('now','localtime'), datetime('now','localtime'))`,
-      [indexId, indexContent, `${pages.length} 页面 · ${groups.size} 分类`],
+      [indexId, indexContent, `${pages.length} 页面 · ${groups.size} 分类`]
     )
   }
 }
@@ -423,14 +338,8 @@ export async function rebuildIndex(): Promise<void> {
 /** 分类图标映射 */
 function getCategoryIcon(category: string): string {
   const icons: Record<string, string> = {
-    tech: '💻',
-    academic: '🎓',
-    concept: '💡',
-    decision: '⚖️',
-    learning: '📖',
-    insight: '🔮',
-    general: '📄',
-    output: '📝',
+    tech: '💻', academic: '🎓', concept: '💡', decision: '⚖️',
+    learning: '📖', insight: '🔮', general: '📄', output: '📝',
     index: '📚',
   }
   return icons[category] || '📄'
@@ -455,13 +364,7 @@ export function getCompileLLMConfig(): LLMConfig {
  *
  * 在编译完成后异步调用，不影响编译流程
  */
-async function vectorizeCompiledPage(
-  pageId: string,
-  content: string,
-  folderPath: string,
-  sourceIds: string[] = [],
-  drawerIds: string[] = [],
-): Promise<void> {
+async function vectorizeCompiledPage(pageId: string, content: string, folderPath: string): Promise<void> {
   if (!content || content.trim().length < 50) return
 
   try {
@@ -472,60 +375,31 @@ async function vectorizeCompiledPage(
 
     // 删除该页面旧的块和向量
     try {
-      const oldChunks = (await dbQuery('SELECT id FROM wiki_chunks WHERE page_id = ?', [pageId])) as Array<{
-        id: string
-      }>
+      const oldChunks = await dbQuery('SELECT id FROM wiki_chunks WHERE page_id = ?', [pageId]) as Array<{ id: string }>
       for (const old of oldChunks) {
         await dbRun('DELETE FROM wiki_vectors WHERE chunk_id = ?', [old.id])
       }
       await dbRun('DELETE FROM wiki_chunks WHERE page_id = ?', [pageId])
-    } catch {
-      /* ignore */
-    }
+    } catch { /* ignore */ }
 
     // 分块
     const chunks = chunkText(content)
-    const primarySourceId = sourceIds[0] || null
-    const primaryDrawerId = drawerIds[0] || null
     for (const chunk of chunks) {
       const chunkId = generateId()
       await dbRun(
-        `INSERT OR IGNORE INTO wiki_chunks (id, source_id, page_id, drawer_id, folder_path, chunk_index, content, token_count, header_breadcrumb, overlap_prev, overlap_next, metadata_json, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))`,
-        [
-          chunkId,
-          primarySourceId,
-          pageId,
-          primaryDrawerId,
-          folderPath,
-          chunk.index,
-          chunk.content,
-          chunk.tokenCount,
-          chunk.headerBreadcrumb,
-          chunk.overlapPrev,
-          chunk.overlapNext,
-          JSON.stringify({ sourceIds, drawerIds }),
-        ],
+        `INSERT OR IGNORE INTO wiki_chunks (id, page_id, folder_path, chunk_index, content, token_count, header_breadcrumb, overlap_prev, overlap_next, metadata_json, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', datetime('now','localtime'))`,
+        [chunkId, pageId, folderPath, chunk.index, chunk.content, chunk.tokenCount, chunk.headerBreadcrumb, chunk.overlapPrev, chunk.overlapNext]
       )
 
       // 生成向量
       try {
         const embedding = await generateEmbedding(chunk.content)
         const norm = Math.sqrt(Array.from(embedding).reduce((sum: number, v: number) => sum + v * v, 0))
-        await storeVector('wiki_vectors', {
-          chunkId,
-          embedding,
-          model: 'embedding-3',
-          dimension: embedding.length,
-          norm,
-        })
-      } catch {
-        /* 向量生成失败不影响分块 */
-      }
+        await storeVector('wiki_vectors', { chunkId, embedding, model: 'embedding-3', dimension: embedding.length, norm })
+      } catch { /* 向量生成失败不影响分块 */ }
     }
-  } catch {
-    /* non-critical */
-  }
+  } catch { /* non-critical */ }
 }
 
 /**
@@ -534,19 +408,17 @@ async function vectorizeCompiledPage(
  * 比较抽屉更新时间与关联 Wiki 页面更新时间，
  * 如果抽屉更新了但页面没更新，标记为需要重编译
  */
-export async function detectStalePages(): Promise<
-  Array<{
-    pageId: string
-    pageTitle: string
-    drawerCount: number
-    lastDrawerUpdate: string
-    lastPageUpdate: string
-  }>
-> {
+export async function detectStalePages(): Promise<Array<{
+  pageId: string
+  pageTitle: string
+  drawerCount: number
+  lastDrawerUpdate: string
+  lastPageUpdate: string
+}>> {
   const { query: dbQuery } = await import('../db/repository')
 
   try {
-    return (await dbQuery(
+    return await dbQuery(
       `SELECT p.id as pageId, p.title as pageTitle,
               COUNT(d.id) as drawerCount,
               MAX(d.updated_at) as lastDrawerUpdate,
@@ -555,8 +427,8 @@ export async function detectStalePages(): Promise<
        JOIN mempalace_drawers d ON d.compiled_page_id = p.id
        WHERE d.updated_at > p.updated_at
        GROUP BY p.id
-       LIMIT 50`,
-    )) as Array<{
+       LIMIT 50`
+    ) as Array<{
       pageId: string
       pageTitle: string
       drawerCount: number

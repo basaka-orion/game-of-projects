@@ -255,7 +255,7 @@ export default function NeuronsTab({ neurons, loading, selectedId, setSelectedId
         {selected ? (
           <div className="sandbox-map__stage-view">
             <SystemStageShell
-              eyebrow="project neuron"
+              eyebrow="项目神经元"
               title={`${selected.project.title} 不是一张项目卡，而是一颗正在影响全局判断的神经元`}
               description={selected.project.oneLiner || selected.project.summary || '这颗神经元已经进入系统，但还需要更清晰的一句话定位。'}
               metrics={[
@@ -275,7 +275,7 @@ export default function NeuronsTab({ neurons, loading, selectedId, setSelectedId
               leftRail={
                 <>
                   <SystemStagePanel
-                    eyebrow="identity"
+                    eyebrow="项目身份"
                     title="项目画像"
                     description="先知道这颗神经元属于哪个行业、哪种创新类型，再去看更细的分析。"
                   >
@@ -301,7 +301,7 @@ export default function NeuronsTab({ neurons, loading, selectedId, setSelectedId
               }
               centerRail={
                 <SystemStagePanel
-                  eyebrow="focal verdict"
+                  eyebrow="主判断"
                   title={selected.project.summary || selected.project.oneLiner || '这颗神经元等待更清晰的主判断'}
                   description="右侧所有雷达、SWOT 和 Agent 评估都应该服务于这一句：这颗项目神经元究竟为什么值得你继续盯住。"
                   focal
@@ -346,7 +346,7 @@ export default function NeuronsTab({ neurons, loading, selectedId, setSelectedId
               rightRail={
                 <>
                   <SystemStagePanel
-                    eyebrow="linked rooms"
+                    eyebrow="联动房间"
                     title="神经元联动"
                     description="一颗项目神经元会继续影响推演、突触与 Boss 判断。"
                   >
@@ -354,7 +354,7 @@ export default function NeuronsTab({ neurons, loading, selectedId, setSelectedId
                       title="推演室"
                       value="多角色推演"
                       description="去看这颗神经元在红蓝军对抗里会被如何质询。"
-                      actionLabel="open"
+                      actionLabel="打开"
                       tone="accent"
                       onClick={() => navigateSandboxTab('warroom')}
                     />
@@ -362,20 +362,20 @@ export default function NeuronsTab({ neurons, loading, selectedId, setSelectedId
                       title="突触"
                       value="跨项目连接"
                       description="检查它和其他项目之间已经形成了哪些高价值连接。"
-                      actionLabel="open"
+                      actionLabel="打开"
                       onClick={() => navigateSandboxTab('synapses')}
                     />
                     <SystemStageFlowItem
                       title="Boss"
                       value="主脑偏好"
                       description="回到 Boss，观察这颗神经元为何会被偏爱或被否决。"
-                      actionLabel="open"
+                      actionLabel="打开"
                       onClick={() => navigateSandboxTab('boss')}
                     />
                   </SystemStagePanel>
 
                   <SystemStagePanel
-                    eyebrow="current pressure"
+                    eyebrow="压力点"
                     title="当前压力点"
                     description="真正应该先看的不是所有信息，而是最可能让项目变强或出问题的地方。"
                   >
@@ -449,22 +449,16 @@ export default function NeuronsTab({ neurons, loading, selectedId, setSelectedId
             )}
 
             {/* 编辑/查看切换 */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginBottom: '4px' }}>
-              {isEditing ? (
-                <>
-                  <button className="sandbox-map__action-btn" onClick={cancelEdit} disabled={isSaving}>
-                    取消
-                  </button>
-                  <button className="sandbox-map__action-btn sandbox-map__action-btn--primary" onClick={handleSave} disabled={isSaving}>
-                    {isSaving ? '保存中...' : '💾 保存'}
-                  </button>
-                </>
-              ) : (
-                <button className="sandbox-map__action-btn" onClick={startEdit}>
-                  ✏️ 编辑
+            {isEditing ? (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginBottom: '4px' }}>
+                <button className="sandbox-map__action-btn" onClick={cancelEdit} disabled={isSaving}>
+                  取消
                 </button>
-              )}
-            </div>
+                <button className="sandbox-map__action-btn sandbox-map__action-btn--primary" onClick={handleSave} disabled={isSaving}>
+                  {isSaving ? '保存中...' : '💾 保存'}
+                </button>
+              </div>
+            ) : null}
 
             {/* 可编辑字段 */}
             {isEditing ? (

@@ -42,7 +42,9 @@
   justify-content: center;
   gap: var(--hd-space-sm);
   padding: var(--hd-space-md);
-  background: radial-gradient(circle at top, rgba(0, 212, 170, 0.18), transparent 62%), var(--hd-bg-surface);
+  background:
+    radial-gradient(circle at top, rgba(0, 212, 170, 0.18), transparent 62%),
+    var(--hd-bg-surface);
   border: 1px solid var(--hd-border);
   border-radius: var(--hd-radius-md);
 }

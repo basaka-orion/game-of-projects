@@ -4,7 +4,6 @@
  */
 import { describe, it, expect } from 'vitest'
 import { buildToolPrompt } from '../tool-loop'
-import { parseToolCall } from '../../tools'
 
 describe('Tool Loop', () => {
   describe('buildToolPrompt', () => {
@@ -60,16 +59,5 @@ describe('Tool Call Regex', () => {
     expect(matches).toHaveLength(1)
     expect(matches[0][1]).toBe('web-search')
     expect(matches[0][2]).toBe('量子计算最新进展')
-  })
-
-  it('应解析模型常见的 XML 冒号工具调用格式', () => {
-    const parsed = parseToolCall('<tool_call: web_search>\n{"query":"AI news","max_results":10}\n</tool_call_use>')
-    expect(parsed).toEqual({
-      tool: 'web_search',
-      params: {
-        query: 'AI news',
-        max_results: 10,
-      },
-    })
   })
 })

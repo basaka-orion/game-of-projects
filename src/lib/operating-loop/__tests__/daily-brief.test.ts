@@ -71,4 +71,21 @@ describe('daily brief deck', () => {
     expect(deck.sections[2].items[0]).toMatchObject({ title: '证据覆盖不足', value: '50%', target: 'knowledge' })
     expect(deck.sections[3].items[0]).toMatchObject({ title: '执行复盘', value: 1, target: 'control' })
   })
+
+  it('uses the local calendar day for the command brief date', () => {
+    const deck = buildDailyBriefDeck({
+      now: new Date(2026, 4, 12, 0, 30),
+      projectCount: 0,
+      classifiedProjectCount: 0,
+      synapseCount: 0,
+      highSignalSynapseCount: 0,
+      bossMemoryCount: 0,
+      decisionCount: 0,
+      pendingArchiveCount: 0,
+      operatingEvents: [],
+      executionSummary: summary(),
+    })
+
+    expect(deck.dateLabel).toBe('2026-05-12')
+  })
 })

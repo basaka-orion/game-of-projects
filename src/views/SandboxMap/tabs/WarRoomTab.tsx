@@ -267,7 +267,7 @@ export default function WarRoomTab() {
   return (
     <div className="warroom-tab">
       <SystemStageShell
-        eyebrow="war room"
+        eyebrow="推演室"
         title="推演室应该先给出此刻战局的主判断，再带你拆支柱、项目与突触"
         description={
           alignmentLoading
@@ -302,7 +302,7 @@ export default function WarRoomTab() {
         leftRail={
           <>
             <SystemStagePanel
-              eyebrow="battle state"
+              eyebrow="战局状态"
               title="当前战局"
               description="先知道现在是开始成形、正在拉直，还是已经明显偏离。"
             >
@@ -326,7 +326,7 @@ export default function WarRoomTab() {
             </SystemStagePanel>
 
             <SystemStagePanel
-              eyebrow="cross project tension"
+              eyebrow="跨项目张力"
               title="关键突触"
               description="真正值得优先看的，是项目之间最强的连接张力。"
             >
@@ -354,7 +354,7 @@ export default function WarRoomTab() {
         }
         centerRail={
           <SystemStagePanel
-            eyebrow="focal verdict"
+            eyebrow="主判断"
             title={alignmentLoading ? '对齐分析生成中...' : `愿景对齐度 ${alignmentReport?.overallScore ?? 0}`}
             description="推演室的中心不该是按钮和列表，而是这一轮最关键的总判断，以及它为什么成立。"
             focal
@@ -409,7 +409,7 @@ export default function WarRoomTab() {
         rightRail={
           <>
             <SystemStagePanel
-              eyebrow="linked rooms"
+              eyebrow="联动房间"
               title="推演室联动"
               description="去看战局上下游，而不是把它当成孤立评分器。"
             >
@@ -417,7 +417,7 @@ export default function WarRoomTab() {
                 title="神经元"
                 value="项目母样本"
                 description="回到项目列表，看看哪些样本正在拖累或推动战局。"
-                actionLabel="open"
+                actionLabel="打开"
                 tone="accent"
                 onClick={() => navigateSandboxTab('neurons')}
               />
@@ -425,20 +425,20 @@ export default function WarRoomTab() {
                 title="Boss"
                 value="愿景主线"
                 description="查看这轮战局判断和 Boss 主脑是否仍在同一条叙事线上。"
-                actionLabel="open"
+                actionLabel="打开"
                 onClick={() => navigateSandboxTab('boss')}
               />
               <SystemStageFlowItem
                 title="突触"
                 value="组合连接"
                 description="进入突触页，追踪项目之间的高价值连接。"
-                actionLabel="open"
+                actionLabel="打开"
                 onClick={() => navigateSandboxTab('synapses')}
               />
             </SystemStagePanel>
 
             <SystemStagePanel
-              eyebrow="project pressure"
+              eyebrow="项目压力"
               title="高压项目"
               description="先看最值得盯住的项目，而不是平均看一圈。"
             >
@@ -532,7 +532,7 @@ export default function WarRoomTab() {
         <CollapsibleSection title="推演行动计划" defaultOpen={true}>
           <div className="warroom-tab__action-head">
             <div>
-              <div className="warroom-tab__field-label">selected project</div>
+              <div className="warroom-tab__field-label">选中项目</div>
               <div className="warroom-tab__action-title">{actionPlan.projectTitle}</div>
               <div className="warroom-tab__action-summary">{actionPlan.summary}</div>
             </div>

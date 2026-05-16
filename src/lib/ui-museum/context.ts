@@ -1,6 +1,6 @@
 import { UI_STYLE_ITEMS } from './catalog'
 import { createFusionVisual, latestStyleEvolutionEvents, loadUiMuseumState } from './state'
-import type { UiFusionResult, UiStyleItem, UiVisualTokens } from './types'
+import type { UiFusionResult, UiStyleItem, UiStyleMasterProfile, UiVisualTokens } from './types'
 
 export interface UiMuseumPrdContext {
   styleIds: string[]
@@ -17,6 +17,14 @@ export interface UiMuseumPrdContext {
   componentStates: string[]
   acceptanceChecklist: string[]
   evolutionNotes: string[]
+  styleProfiles: Array<{
+    styleId: string
+    styleName: string
+    referenceBrief: string
+    identityRules: string[]
+    antiPatterns: string[]
+    restorationScores: UiStyleMasterProfile['restorationScores']
+  }>
   savedFusionName?: string
   savedFusionPrompt?: string
   promptFragment: string
@@ -25,22 +33,22 @@ export interface UiMuseumPrdContext {
 const intentRules: Array<{ keywords: string[]; styleIds: string[]; reason: string }> = [
   {
     keywords: ['ai', 'agent', '智能体', '副驾驶', '自动化', 'workflow', '工作流', '编程', '代码', 'copilot'],
-    styleIds: ['agentic-os', 'copilot-ai', 'ai-abstract', 'spatial'],
+    styleIds: ['canvas-ai', 'agentic-os', 'copilot-ai', 'xai-transparency'],
     reason: '项目带有 AI/智能体/自动化气质，需要把任务流、状态感和执行反馈可视化。',
   },
   {
     keywords: ['知识', 'wiki', '笔记', '阅读', '学习', '研究', '资料', '文档', '大佬', '方法论'],
-    styleIds: ['anthropic-serif', 'data-ink', 'wabi-sabi', 'minimal'],
+    styleIds: ['anthropic-serif', 'xai-transparency', 'local-first-ledger', 'data-ink'],
     reason: '项目偏知识与深度阅读，需要安静但有辨识度的信息架构。',
   },
   {
     keywords: ['小白', '新手', '陪伴', '情绪', '心理', '疗愈', '日记', '宠物', '儿童'],
-    styleIds: ['emotion-adaptive', 'ethereal', 'digicute', 'natural'],
+    styleIds: ['emotion-adaptive', 'micro-sonic', 'adaptive-a11y', 'ethereal'],
     reason: '项目偏陪伴与低门槛使用，需要温和、低压、状态可感知的界面。',
   },
   {
     keywords: ['金融', '数据', '指标', '仪表盘', '交易', '安全', '风控', '保险', '银行'],
-    styleIds: ['data-ink', 'skeuo-stone', 'minimal', 'blueprint-cad'],
+    styleIds: ['xai-transparency', 'local-first-ledger', 'data-ink', 'intent-friction'],
     reason: '项目偏数据和可信决策，需要高可读性、克制密度和强状态对比。',
   },
   {
@@ -50,7 +58,7 @@ const intentRules: Array<{ keywords: string[]; styleIds: string[]; reason: strin
   },
   {
     keywords: ['工业', '硬件', '设备', 'cad', '建筑', '制造', '参数', '工程'],
-    styleIds: ['blueprint-cad', 'microind', 'blueprint', 'data-ink'],
+    styleIds: ['spaceship-manual', 'blueprint-cad', 'microind', 'data-ink'],
     reason: '项目偏工程控制，需要参数化、测量感和精密仪器式层级。',
   },
   {
@@ -60,7 +68,7 @@ const intentRules: Array<{ keywords: string[]; styleIds: string[]; reason: strin
   },
   {
     keywords: ['创意', '艺术', '设计', '展览', '作品集', '品牌', '杂志', '视觉'],
-    styleIds: ['holographic', 'risograph', 'kinetic', 'personal'],
+    styleIds: ['canvas-ai', 'human-touch-ai', 'soft-maximalism', 'holographic'],
     reason: '项目偏创意表达，需要把品牌个性和视觉资产生产能力前置。',
   },
   {
@@ -70,8 +78,28 @@ const intentRules: Array<{ keywords: string[]; styleIds: string[]; reason: strin
   },
   {
     keywords: ['android', 'google', '移动', '手机'],
-    styleIds: ['material', 'bento', 'freshretro', 'zero-ui'],
+    styleIds: ['m3-expressive', 'material', 'adaptive-a11y', 'bento'],
     reason: '项目偏移动端，需要动态色、清晰触控状态和轻量级组件系统。',
+  },
+  {
+    keywords: ['透明', '解释', '证据', '可信', '审计', '置信', '出处', '来源', 'review', 'evidence'],
+    styleIds: ['xai-transparency', 'local-first-ledger', 'data-ink', 'intent-friction'],
+    reason: '项目需要可信输出时，界面必须显露证据链、置信度、复核状态和风险阻尼。',
+  },
+  {
+    keywords: ['语音', '手势', '摄像头', '相机', '穿戴', '车载', '传感器', '多模态', 'gesture', 'voice'],
+    styleIds: ['multimodal-gesture', 'micro-sonic', 'zero-ui', 'spatial'],
+    reason: '项目偏多模态输入，需要把不可见输入转成可见状态、降级控制和平台反馈。',
+  },
+  {
+    keywords: ['无障碍', '可访问', '老年', '高对比', '低动效', '认知负荷', 'accessibility', 'a11y'],
+    styleIds: ['adaptive-a11y', 'm3-expressive', 'data-ink', 'barely-there'],
+    reason: '项目需要适配不同能力用户，视觉系统必须把对比、密度、动效和键盘焦点作为核心规格。',
+  },
+  {
+    keywords: ['本地', '隐私', '离线', '同步', '冲突', '账本', '外脑', 'local-first', 'privacy'],
+    styleIds: ['local-first-ledger', 'xai-transparency', 'barely-there', 'data-ink'],
+    reason: '项目偏本地外脑或隐私协作，需要把存储边界、同步状态和审计日志显性化。',
   },
 ]
 
@@ -141,14 +169,22 @@ function buildPromptFragment(params: {
   componentStates: string[]
   acceptanceChecklist: string[]
   evolutionNotes: string[]
+  styleProfiles: UiMuseumPrdContext['styleProfiles']
   savedFusion?: UiFusionResult | null
 }): string {
   const names = params.styles.map(styleName)
+  const profileLines = params.styleProfiles.flatMap((profile) => [
+    `- ${profile.styleName} 来源基准：${profile.referenceBrief}`,
+    `- ${profile.styleName} 身份规则：${profile.identityRules.join('；')}`,
+    `- ${profile.styleName} 禁忌项：${profile.antiPatterns.join('；')}`,
+    `- ${profile.styleName} 复原评分：Identity ${profile.restorationScores.identity} / Craft ${profile.restorationScores.craft} / Interaction ${profile.restorationScores.interaction} / Platform ${profile.restorationScores.platformFit} / OpenBasaka ${profile.restorationScores.openbasakaUsefulness}`,
+  ])
   return [
     '## UI风格馆自动视觉输入',
     `- 自动选中风格：${names.join(' / ')}。`,
     params.savedFusion ? `- 优先复用已保存融合：${params.savedFusion.name}。` : '',
     `- 选择理由：${params.reasoning}`,
+    ...profileLines,
     `- 色彩与材质：${params.visual.palette.join('、')}；背景 ${params.visual.background}；界面层 ${params.visual.surface}；强调色 ${params.visual.accent}。`,
     `- 组件规则：半径 ${params.visual.radius}；阴影 ${params.visual.shadow}；字体 ${params.visual.typography}；密度 ${params.visual.density}；动效 ${params.visual.motion}。`,
     `- Web 落地：${params.platformNotes.web}`,
@@ -168,21 +204,23 @@ function buildPromptFragment(params: {
 
 function buildPlatformNotes(styles: UiStyleItem[]): UiMuseumPrdContext['platformNotes'] {
   return {
-    web: styles.map((style) => `${styleName(style)}：${style.web}`).join('\n'),
-    ios: styles.map((style) => `${styleName(style)}：${style.ios}`).join('\n'),
-    mac: styles.map((style) => `${styleName(style)}：${style.mac || 'macOS 版必须使用 Toolbar、Sidebar/Split View、Inspector、键盘焦点和窗口状态承接桌面效率。'}`).join('\n'),
-    android: styles.map((style) => `${styleName(style)}：${style.android}`).join('\n'),
-    mini: styles.map((style) => `${styleName(style)}：${style.mini}`).join('\n'),
+    web: styles.map((style) => `${styleName(style)}：${style.masterProfile.platformRules.web}`).join('\n'),
+    ios: styles.map((style) => `${styleName(style)}：${style.masterProfile.platformRules.ios}`).join('\n'),
+    mac: styles.map((style) => `${styleName(style)}：${style.masterProfile.platformRules.mac}`).join('\n'),
+    android: styles.map((style) => `${styleName(style)}：${style.masterProfile.platformRules.android}`).join('\n'),
+    mini: styles.map((style) => `${styleName(style)}：${style.masterProfile.platformRules.mini}`).join('\n'),
   }
 }
 
 function buildComponentStates(styles: UiStyleItem[], visual: UiVisualTokens): string[] {
   const names = styles.map(styleName).join(' / ')
+  const profileGrammar = styles.flatMap((style) => style.masterProfile.componentGrammar.slice(0, 2))
   return [
     `导航/信息架构必须显露 ${names} 的第一视觉信号`,
     `主按钮、次按钮、hover、pressed、focus、disabled 使用 ${visual.accent} 和 ${visual.border} 成套定义`,
     `输入框、选择器、滑杆、开关必须有 ${visual.motion} 的反馈节奏`,
     `卡片、空态、加载态、成功态、失败态必须沿用 ${visual.texture} 材质和 ${visual.density} 信息密度`,
+    ...profileGrammar,
   ]
 }
 
@@ -192,7 +230,19 @@ function buildAcceptanceChecklist(styles: UiStyleItem[], visual: UiVisualTokens)
     `调色板只从 ${visual.palette.join(' / ')} 派生，额外颜色必须有状态语义`,
     `组件半径 ${visual.radius}、阴影 ${visual.shadow}、字体 ${visual.typography} 在 Web/iOS/Android/小程序规格中一致`,
     '交付物必须写明真实互动状态、响应式断点和动效降级方案',
+    ...styles.flatMap((style) => style.masterProfile.acceptanceChecklist.slice(0, 3)),
   ]
+}
+
+function buildStyleProfiles(styles: UiStyleItem[]): UiMuseumPrdContext['styleProfiles'] {
+  return styles.map((style) => ({
+    styleId: style.id,
+    styleName: styleName(style),
+    referenceBrief: style.masterProfile.referenceBrief,
+    identityRules: style.masterProfile.identityRules,
+    antiPatterns: style.masterProfile.antiPatterns,
+    restorationScores: style.masterProfile.restorationScores,
+  }))
 }
 
 export function buildUiMuseumPrdContext(input: string, preferredStyleIds: string[] = []): UiMuseumPrdContext {
@@ -213,10 +263,11 @@ export function buildUiMuseumPrdContext(input: string, preferredStyleIds: string
   const platformNotes = buildPlatformNotes(styles)
   const componentStates = buildComponentStates(styles, visual)
   const acceptanceChecklist = buildAcceptanceChecklist(styles, visual)
+  const styleProfiles = buildStyleProfiles(styles)
   const state = loadUiMuseumState()
   const evolutionNotes = latestStyleEvolutionEvents(state, styles.map((style) => style.id), savedFusion?.id)
     .map((event) => `${event.targetName} G${event.generation}: ${event.critique} ${event.promptPatch}`)
-  const promptFragment = buildPromptFragment({ styles, reasoning, visual, platformNotes, componentStates, acceptanceChecklist, evolutionNotes, savedFusion })
+  const promptFragment = buildPromptFragment({ styles, reasoning, visual, platformNotes, componentStates, acceptanceChecklist, evolutionNotes, styleProfiles, savedFusion })
 
   return {
     styleIds: styles.map((style) => style.id),
@@ -227,6 +278,7 @@ export function buildUiMuseumPrdContext(input: string, preferredStyleIds: string
     componentStates,
     acceptanceChecklist,
     evolutionNotes,
+    styleProfiles,
     savedFusionName: savedFusion?.name,
     savedFusionPrompt: savedFusion?.prompt,
     promptFragment,

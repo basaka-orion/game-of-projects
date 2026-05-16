@@ -391,26 +391,6 @@ export default function ProfilingStudioTab() {
                 )}
               </SystemStagePanel>
 
-              <SystemStagePanel
-                eyebrow="growth signature"
-                title="成长轨迹"
-                description="不再把数值堆成表，而是直接展示你在关键维度上的推移方向。"
-              >
-                {orderedRuns.length < 2 ? (
-                  <EmptyState icon="📈" title="成长轨迹尚未形成" description="至少完成两次画像后，系统才知道你是在发散、收束还是转向。" />
-                ) : (
-                  <div className="sandbox-map__profiling-metrics-grid">
-                    {metricConfigs.map(metric => (
-                      <SignalTrajectory
-                        key={metric.key}
-                        title={metric.label}
-                        color={metric.color}
-                        values={orderedRuns.map(run => metric.value(run))}
-                      />
-                    ))}
-                  </div>
-                )}
-              </SystemStagePanel>
             </>
           }
           rightRail={
@@ -497,65 +477,89 @@ export default function ProfilingStudioTab() {
             </>
           }
           footer={
-            <div className="sandbox-map__stage-footer-grid">
+            <div className="sandbox-map__profiling-footer-stack">
               <SystemStagePanel
-                eyebrow="full timeline"
-                title="画像时间线"
-                description="把画像看成一条不断修正自己的线，而不是一份一次性的测试结果。"
+                eyebrow="growth signature"
+                title="成长轨迹"
+                description="不再把数值堆成表，而是直接展示你在关键维度上的推移方向。"
+                className="sandbox-map__profiling-growth-panel"
               >
-                {timeline.length === 0 ? (
-                  <EmptyState icon="⏳" title="暂无时间线" description="测评 run 会按时间记录在这里，方便你看画像是如何变化的。" />
+                {orderedRuns.length < 2 ? (
+                  <EmptyState icon="📈" title="成长轨迹尚未形成" description="至少完成两次画像后，系统才知道你是在发散、收束还是转向。" />
                 ) : (
-                  <div className="sandbox-map__profiling-timeline">
-                    {timeline.map(item => (
-                      <div key={item.id} className="sandbox-map__profiling-timeline-item">
-                        <div className="sandbox-map__profiling-timeline-dot" />
-                        <div className="sandbox-map__profiling-timeline-body">
-                          <div className="sandbox-map__profiling-timeline-head">
-                            <span className="sandbox-map__profiling-timeline-mode">{modeLabel(item.mode)}</span>
-                            <span className="sandbox-map__profiling-timeline-time">{formatTime(item.createdAt)}</span>
-                          </div>
-                          <div className="sandbox-map__profiling-timeline-meta">
-                            run: {item.id.slice(0, 8)} · 可信度 {Math.round(item.confidence * 100)}%
-                          </div>
-                        </div>
-                      </div>
+                  <div className="sandbox-map__profiling-metrics-grid">
+                    {metricConfigs.map(metric => (
+                      <SignalTrajectory
+                        key={metric.key}
+                        title={metric.label}
+                        color={metric.color}
+                        values={orderedRuns.map(run => metric.value(run))}
+                      />
                     ))}
                   </div>
                 )}
               </SystemStagePanel>
 
-              <SystemStagePanel
-                eyebrow="snapshot archive"
-                title="写回快照档案"
-                description="这里保存的是“系统被你哪一轮画像推偏了什么”。"
-              >
-                {snapshotTimeline.length === 0 ? (
-                  <EmptyState icon="🗂️" title="暂无快照档案" description="当画像真正写回主档时，这里会自动生成影响档案。" />
-                ) : (
-                  <div className="sandbox-map__profiling-snapshots">
-                    {snapshotTimeline.map(item => {
-                      const diff = parseSnapshotDiff(item)
-                      const keys = diff?.changedKeys || []
-                      return (
-                        <div key={item.id} className="sandbox-map__profiling-snapshot-item">
-                          <div className="sandbox-map__profiling-snapshot-head">
-                            <span>{formatTime(item.created_at)}</span>
-                            <span>{item.source}</span>
-                          </div>
-                          <div className="sandbox-map__stage-chip-cloud">
-                            {keys.length > 0 ? keys.map(key => (
-                              <span key={key} className="sandbox-map__boss-tag">{humanizeKey(key)}</span>
-                            )) : (
-                              <span className="sandbox-map__boss-tag">无字段变化</span>
-                            )}
+              <div className="sandbox-map__stage-footer-grid sandbox-map__profiling-footer-grid">
+                <SystemStagePanel
+                  eyebrow="full timeline"
+                  title="画像时间线"
+                  description="把画像看成一条不断修正自己的线，而不是一份一次性的测试结果。"
+                >
+                  {timeline.length === 0 ? (
+                    <EmptyState icon="⏳" title="暂无时间线" description="测评 run 会按时间记录在这里，方便你看画像是如何变化的。" />
+                  ) : (
+                    <div className="sandbox-map__profiling-timeline">
+                      {timeline.map(item => (
+                        <div key={item.id} className="sandbox-map__profiling-timeline-item">
+                          <div className="sandbox-map__profiling-timeline-dot" />
+                          <div className="sandbox-map__profiling-timeline-body">
+                            <div className="sandbox-map__profiling-timeline-head">
+                              <span className="sandbox-map__profiling-timeline-mode">{modeLabel(item.mode)}</span>
+                              <span className="sandbox-map__profiling-timeline-time">{formatTime(item.createdAt)}</span>
+                            </div>
+                            <div className="sandbox-map__profiling-timeline-meta">
+                              run: {item.id.slice(0, 8)} · 可信度 {Math.round(item.confidence * 100)}%
+                            </div>
                           </div>
                         </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </SystemStagePanel>
+                      ))}
+                    </div>
+                  )}
+                </SystemStagePanel>
+
+                <SystemStagePanel
+                  eyebrow="snapshot archive"
+                  title="写回快照档案"
+                  description="这里保存的是“系统被你哪一轮画像推偏了什么”。"
+                >
+                  {snapshotTimeline.length === 0 ? (
+                    <EmptyState icon="🗂️" title="暂无快照档案" description="当画像真正写回主档时，这里会自动生成影响档案。" />
+                  ) : (
+                    <div className="sandbox-map__profiling-snapshots">
+                      {snapshotTimeline.map(item => {
+                        const diff = parseSnapshotDiff(item)
+                        const keys = diff?.changedKeys || []
+                        return (
+                          <div key={item.id} className="sandbox-map__profiling-snapshot-item">
+                            <div className="sandbox-map__profiling-snapshot-head">
+                              <span>{formatTime(item.created_at)}</span>
+                              <span>{item.source}</span>
+                            </div>
+                            <div className="sandbox-map__stage-chip-cloud">
+                              {keys.length > 0 ? keys.map(key => (
+                                <span key={key} className="sandbox-map__boss-tag">{humanizeKey(key)}</span>
+                              )) : (
+                                <span className="sandbox-map__boss-tag">无字段变化</span>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </SystemStagePanel>
+              </div>
             </div>
           }
         />

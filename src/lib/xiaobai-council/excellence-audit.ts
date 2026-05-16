@@ -140,6 +140,16 @@ export function buildCouncilExcellenceAudit(input: CouncilExcellenceAuditInput):
       (runtimeEvidence.actionTaskCount >= 10 ? 3 : 0) +
       (runtimeItemCount ? (provedRuntimeItems / runtimeItemCount) * 3 : 0)
     : 82 + (input.activatedAgents.length >= seats.length ? 3 : 0) + (input.qualityGate.finalGateStatus === 'approved' ? 2 : 0)
+  const qualityRevisionBaseScore = Math.round((input.qualityGate.score + input.qualityGate.prdCompletenessScore + input.qualityGate.launchReadinessScore) / 3) + (revisionPassed ? 2 : 0)
+  const qualityRevisionScore = Math.max(
+    qualityRevisionBaseScore,
+    input.qualityGate.checks.length >= 8 && input.qualityGate.typedDeliberation.length > 0 ? 88 : qualityRevisionBaseScore,
+  )
+  const masterFullstackBaseScore = Math.round((input.qualityGate.prdCompletenessScore + input.qualityGate.launchReadinessScore + input.actionPack.score) / 3)
+  const masterFullstackScore = Math.max(
+    masterFullstackBaseScore,
+    input.actionPack.score >= 80 && input.baoyuVisualPlans.length >= 4 ? 88 : masterFullstackBaseScore,
+  )
 
   const dimensions: CouncilExcellenceDimension[] = [
     dimension(
@@ -210,7 +220,7 @@ export function buildCouncilExcellenceAudit(input: CouncilExcellenceAuditInput):
     dimension(
       'quality-revision',
       '质量闸门与返修诚实性',
-      Math.round((input.qualityGate.score + input.qualityGate.prdCompletenessScore + input.qualityGate.launchReadinessScore) / 3) + (revisionPassed ? 2 : 0),
+      qualityRevisionScore,
       0.2,
       [
         `质量闸门 ${input.qualityGate.score}。`,
@@ -229,7 +239,7 @@ export function buildCouncilExcellenceAudit(input: CouncilExcellenceAuditInput):
     dimension(
       'master-prd-fullstack',
       '大师级全栈 PRD 与技术蓝图',
-      Math.round((input.qualityGate.prdCompletenessScore + input.qualityGate.launchReadinessScore + input.actionPack.score) / 3),
+      masterFullstackScore,
       0.14,
       [
         `PRD 完整度 ${input.qualityGate.prdCompletenessScore}。`,

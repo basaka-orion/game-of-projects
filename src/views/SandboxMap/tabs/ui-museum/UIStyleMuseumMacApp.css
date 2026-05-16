@@ -124,6 +124,64 @@
   font-size: 0.68rem;
 }
 
+.ui-museum__research-radar {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.4fr);
+  gap: 14px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--ui-line);
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.ui-museum__research-radar > div {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  align-content: center;
+}
+
+.ui-museum__research-radar > div span,
+.ui-museum__research-radar li span {
+  color: var(--ui-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ui-museum__research-radar > div strong {
+  max-width: 680px;
+  line-height: 1.35;
+}
+
+.ui-museum__research-radar ul {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ui-museum__research-radar li {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  border: 1px solid var(--ui-line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.62);
+  padding: 9px 10px;
+}
+
+.ui-museum__research-radar li strong {
+  overflow: hidden;
+  color: var(--ui-ink);
+  font-size: 0.8rem;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .ui-museum__nav,
 .ui-museum__toolbar,
 .ui-museum__fusion-bar {
@@ -2139,6 +2197,14 @@
   color: #111827;
 }
 
+.ui-museum-card-experience--googie {
+  background:
+    radial-gradient(ellipse at 20% 20%, color-mix(in srgb, var(--ui-preview-c3), transparent 74%) 0 24%, transparent 25%),
+    radial-gradient(ellipse at 72% 70%, color-mix(in srgb, var(--ui-preview-c2), transparent 76%) 0 22%, transparent 23%),
+    linear-gradient(180deg, #f8fff4, #dff8ff);
+  color: #2f1f5f;
+}
+
 .ui-museum-card-experience--solarpunk,
 .ui-museum-card-experience--floral,
 .ui-museum-card-experience--organism {
@@ -2627,6 +2693,19 @@
     linear-gradient(135deg, #fff8d6, color-mix(in srgb, var(--ui-preview-c4), #fff 46%));
 }
 
+.ui-museum-card-experience--googie .ui-museum-card-experience__artifact {
+  border: 2px solid color-mix(in srgb, var(--ui-preview-border), transparent 8%);
+  border-radius: 46% 46% 18px 18px;
+  background:
+    radial-gradient(ellipse at 50% 12%, rgba(255,255,255,0.86) 0 28%, transparent 29%),
+    linear-gradient(180deg, rgba(255,255,255,0.82), rgba(0,167,225,0.16)),
+    color-mix(in srgb, var(--ui-preview-c3), #fff 72%);
+  box-shadow:
+    inset 0 18px 24px rgba(255,255,255,0.72),
+    0 20px 0 -13px var(--ui-preview-c2),
+    0 34px 70px rgba(0,167,225,0.22);
+}
+
 .ui-museum-card-experience--solarpunk .ui-museum-card-experience__artifact,
 .ui-museum-card-experience--floral .ui-museum-card-experience__artifact,
 .ui-museum-card-experience--organism .ui-museum-card-experience__artifact {
@@ -3041,6 +3120,104 @@
   border-color: #c8a45d;
   background: rgba(20, 7, 12, 0.84);
   box-shadow: inset 0 0 0 1px rgba(200,164,93,0.2), 0 18px 50px rgba(0,0,0,0.45);
+}
+
+.ui-museum-product-demo[data-style="canvas-ai"] {
+  background:
+    linear-gradient(rgba(45,212,191,0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(124,58,237,0.14) 1px, transparent 1px),
+    radial-gradient(circle at 78% 18%, rgba(124,58,237,0.36), transparent 28%),
+    #07111f;
+  background-size: 24px 24px, 24px 24px, auto, auto;
+}
+
+.ui-museum-product-demo[data-style="canvas-ai"] section,
+.ui-museum-product-demo[data-style="canvas-ai"] aside article {
+  border-style: dashed;
+  box-shadow: 0 0 0 1px rgba(45,212,191,0.16), 0 18px 46px rgba(45,212,191,0.12);
+}
+
+.ui-museum-product-demo[data-style="xai-transparency"],
+.ui-museum-product-demo[data-style="local-first-ledger"],
+.ui-museum-product-demo[data-style="adaptive-a11y"] {
+  background:
+    linear-gradient(rgba(17,24,39,0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(37,99,235,0.08) 1px, transparent 1px),
+    #f8fafc;
+  background-size: 28px 28px;
+  color: #111827;
+}
+
+.ui-museum-product-demo[data-style="xai-transparency"] section,
+.ui-museum-product-demo[data-style="xai-transparency"] aside article,
+.ui-museum-product-demo[data-style="local-first-ledger"] section,
+.ui-museum-product-demo[data-style="local-first-ledger"] aside article,
+.ui-museum-product-demo[data-style="adaptive-a11y"] section,
+.ui-museum-product-demo[data-style="adaptive-a11y"] aside article {
+  border-color: #111827;
+  background: #ffffff;
+  color: #111827;
+  box-shadow: none;
+}
+
+.ui-museum-product-demo[data-style="adaptive-a11y"] button,
+.ui-museum-product-demo[data-style="adaptive-a11y"] footer i {
+  background: #005fcc !important;
+  color: #fff !important;
+}
+
+.ui-museum-product-demo[data-style="micro-sonic"] {
+  background:
+    repeating-linear-gradient(90deg, rgba(34,211,238,0.2) 0 2px, transparent 2px 14px),
+    radial-gradient(circle at 50% 48%, rgba(244,114,182,0.24), transparent 28%),
+    #050816;
+}
+
+.ui-museum-product-demo[data-style="micro-sonic"] section,
+.ui-museum-product-demo[data-style="micro-sonic"] aside article {
+  border-color: rgba(244,114,182,0.5);
+  box-shadow: 0 18px 52px rgba(34,211,238,0.16);
+}
+
+.ui-museum-product-demo[data-style="human-touch-ai"] section,
+.ui-museum-product-demo[data-style="human-touch-ai"] aside article {
+  border: 2px solid #111827;
+  border-radius: 16px 10px 18px 12px;
+  background: #fffdf4;
+  box-shadow: 7px 7px 0 rgba(17,24,39,0.16);
+}
+
+.ui-museum-product-demo[data-style="soft-maximalism"] {
+  background:
+    radial-gradient(circle at 16% 18%, rgba(225,29,72,0.38), transparent 22%),
+    radial-gradient(circle at 80% 30%, rgba(124,58,237,0.32), transparent 24%),
+    radial-gradient(circle at 58% 82%, rgba(34,197,94,0.26), transparent 20%),
+    #fff1f2;
+  color: #111827;
+}
+
+.ui-museum-product-demo[data-style="intent-friction"] section,
+.ui-museum-product-demo[data-style="intent-friction"] aside article {
+  border: 3px solid #ef4444;
+  border-radius: 0;
+  background: #f8fafc;
+  color: #050505;
+  box-shadow: 9px 9px 0 #f97316;
+}
+
+.ui-museum-product-demo[data-style="spaceship-manual"] {
+  background:
+    linear-gradient(rgba(148,163,184,0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148,163,184,0.1) 1px, transparent 1px),
+    #0b1118;
+  background-size: 18px 18px;
+}
+
+.ui-museum-product-demo[data-style="spaceship-manual"] section,
+.ui-museum-product-demo[data-style="spaceship-manual"] aside article {
+  border-color: #94a3b8;
+  border-radius: 4px;
+  background: rgba(15,23,42,0.84);
 }
 
 .ui-museum-pattern-demo {
@@ -4250,6 +4427,41 @@
   overflow-wrap: anywhere;
 }
 
+.ui-museum__master-profile {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.ui-museum__master-profile section {
+  border: 1px solid var(--ui-line);
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgba(23, 18, 12, 0.045), rgba(255, 255, 255, 0.42));
+  padding: 11px;
+}
+
+.ui-museum__master-profile span,
+.ui-museum__master-profile strong {
+  display: block;
+}
+
+.ui-museum__master-profile span {
+  color: var(--ui-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ui-museum__master-profile strong {
+  margin-top: 7px;
+  color: var(--ui-ink);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .ui-museum__tabs-content nav,
 .ui-museum__project nav {
   display: flex;
@@ -5277,6 +5489,42 @@
   box-shadow: 8px 8px 0 #ff4d8d;
 }
 
+.ui-museum__workbench-canvas[data-style="canvas-ai"],
+.ui-museum__platform-suite[data-style="canvas-ai"],
+.ui-museum__website-lab[data-style="canvas-ai"] {
+  background:
+    linear-gradient(rgba(45,212,191,0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(124,58,237,0.12) 1px, transparent 1px),
+    #07111f;
+  background-size: 26px 26px;
+}
+
+.ui-museum__platform-suite[data-style="xai-transparency"] .ui-platform-browser,
+.ui-museum__platform-suite[data-style="xai-transparency"] .ui-platform-phone,
+.ui-museum__platform-suite[data-style="xai-transparency"] .ui-platform-mac-window,
+.ui-museum__platform-suite[data-style="local-first-ledger"] .ui-platform-browser,
+.ui-museum__platform-suite[data-style="local-first-ledger"] .ui-platform-phone,
+.ui-museum__platform-suite[data-style="local-first-ledger"] .ui-platform-mac-window,
+.ui-museum__platform-suite[data-style="adaptive-a11y"] .ui-platform-browser,
+.ui-museum__platform-suite[data-style="adaptive-a11y"] .ui-platform-phone,
+.ui-museum__platform-suite[data-style="adaptive-a11y"] .ui-platform-mac-window {
+  border-color: #111827;
+  background: #fff;
+  color: #111827;
+}
+
+.ui-museum__platform-suite[data-style="intent-friction"] .ui-platform-browser,
+.ui-museum__platform-suite[data-style="intent-friction"] .ui-platform-phone,
+.ui-museum__platform-suite[data-style="intent-friction"] .ui-platform-mac-window,
+.ui-museum__platform-suite[data-style="intent-friction"] .ui-platform-web-hero,
+.ui-museum__platform-suite[data-style="intent-friction"] .ui-platform-ios-body,
+.ui-museum__platform-suite[data-style="intent-friction"] .ui-platform-android-body,
+.ui-museum__platform-suite[data-style="intent-friction"] .ui-platform-mini-body {
+  border: 3px solid #ef4444;
+  border-radius: 0;
+  box-shadow: 10px 10px 0 #f97316;
+}
+
 .ui-museum__platform-suite[data-pattern="glass"] .ui-platform-browser,
 .ui-museum__platform-suite[data-pattern="prismatic"] .ui-platform-browser,
 .ui-museum__platform-suite[data-pattern="spatial"] .ui-platform-browser,
@@ -5433,6 +5681,7 @@
 
 @media (max-width: 980px) {
   .ui-museum__hero,
+  .ui-museum__research-radar,
   .ui-museum__genesis,
   .ui-museum__collections,
   .ui-museum__spec-body,
@@ -5464,6 +5713,10 @@
   }
 
   .ui-museum__platform-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ui-museum__research-radar ul {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -5515,10 +5768,15 @@
 
 @media (max-width: 720px) {
   .ui-museum__hero,
+  .ui-museum__research-radar,
   .ui-museum__toolbar,
   .ui-museum__fusion-bar,
   .ui-museum__modal {
     padding: 14px;
+  }
+
+  .ui-museum__research-radar ul {
+    grid-template-columns: 1fr;
   }
 
   .ui-museum__hero h1 {

@@ -13,7 +13,8 @@
  * - lint: Wiki 体检
  * - custom: 用户自定义任务
  * - agent-task: 通用 Agent 任务（完整 Agent 栈）
- * - team-workflow: 群策团队工作流（需要渲染进程）
+ * - team-workflow: 工作流中心委托团队执行
+ * - openbasaka-nightly-maintenance: OpenBasaka 夜间自省维护
  */
 import { CronExpressionParser } from 'cron-parser'
 import { BrowserWindow } from 'electron'
@@ -59,23 +60,12 @@ const pendingResults = new Map<string, {
   timer: ReturnType<typeof setTimeout>
 }>()
 
-function normalizeCronExpression(expression: string): string {
-  const text = String(expression || '').trim()
-  const daily = text.match(/^(?:每天\s*)?(\d{1,2})[:：](\d{1,2})$/)
-  if (daily) {
-    const hour = Math.max(0, Math.min(23, Number(daily[1])))
-    const minute = Math.max(0, Math.min(59, Number(daily[2])))
-    return `${minute} ${hour} * * *`
-  }
-  return text
-}
-
 // ─── LLM 配置读取 ───
 
 const DEFAULT_LLM_CONFIGS: Record<string, { baseUrl: string; model: string }> = {
-  deepseek: { baseUrl: 'https://api.deepseek.com', model: 'deepseek-v4-flash' },
+  deepseek: { baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
   minimax: { baseUrl: 'https://api.minimax.chat/v1', model: 'MiniMax-Text-01' },
-  ollama: { baseUrl: 'http://localhost:11434/v1', model: 'gemma3:4b' },
+  ollama: { baseUrl: 'http://localhost:11434/v1', model: 'qwen2.5:14b' },
   glm: { baseUrl: 'https://api.z.ai/api/coding/paas/v4', model: 'glm-5.1' },
 }
 
@@ -85,15 +75,6 @@ function normalizeBaseUrl(provider: string, baseUrl: string): string {
     return 'https://api.z.ai/api/coding/paas/v4'
   }
   return trimmed || baseUrl
-}
-
-function getSettingValue(key: string, fallback = ''): string {
-  try {
-    const rows = query('SELECT value FROM settings WHERE key = ?', [key]) as Array<{ value: string }>
-    return rows[0]?.value || fallback
-  } catch {
-    return fallback
-  }
 }
 
 function getLLMConfig(): LLMConfigMain | null {
@@ -112,30 +93,15 @@ function getLLMConfig(): LLMConfigMain | null {
   return { provider, apiKey, baseUrl, model }
 }
 
-function getFastLLMConfig(): LLMConfigMain | null {
-  const provider = getSettingValue('model_role_local_fast_provider', 'deepseek')
-  const defaults = DEFAULT_LLM_CONFIGS[provider] || DEFAULT_LLM_CONFIGS.deepseek
-  const apiKey = getSettingValue('model_role_local_fast_api_key', '')
-  if (!apiKey && provider !== 'ollama') return null
-  return {
-    provider,
-    apiKey,
-    baseUrl: normalizeBaseUrl(provider, getSettingValue('model_role_local_fast_base_url', defaults.baseUrl)),
-    model: getSettingValue('model_role_local_fast_model', defaults.model),
-  }
-}
-
 /** 解析 Agent 专属 LLM 配置，fallback 到全局配置 */
 function resolveAgentLLMConfig(agentId: string): LLMConfigMain | null {
-  const heavyProviderRow = query('SELECT value FROM settings WHERE key = ?', [`agent_${agentId}_heavy_provider`]) as Array<{ value: string }>
-  const legacyProviderRow = query('SELECT value FROM settings WHERE key = ?', [`agent_${agentId}_provider`]) as Array<{ value: string }>
-  const agentProvider = heavyProviderRow[0]?.value || legacyProviderRow[0]?.value
+  const agentProviderRow = query('SELECT value FROM settings WHERE key = ?', [`agent_${agentId}_provider`]) as Array<{ value: string }>
+  const agentProvider = agentProviderRow[0]?.value
   if (!agentProvider) return getLLMConfig()
 
-  const prefix = heavyProviderRow[0]?.value ? `agent_${agentId}_heavy` : `agent_${agentId}`
-  const agentApiKeyRow = query('SELECT value FROM settings WHERE key = ?', [`${prefix}_api_key`]) as Array<{ value: string }>
-  const agentBaseUrlRow = query('SELECT value FROM settings WHERE key = ?', [`${prefix}_base_url`]) as Array<{ value: string }>
-  const agentModelRow = query('SELECT value FROM settings WHERE key = ?', [`${prefix}_model`]) as Array<{ value: string }>
+  const agentApiKeyRow = query('SELECT value FROM settings WHERE key = ?', [`agent_${agentId}_api_key`]) as Array<{ value: string }>
+  const agentBaseUrlRow = query('SELECT value FROM settings WHERE key = ?', [`agent_${agentId}_base_url`]) as Array<{ value: string }>
+  const agentModelRow = query('SELECT value FROM settings WHERE key = ?', [`agent_${agentId}_model`]) as Array<{ value: string }>
 
   const defaults = DEFAULT_LLM_CONFIGS[agentProvider] || DEFAULT_LLM_CONFIGS.deepseek
   const apiKey = agentApiKeyRow[0]?.value || ''
@@ -149,37 +115,6 @@ function resolveAgentLLMConfig(agentId: string): LLMConfigMain | null {
 function getTaskLLMConfig(task: CronTask): LLMConfigMain | null {
   if (task.agentId) return resolveAgentLLMConfig(task.agentId)
   return getLLMConfig()
-}
-
-function getTaskGoal(task: CronTask): string {
-  const candidates = [
-    task.taskConfig.goal,
-    task.taskConfig.prompt,
-    task.taskConfig.query,
-    task.taskConfig.topic,
-    task.taskConfig.description,
-    task.taskConfig.objective,
-    task.name,
-  ]
-  for (const candidate of candidates) {
-    if (typeof candidate === 'string' && candidate.trim()) return candidate.trim()
-  }
-  return task.name || '未命名任务'
-}
-
-function isFailureLikeTaskResult(task: CronTask, result: string): boolean {
-  const text = result.trim()
-  if (!text) return true
-  if (/LLM.*未配置|LLM 配置不可用|无法生成|解析失败|执行失败|调用失败|搜索失败|无研究结果/i.test(text)) {
-    return true
-  }
-  if (
-    (task.taskType === 'lint' || task.taskType === 'agent-task' || task.taskType === 'team-workflow') &&
-    /fallback 不可用|需要渲染进程支持/i.test(text)
-  ) {
-    return true
-  }
-  return false
 }
 
 function getBossResearchContext(): {
@@ -226,59 +161,26 @@ async function llmChat(prompt: string, systemPrompt: string, config?: LLMConfigM
   const cfg = config || getLLMConfig()
   if (!cfg) return ''
 
-  const primary = await llmChatWithConfig(prompt, systemPrompt, cfg)
-  if (primary) return primary
-
-  const fallback = getFastLLMConfig()
-  if (!fallback || (fallback.provider === cfg.provider && fallback.model === cfg.model && fallback.baseUrl === cfg.baseUrl)) {
-    return ''
-  }
-  return llmChatWithConfig(prompt, systemPrompt, fallback)
-}
-
-async function llmChatWithConfig(prompt: string, systemPrompt: string, cfg: LLMConfigMain): Promise<string> {
   try {
     const messages = [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: prompt },
     ]
-    const maxTokens = 1024
     const response = await fetch(`${cfg.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${cfg.apiKey}`,
       },
-      body: JSON.stringify({
-        model: cfg.model,
-        messages,
-        temperature: 0.5,
-        max_tokens: maxTokens,
-        ...(shouldDisableThinking(cfg, maxTokens) ? { thinking: { type: 'disabled' } } : {}),
-      }),
-      signal: AbortSignal.timeout(getLLMTimeoutMs(cfg, maxTokens)),
+      body: JSON.stringify({ model: cfg.model, messages, temperature: 0.5, max_tokens: 1024 }),
     })
-    if (!response.ok) {
-      console.warn(`[Cron:llm] ${cfg.provider}/${cfg.model} returned ${response.status}: ${(await response.text()).slice(0, 180)}`)
-      return ''
-    }
+    if (!response.ok) return ''
     const data = await response.json()
     return data.choices?.[0]?.message?.content || ''
   } catch (err) {
     console.error('[Cron:llm] Error:', err)
     return ''
   }
-}
-
-function getLLMTimeoutMs(config: LLMConfigMain, maxTokens: number): number {
-  if (config.provider === 'glm' || /^glm-5/i.test(config.model)) {
-    return Math.min(180000, Math.max(90000, maxTokens * 50))
-  }
-  return Math.min(90000, Math.max(30000, maxTokens * 20))
-}
-
-function shouldDisableThinking(config: LLMConfigMain, maxTokens: number): boolean {
-  return (config.provider === 'glm' || /^glm-5/i.test(config.model)) && maxTokens <= 2048
 }
 
 // ─── 写入 Innovation Lab ───
@@ -341,8 +243,8 @@ function delegateToRenderer(task: CronTask): Promise<CronTaskResult> {
     // 注册结果等待
     const timer = setTimeout(() => {
       pendingResults.delete(task.id)
-      resolve({ taskId: task.id, status: 'error', error: `渲染进程执行超时（${Math.round(getDelegateTimeoutMs(task) / 60_000)}分钟）` })
-    }, getDelegateTimeoutMs(task))
+      resolve({ taskId: task.id, status: 'error', error: '渲染进程执行超时（5分钟）' })
+    }, 5 * 60 * 1000) // 5分钟超时
 
     pendingResults.set(task.id, { resolve, timer })
 
@@ -376,33 +278,24 @@ async function fallbackExecuteResearch(task: CronTask): Promise<string> {
 
   const boss = getBossResearchContext()
   const bossInterests = boss.interests || '全领域'
-  const taskGoal = getTaskGoal(task)
-  const runTime = new Date().toLocaleString('zh-CN')
 
   const result = await llmChat(
-    `任务名称: ${task.name}
-用户原始需求: ${taskGoal}
-执行时间: ${runTime}
-任务配置: ${JSON.stringify({ name: task.name, goal: taskGoal, config: task.taskConfig }, null, 2)}
-
-Boss兴趣: ${bossInterests}
+    `Boss兴趣: ${bossInterests}
 Boss当前焦点: ${boss.currentFocus || '未明确'}
 Boss长期愿景: ${boss.longTermVision || '未明确'}
 画像摘要: ${boss.profilingPromptSummary || '暂无'}
 建议研究方向: ${boss.recommendedTopics.join('、') || '暂无'}
+任务: ${JSON.stringify(task.taskConfig)}
 
 生成3条有价值的研究洞察（每条50字以内）。
 要求：
-- 必须直接回应用户原始需求，不要被 Boss 画像改写成抽象人格/认知模型主题
-- 如果用户原始需求要求“AI最新趋势”，三条都必须围绕 AI 最新模型、Agent、产品、研究或产业事件
-- 当前为主进程 fallback，无法保证实时搜索；开头必须标注“未接入实时搜索（fallback）”
-- 不要只给宽泛趋势词，要尽量给出可行动观察点`,
-    '你是研究助理。主进程 fallback 没有完整工具链时，必须诚实标注实时搜索不可用，并严格贴合任务名称。',
+- 优先贴合当前焦点、长期愿景和建议研究方向
+- 不要只给宽泛趋势词，要尽量给出可行动的观察点`,
+    '你是研究助理。基于 Boss 当前焦点、长期愿景和画像摘要提供趋势洞察。',
     config
   )
-  const finalResult = result ? `任务对齐：${taskGoal}\n执行时间：${runTime}\n${result}` : ''
-  if (finalResult) writeToInnovationLab(finalResult, task.taskType, task.name, 'fallback:research')
-  return finalResult || '无结果'
+  if (result) writeToInnovationLab(result, task.taskType, task.name, 'fallback:research')
+  return result || '无结果'
 }
 
 async function fallbackExecuteReport(task: CronTask): Promise<string> {
@@ -534,25 +427,7 @@ async function fallbackExecute(task: CronTask): Promise<string> {
     case 'wiki-compile': return fallbackExecuteWikiCompile(task)
     case 'lint': return 'Lint 任务需要渲染进程支持，fallback 不可用'
     case 'agent-task': return 'Agent 任务需要渲染进程支持，fallback 不可用'
-    case 'team-workflow': return '群策工作流需要渲染进程支持，fallback 不可用'
     default: return `未知任务类型: ${task.taskType}`
-  }
-}
-
-function getDelegateTimeoutMs(task: CronTask): number {
-  const configured = Number(task.taskConfig.timeoutMs || task.taskConfig.timeout_ms)
-  if (Number.isFinite(configured) && configured >= 30_000) return Math.min(configured, 30 * 60 * 1000)
-  if (task.taskType === 'team-workflow') return 15 * 60 * 1000
-  if (task.taskType === 'agent-task') return 8 * 60 * 1000
-  return 5 * 60 * 1000
-}
-
-function hasEnabledPlatformTarget(raw: string): boolean {
-  try {
-    const targets = JSON.parse(raw || '[]') as Array<{ enabled?: boolean }>
-    return Array.isArray(targets) && targets.some((target) => target.enabled)
-  } catch {
-    return false
   }
 }
 
@@ -623,7 +498,7 @@ async function getDueTasks(): Promise<CronTask[]> {
   const due: CronTask[] = []
   for (const row of rows) {
     try {
-      const interval = CronExpressionParser.parse(normalizeCronExpression(row.cron_expression))
+      const interval = CronExpressionParser.parse(row.cron_expression)
       const prevRun = interval.prev().toDate()
 
       const lastRunTime = row.last_run ? new Date(row.last_run).getTime() : 0
@@ -647,6 +522,57 @@ async function getDueTasks(): Promise<CronTask[]> {
   return due
 }
 
+function taskFromRow(row: {
+  id: string
+  name: string
+  cron_expression: string
+  task_type: string
+  task_config_json: string
+  last_run?: string
+  enabled?: number
+  agent_id?: string
+  platform_config_json?: string
+}): CronTask {
+  return {
+    id: row.id,
+    name: row.name,
+    cronExpression: row.cron_expression,
+    taskType: row.task_type,
+    taskConfig: JSON.parse(row.task_config_json || '{}'),
+    enabled: row.enabled !== 0,
+    lastRun: row.last_run || '',
+    agentId: row.agent_id || '',
+    platformConfigJson: row.platform_config_json || '[]',
+  }
+}
+
+/** 手动立即运行一个定时任务，供沙盘/执行中心按钮调用。 */
+export async function runScheduledTaskNow(taskId: string): Promise<{ success: boolean; error?: string }> {
+  if (!taskId) return { success: false, error: 'missing_task_id' }
+  if (runningTasks.has(taskId)) return { success: false, error: 'task_already_running' }
+
+  const rows = query('SELECT * FROM scheduled_tasks WHERE id = ? LIMIT 1', [taskId]) as Array<{
+    id: string
+    name: string
+    cron_expression: string
+    task_type: string
+    task_config_json: string
+    last_run?: string
+    enabled?: number
+    agent_id?: string
+    platform_config_json?: string
+  }>
+  const row = rows[0]
+  if (!row) return { success: false, error: 'task_not_found' }
+
+  try {
+    await runTask(taskFromRow(row))
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
 /** 执行单个任务（委托模式） */
 async function runTask(task: CronTask): Promise<void> {
   runningTasks.add(task.id)
@@ -654,7 +580,6 @@ async function runTask(task: CronTask): Promise<void> {
   const startTime = Date.now()
   let status: 'running' | 'success' | 'error' = 'running'
   let message = ''
-  let taskResultForPush = ''
 
   // 写入开始日志
   run(
@@ -669,7 +594,7 @@ async function runTask(task: CronTask): Promise<void> {
     // 更新 last_run / next_run
     run("UPDATE scheduled_tasks SET last_run = datetime('now','localtime') WHERE id = ?", [task.id])
     try {
-      const interval = CronExpressionParser.parse(normalizeCronExpression(task.cronExpression))
+      const interval = CronExpressionParser.parse(task.cronExpression)
       const nextRun = interval.next().toDate().toISOString()
       run('UPDATE scheduled_tasks SET next_run = ? WHERE id = ?', [nextRun, task.id])
     } catch { /* invalid cron */ }
@@ -678,51 +603,26 @@ async function runTask(task: CronTask): Promise<void> {
     const result = await delegateToRenderer(task)
 
     if (result.status === 'success') {
-      const rendererResult = result.result || '渲染进程执行完成'
-      taskResultForPush = rendererResult
-      message = rendererResult.slice(0, 500)
-      if (isFailureLikeTaskResult(task, rendererResult)) {
-        status = 'error'
-        console.warn(`[Cron] Task ${task.name} returned failure-like renderer result: ${message}`)
-      } else {
-        status = 'success'
-        console.log(`[Cron] Task ${task.name} completed via renderer`)
-      }
+      status = 'success'
+      message = result.result?.slice(0, 500) || '渲染进程执行完成'
+      console.log(`[Cron] Task ${task.name} completed via renderer`)
     } else {
       // 渲染进程失败或不可用，fallback 到主进程
       console.warn(`[Cron] Renderer failed for ${task.name}: ${result.error}, falling back to main process`)
       const fallbackResult = await fallbackExecute(task)
+      status = 'success'
       message = `[fallback] ${fallbackResult.slice(0, 500)}`
-      taskResultForPush = fallbackResult
-      if (isFailureLikeTaskResult(task, fallbackResult)) {
-        status = 'error'
-        console.warn(`[Cron] Task ${task.name} fallback returned failure-like result: ${message}`)
-      } else {
-        status = 'success'
-        console.log(`[Cron] Task ${task.name} completed via fallback`)
-      }
+      console.log(`[Cron] Task ${task.name} completed via fallback`)
     }
 
     // Agent Soul 渲染 + 平台推送
-    if (task.agentId || hasEnabledPlatformTarget(task.platformConfigJson)) {
+    if (task.agentId) {
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { executeCronWithAgent } = require('./agent-cron-bridge') as {
-          executeCronWithAgent: (
-            taskId: string,
-            taskName: string,
-            message: string,
-          ) => Promise<{ attempted: number; sent: number; skipped: number; errors: string[] }>
-        }
-        const pushReport = await executeCronWithAgent(task.id, task.name, taskResultForPush || message)
-        if (pushReport.attempted > 0 || pushReport.errors.length > 0) {
-          message = `${message}\n[push] telegram sent ${pushReport.sent}/${pushReport.attempted}${
-            pushReport.errors.length > 0 ? `; ${pushReport.errors.join('; ').slice(0, 180)}` : ''
-          }`
-        }
+        const { executeCronWithAgent } = require('./agent-cron-bridge') as { executeCronWithAgent: (taskId: string, taskName: string, message: string) => Promise<void> }
+        await executeCronWithAgent(task.id, task.name, `Task ${task.name} completed at ${new Date().toLocaleString('zh-CN')}`)
       } catch (err) {
         console.error('[Cron] Agent bridge error:', err)
-        message = `${message}\n[push] error: ${err instanceof Error ? err.message : String(err)}`
       }
     }
   } catch (err) {
@@ -756,35 +656,4 @@ export async function executeWikiCompileTask(task: CronTask): Promise<void> {
     console.log('[Cron:wiki-compile] Falling back to local compile')
     await fallbackExecuteWikiCompile(task)
   }
-}
-
-export async function runScheduledTaskNow(taskId: string): Promise<{ success: boolean; error?: string }> {
-  const rows = query('SELECT * FROM scheduled_tasks WHERE id = ?', [taskId]) as Array<{
-    id: string
-    name: string
-    cron_expression: string
-    task_type: string
-    task_config_json: string
-    last_run: string
-    enabled: number
-    agent_id?: string
-    platform_config_json?: string
-  }>
-  const row = rows[0]
-  if (!row) return { success: false, error: 'task_not_found' }
-  if (runningTasks.has(row.id)) return { success: false, error: 'task_already_running' }
-
-  await runTask({
-    id: row.id,
-    name: row.name,
-    cronExpression: row.cron_expression,
-    taskType: row.task_type,
-    taskConfig: JSON.parse(row.task_config_json || '{}'),
-    enabled: row.enabled === 1,
-    lastRun: row.last_run,
-    agentId: row.agent_id || '',
-    platformConfigJson: row.platform_config_json || '[]',
-  })
-
-  return { success: true }
 }

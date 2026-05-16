@@ -3,6 +3,7 @@ import type {
   CouncilConsensusTrace,
   CouncilMasterPrdValidation,
 } from '../../../../lib/xiaobai-council/master-prd'
+import type { CouncilTopTierPrdEvaluation } from '../../../../lib/xiaobai-council/top-tier-prd'
 
 interface CouncilMasterPrdViewProps {
   markdown: string
@@ -16,6 +17,8 @@ interface CouncilMasterPrdViewProps {
   onSave?: () => void
   copied?: boolean
   saved?: boolean
+  mode?: 'product' | 'review'
+  topTierEvaluation?: CouncilTopTierPrdEvaluation | null
 }
 
 function inlineFormat(text: string): ReactNode[] {
@@ -173,14 +176,17 @@ export function CouncilMasterPrdView({
   onSave,
   copied,
   saved,
+  mode = 'review',
+  topTierEvaluation,
 }: CouncilMasterPrdViewProps) {
+  const productMode = mode === 'product'
   return (
-    <section className="council-app__panel council-master-prd" aria-label="小白智囊团大师共识 PRD">
+    <section className="council-app__panel council-master-prd" aria-label={productMode ? '产品 PRD' : '小白智囊团超顶级 PRD'}>
       <div className="council-app__panel-head">
         <div>
-          <div className="council-app__section-kicker">大师共识 PRD · 全技术栈可开工</div>
-          <h2>最终成品：多角色严苛脑暴后达成的 PRD</h2>
-          <p>主文档保留人物智慧、裁决来源和前后端技术栈，不再把过程日志平铺成噪音。</p>
+          <div className="council-app__section-kicker">{productMode ? '产品 PRD · 大师级开工判定' : '超顶级 PRD · 主文档 + 证据附录'}</div>
+          <h2>{productMode ? '最终成品：只保留产品本身和开工门槛' : '最终成品：可决策、可设计、可开发、可上市、可验收'}</h2>
+          <p>{productMode ? '这里不混入辩论、质量门和运行日志；若大师级评分未过，会直接显示返修缺口。' : '主文档只保留可执行规格，辩论、裁决、质量门和运行证据进入附录追溯。'}</p>
         </div>
         <div className="council-app__artifact-actions">
           {onCopy && <button type="button" onClick={onCopy}>{copied ? '已复制' : '复制 PRD'}</button>}
@@ -189,7 +195,15 @@ export function CouncilMasterPrdView({
         </div>
       </div>
 
-      <div className="council-master-prd__metrics">
+      {productMode && topTierEvaluation && (
+        <div className="council-master-prd__missing">
+          <strong>{topTierEvaluation.claimLabel}</strong>
+          <span>{topTierEvaluation.score}/100 · {topTierEvaluation.status}</span>
+          {topTierEvaluation.blockers.slice(0, 4).map((blocker) => <span key={blocker}>{blocker}</span>)}
+        </div>
+      )}
+
+      {!productMode && <div className="council-master-prd__metrics">
         <article>
           <span>大师级结构</span>
           <strong>{validation.score}</strong>
@@ -210,9 +224,9 @@ export function CouncilMasterPrdView({
           <strong>{runId ? 'ready' : '-'}</strong>
           <small>{runId || '未生成运行证据'}</small>
         </article>
-      </div>
+      </div>}
 
-      {validation.missedLabels.length > 0 && (
+      {!productMode && validation.missedLabels.length > 0 && (
         <div className="council-master-prd__missing">
           <strong>仍需返修章节</strong>
           {validation.missedLabels.map((label) => <span key={label}>{label}</span>)}
@@ -223,7 +237,7 @@ export function CouncilMasterPrdView({
         {renderMarkdown(markdown)}
       </article>
 
-      {trace && (
+      {!productMode && trace && (
         <div className="council-master-prd__trace">
           <div>
             <div className="council-app__section-kicker">共识形成追溯</div>

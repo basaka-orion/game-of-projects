@@ -200,14 +200,68 @@ function buildFusion(video: BiliVideoInfo, transcript: string, isTeaching: boole
 5. 导图必须以本地中文排版渲染，图片模型不得直接写中文。
 
 最终输出：可归档知识页、可注入 Agent 的 prompt 片段、可执行下一步、可视化导图结构。`
+  const uniqueTargets = Array.from(new Set(targetSubsystems)).slice(0, 5)
+  const absorptionScore = applicable
+    ? Math.min(94, 52 + uniqueTargets.length * 8 + (isTeaching ? 10 : 0))
+    : 18
+  const systemTransformationPrompt = `${masterPrompt}
+
+## System transformation
+
+- 把「${video.title}」作为 ${uniqueTargets.join(' / ')} 的可追溯素材。
+- 任何结论必须能回到原始来源、字幕、OCR 或用户手写笔记。
+- 先写入知识资产，再按低风险步骤生成可试跑工作流。`
+  const promptPatches: OpenbasakaFusionResult['promptPatches'] = [
+    {
+      title: 'Agent 调用补丁',
+      target: 'agent-prompt',
+      prompt: `当 Boss 提到「${video.title}」或相关主题时，优先引用这份来源的概念、步骤和风险边界；没有证据的部分必须标为待验证。`,
+      evidenceRefs: [],
+    },
+    {
+      title: '知识库编译补丁',
+      target: 'knowledge',
+      prompt: `把来源整理成「问题背景 / 核心观点 / 证据片段 / 可复用动作 / 风险」五段，不要把观点伪装成事实。`,
+      evidenceRefs: [],
+    },
+    ...(uniqueTargets.includes('workflow')
+      ? [{
+          title: '工作流试跑补丁',
+          target: 'workflow',
+          prompt: `只抽取 1-3 个低风险、可回滚的步骤试跑；任何会改文件、发消息、付费或影响账号的动作都必须先给 Boss 确认。`,
+          evidenceRefs: [],
+        } satisfies OpenbasakaFusionResult['promptPatches'][number]]
+      : []),
+  ]
+  const reusableAssets: OpenbasakaFusionResult['reusableAssets'] = [
+    {
+      title: `${video.title} · 复用摘要`,
+      kind: isTeaching ? 'tutorial-digest' : 'knowledge-digest',
+      content: excerpt(transcript || video.contentText || video.description || video.title, 520),
+      evidenceRefs: [],
+    },
+  ]
 
   return {
     applicable,
-    targetSubsystems: Array.from(new Set(targetSubsystems)).slice(0, 5),
+    targetSubsystems: uniqueTargets,
     rationale: applicable
       ? '来源已经具备可抽取的主题、证据或操作线索，适合进入 Openbasaka 的知识与 Agent 上下文。'
       : '当前来源文本太少，只适合暂存，等待补充字幕、OCR、转写或正文后再深度融合。',
     masterPrompt,
+    systemTransformationPrompt,
+    absorptionScore,
+    absorptionVerdict: applicable
+      ? '可一键吸收为 Openbasaka 可追溯能力补丁'
+      : '暂不建议吸收为系统能力，先补充正文或转写',
+    promptPatches,
+    reusableAssets,
+    integrationSteps: [
+      '保存原始来源与字幕/OCR，保持可追溯。',
+      '生成知识页与 Agent prompt patch。',
+      '如果命中工作流，只创建低风险试跑步骤并等待 Boss 确认高风险动作。',
+      '记录吸收结果到 operating_events，方便后续回滚与复盘。',
+    ],
     archiveTags,
     folderPath: '知识+大佬/万象学习',
     risks: [
@@ -322,6 +376,8 @@ export function createLocalWanxiangResult(input: {
   transcript: string
   goal: string
 }): WanxiangLearningResult {
+  if (!input.transcript.trim()) return createPendingWanxiangResult(input)
+
   const evidenceRefs = parseEvidenceRefs(input.video, input.transcript)
   const reasons = teachingSignals(input.video, input.transcript, input.goal)
   const isTeaching = reasons.length >= 2
@@ -350,6 +406,77 @@ export function createLocalWanxiangResult(input: {
     generatedBy: 'local',
   }
   result.markdown = buildWanxiangMarkdown(input.video, result, input.transcript)
+  return result
+}
+
+function createPendingWanxiangResult(input: {
+  video: BiliVideoInfo
+  transcript: string
+  goal: string
+}): WanxiangLearningResult {
+  const evidenceRefs: SourceEvidenceRef[] = [
+    {
+      id: 'source_card',
+      label: '来源卡片',
+      quote: excerpt(`${input.video.platformName} / ${input.video.bvid} / ${input.video.title}`, 120),
+      sourceId: input.video.id,
+    },
+  ]
+  const teaching: TeachingVerdictResult = {
+    isTeaching: false,
+    confidence: 0.08,
+    reasons: ['只识别到来源卡片，缺少真实字幕、正文、OCR 或转写，不能判定为教程。'],
+    evidenceRefs,
+    nonTeachingDigest: `「${input.video.title}」已接入万象学习，但当前没有可分析正文。此时只能暂存来源，不能生成观点摘要、教程或行动结论。`,
+  }
+  const openbasakaFusion: OpenbasakaFusionResult = {
+    applicable: false,
+    targetSubsystems: ['knowledge'],
+    rationale: '缺少可追溯正文，暂时不能吸收为 Openbasaka 能力或 Agent prompt。',
+    masterPrompt: '先补充字幕、正文、OCR、转写或手动笔记，再重新运行万象三结果。',
+    systemTransformationPrompt: '当前来源只允许作为待处理素材入库，不允许进入能力吸收。',
+    absorptionScore: 6,
+    absorptionVerdict: '暂不吸收，等待真实内容',
+    promptPatches: [],
+    reusableAssets: [],
+    integrationSteps: ['补充真实内容', '重新生成三结果', '确认证据链后再归档或吸收'],
+    archiveTags: ['万象学习', '待补内容', input.video.sourceKind, input.video.platformName],
+    folderPath: '知识+大佬/万象学习/待补内容',
+    risks: ['如果现在生成教程或时间线，会把模板误当成来源事实。'],
+  }
+  const mindMap: WanxiangMindMap = {
+    title: `${input.video.title} · 待补内容`,
+    layout: 'concept',
+    nodes: [
+      node('root', input.video.title, 'root', [
+        node('known', '已知：来源卡片', 'topic', [
+          node('known_platform', input.video.platformName, 'evidence'),
+          node('known_id', input.video.bvid, 'evidence'),
+        ]),
+        node('missing', '缺失：真实内容', 'warning', [
+          node('missing_transcript', '字幕/正文/OCR/转写', 'warning'),
+          node('missing_evidence', '可引用证据片段', 'warning'),
+        ]),
+        node('next', '下一步', 'action', [
+          node('next_1', '补充字幕或正文', 'action'),
+          node('next_2', '重新生成三结果', 'action'),
+        ]),
+      ], '待补内容，不能当成已理解来源。', evidenceRefs),
+    ],
+    markdown: '',
+  }
+  mindMap.markdown = mindMapToMarkdown(mindMap)
+  const result: WanxiangLearningResult = {
+    sourceId: input.video.id,
+    sourceTitle: input.video.title,
+    teaching,
+    openbasakaFusion,
+    mindMap,
+    markdown: '',
+    createdAt: Date.now(),
+    generatedBy: 'local',
+  }
+  result.markdown = buildWanxiangMarkdown(input.video, result, '')
   return result
 }
 
@@ -389,6 +516,46 @@ function sanitizeNode(value: unknown, fallback: MindMapNode, depth = 0): MindMap
   }
 }
 
+function sanitizePromptPatches(
+  value: unknown,
+  fallback: OpenbasakaFusionResult['promptPatches'],
+): OpenbasakaFusionResult['promptPatches'] {
+  if (!Array.isArray(value)) return fallback
+  const patches = value
+    .map((item, index): OpenbasakaFusionResult['promptPatches'][number] => {
+      const row = item as Partial<OpenbasakaFusionResult['promptPatches'][number]>
+      return {
+        title: text(row.title, `Prompt Patch ${index + 1}`),
+        target: text(row.target, 'agent-prompt'),
+        prompt: multiline(row.prompt),
+        evidenceRefs: sanitizeEvidence(row.evidenceRefs, []),
+      }
+    })
+    .filter((item) => item.prompt)
+    .slice(0, 6)
+  return patches.length ? patches : fallback
+}
+
+function sanitizeReusableAssets(
+  value: unknown,
+  fallback: OpenbasakaFusionResult['reusableAssets'],
+): OpenbasakaFusionResult['reusableAssets'] {
+  if (!Array.isArray(value)) return fallback
+  const assets = value
+    .map((item, index): OpenbasakaFusionResult['reusableAssets'][number] => {
+      const row = item as Partial<OpenbasakaFusionResult['reusableAssets'][number]>
+      return {
+        title: text(row.title, `Reusable Asset ${index + 1}`),
+        kind: text(row.kind, 'knowledge-digest'),
+        content: multiline(row.content),
+        evidenceRefs: sanitizeEvidence(row.evidenceRefs, []),
+      }
+    })
+    .filter((item) => item.content)
+    .slice(0, 8)
+  return assets.length ? assets : fallback
+}
+
 export function normalizeWanxiangResult(input: Partial<WanxiangLearningResult> | undefined, fallback: WanxiangLearningResult, video: BiliVideoInfo, transcript = ''): WanxiangLearningResult {
   if (!input) return fallback
   const evidenceRefs = sanitizeEvidence(input.teaching?.evidenceRefs, fallback.teaching.evidenceRefs)
@@ -410,6 +577,15 @@ export function normalizeWanxiangResult(input: Partial<WanxiangLearningResult> |
     targetSubsystems: targetSubsystems.length ? targetSubsystems : fallback.openbasakaFusion.targetSubsystems,
     rationale: multiline(input.openbasakaFusion?.rationale, fallback.openbasakaFusion.rationale),
     masterPrompt: multiline(input.openbasakaFusion?.masterPrompt, fallback.openbasakaFusion.masterPrompt),
+    systemTransformationPrompt: multiline(
+      input.openbasakaFusion?.systemTransformationPrompt,
+      fallback.openbasakaFusion.systemTransformationPrompt || fallback.openbasakaFusion.masterPrompt,
+    ),
+    absorptionScore: clampNumber(input.openbasakaFusion?.absorptionScore, fallback.openbasakaFusion.absorptionScore, 0, 100),
+    absorptionVerdict: text(input.openbasakaFusion?.absorptionVerdict, fallback.openbasakaFusion.absorptionVerdict),
+    promptPatches: sanitizePromptPatches(input.openbasakaFusion?.promptPatches, fallback.openbasakaFusion.promptPatches),
+    reusableAssets: sanitizeReusableAssets(input.openbasakaFusion?.reusableAssets, fallback.openbasakaFusion.reusableAssets),
+    integrationSteps: list(input.openbasakaFusion?.integrationSteps, fallback.openbasakaFusion.integrationSteps, 8),
     archiveTags: list(input.openbasakaFusion?.archiveTags, fallback.openbasakaFusion.archiveTags, 12),
     folderPath: text(input.openbasakaFusion?.folderPath, fallback.openbasakaFusion.folderPath || '知识+大佬/万象学习'),
     risks: list(input.openbasakaFusion?.risks, fallback.openbasakaFusion.risks, 6),

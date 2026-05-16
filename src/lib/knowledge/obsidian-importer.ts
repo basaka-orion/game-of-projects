@@ -46,7 +46,7 @@ export interface ObsidianImportOptions {
   vaultPath: string
   /** 最大导入数量（0 = 不限） */
   maxFiles?: number
-  /** 递归深度（默认 0，不限深度） */
+  /** 递归深度（默认 3） */
   maxDepth?: number
   /** 是否跳过已导入文件（默认 true） */
   skipExisting?: boolean
@@ -125,7 +125,7 @@ export function parseFrontmatter(content: string): {
 /**
  * 通过 Electron IPC 递归扫描目录，收集 Markdown 文件
  */
-async function scanDirectoryViaIPC(dirPath: string, maxDepth = 0): Promise<string[]> {
+async function scanDirectoryViaIPC(dirPath: string, maxDepth = 3): Promise<string[]> {
   const electronAPI = (window as any)?.electronAPI
   if (!electronAPI?.executeCommand) {
     throw new Error('Obsidian 导入需要桌面端环境')
@@ -185,7 +185,7 @@ export async function scanVaultDirectory(
   const {
     vaultPath,
     maxFiles = 0,
-    maxDepth = 0,
+    maxDepth = 3,
     skipExisting = true,
   } = options
 
@@ -252,8 +252,7 @@ export async function scanVaultDirectory(
           url: frontmatter.url,
           author: frontmatter.author,
           metadata: {
-            rootPath: vaultPath,
-            relativePath: filePath.startsWith(vaultPath) ? filePath.slice(vaultPath.length).replace(/^\/+/, '') : filePath,
+            rootPath: dirnameCompat(vaultPath) || vaultPath,
             obsidianTags: frontmatter.tags,
             obsidianDate: frontmatter.date,
             obsidianSource: frontmatter.source,

@@ -13,10 +13,10 @@ import './Settings.css'
 type SettingsTab = 'ai' | 'boss' | 'data' | 'about'
 
 const PROVIDERS = [
-  { id: 'deepseek', name: 'DeepSeek', defaultModel: 'deepseek-v4-flash' },
+  { id: 'deepseek', name: 'DeepSeek', defaultModel: 'deepseek-chat' },
   { id: 'minimax', name: 'MiniMax', defaultModel: 'minimax-M2.7' },
   { id: 'glm', name: 'GLM', defaultModel: 'glm-5.1' },
-  { id: 'ollama', name: 'Ollama', defaultModel: 'gemma3:4b' },
+  { id: 'ollama', name: 'Ollama', defaultModel: 'llama3' },
   { id: 'custom', name: '自定义', defaultModel: '' },
 ]
 
@@ -180,7 +180,7 @@ export default function Settings() {
                   className="settings__input"
                   value={model}
                   onChange={e => setModel(e.target.value)}
-                  placeholder="deepseek-v4-flash"
+                  placeholder="deepseek-chat"
                 />
               </div>
               <button className="settings__save-btn" onClick={saveAI}>保存</button>
